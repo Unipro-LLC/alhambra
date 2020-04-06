@@ -33,6 +33,9 @@
 # include "entry_zero.hpp"
 #endif
 
+#ifdef TARGET_ARCH_zero
+# include "entry_zero.hpp"
+#endif
 class CppInterpreterGenerator: public AbstractInterpreterGenerator {
   protected:
   // shared code sequences

@@ -49,7 +49,6 @@ bool SharkIntrinsics::is_intrinsic(ciMethod *target) {
   case vmIntrinsics::_dsqrt:
   case vmIntrinsics::_dlog:
   case vmIntrinsics::_dlog10:
-  case vmIntrinsics::_dpow:
   case vmIntrinsics::_dexp:
     return true;
 
@@ -116,9 +115,6 @@ void SharkIntrinsics::do_intrinsic() {
     break;
   case vmIntrinsics::_dlog10:
     do_Math_1to1(builder()->log10());
-    break;
-  case vmIntrinsics::_dpow:
-    do_Math_2to1(builder()->pow());
     break;
   case vmIntrinsics::_dexp:
     do_Math_1to1(builder()->exp());
@@ -200,9 +196,13 @@ void SharkIntrinsics::do_Math_2to1(Value *function) {
   assert(empty == NULL, "should be");
   Value *x = state()->pop()->jdouble_value();
 
+  std::vector<Value *> ArgsV;
+  ArgsV.push_back(x);
+  ArgsV.push_back(y);
+
   state()->push(
     SharkValue::create_jdouble(
-      builder()->CreateCall2(function, x, y)));
+      builder()->CreateCall(function, ArgsV)));
   state()->push(NULL);
 }
 
@@ -265,11 +265,15 @@ void SharkIntrinsics::do_Unsafe_compareAndSwapInt() {
     "addr");
 
   // Perform the operation
-  Value *result = builder()->CreateAtomicCmpXchg(addr, e, x, llvm::SequentiallyConsistent);
+  Value *result = builder()->CreateAtomicCmpXchg(addr, e, x,
+      llvm::AtomicOrdering::SequentiallyConsistent,
+      AtomicCmpXchgInst::getStrongestFailureOrdering(
+          llvm::AtomicOrdering::SequentiallyConsistent));
   // Push the result
   state()->push(
     SharkValue::create_jint(
       builder()->CreateIntCast(
-        builder()->CreateICmpEQ(result, e), SharkType::jint_type(), true),
-      false));
+            builder()->CreateICmpEQ(
+              builder()->CreateExtractValue(result, 0, "result"), e),
+            SharkType::jint_type(), true), false));
 }

@@ -33,7 +33,7 @@ define_pd_global(bool,     BackgroundCompilation,        true );
 define_pd_global(bool,     UseTLAB,                      true );
 define_pd_global(bool,     ResizeTLAB,                   true );
 define_pd_global(bool,     InlineIntrinsics,             false);
-define_pd_global(bool,     PreferInterpreterNativeStubs, false);
+define_pd_global(bool,     PreferInterpreterNativeStubs, true);
 define_pd_global(bool,     ProfileTraps,                 false);
 define_pd_global(bool,     UseOnStackReplacement,        true );
 define_pd_global(bool,     TieredCompilation,            false);

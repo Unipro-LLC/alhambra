@@ -27,6 +27,7 @@
 #include "runtime/biasedLocking.hpp"
 #include "runtime/deoptimization.hpp"
 #include "runtime/thread.hpp"
+#include "memory/oopFactory.hpp"
 #include "shark/llvmHeaders.hpp"
 #include "shark/sharkRuntime.hpp"
 #ifdef TARGET_ARCH_zero
@@ -180,8 +181,44 @@ JRT_ENTRY(void, SharkRuntime::throw_NullPointerException(JavaThread* thread,
     "");
 JRT_END
 
+JRT_ENTRY(void, SharkRuntime::throw_ArrayStoreException(JavaThread* thread,
+                                                         const char* file,
+                                                         int         line))
+  Exceptions::_throw_msg(
+    thread, file, line,
+    vmSymbols::java_lang_ArrayStoreException(),
+    "");
+JRT_END
+
+IRT_ENTRY(void, SharkRuntime::throw_AbstractMethodError(JavaThread* thread,
+                                                         const char* file,
+                                                         int         line,
+                                                         const char* msg))
+  Exceptions::_throw_msg(
+    thread, file, line,
+    vmSymbols::java_lang_AbstractMethodError(),
+    msg);
+IRT_END
+
 // Non-VM calls
 // Nothing in these must ever GC!
+
+int SharkRuntime::throw_AbstractMethodError_entry(Method* method, intptr_t UNUSED, TRAPS) {
+  JavaThread *thread = (JavaThread *) THREAD;
+  ZeroStack *stack = thread->zero_stack();
+
+  // Pop our parameters
+  stack->set_sp(stack->sp() + method->size_of_parameters());
+
+  char msg[O_BUFLEN];
+  method->name_and_sig_as_C_string(msg,O_BUFLEN);
+
+  thread->set_last_Java_frame();
+  throw_AbstractMethodError(thread, __FILE__, __LINE__, msg);
+  thread->reset_last_Java_frame();
+
+  return 0;
+}
 
 void SharkRuntime::dump(const char *name, intptr_t value) {
   oop valueOop = (oop) value;
@@ -189,15 +226,73 @@ void SharkRuntime::dump(const char *name, intptr_t value) {
   if (valueOop->is_oop(true))
     valueOop->print_on(tty);
   else if (value >= ' ' && value <= '~')
-    tty->print("'%c' (%d)", value, value);
+    tty->print("'%ld' (%ld)", value, value);
   else
-    tty->print("%p", value);
-  tty->print_cr("");
+    tty->print("%p", (void*)value);
+  tty->print_cr("----");
 }
 
 bool SharkRuntime::is_subtype_of(Klass* check_klass, Klass* object_klass) {
   return object_klass->is_subtype_of(check_klass);
 }
+
+bool SharkRuntime::aastore_check(oop array, oop object) {
+  // if (!object) return true;
+  Klass* object_klass = object->klass();
+  Klass* elem_type = ObjArrayKlass::cast(array->klass())->element_klass();
+  return (object_klass == elem_type || object_klass->is_subtype_of(elem_type));
+}
+
+#include "oops/klass.hpp"
+
+JRT_ENTRY(void, SharkRuntime::get_interface_uncommon(JavaThread* thread, Method* method, oop object, int index)) {
+  assert(object->is_oop(), "should be");
+  int decoded_index = ConstantPool::decode_cpcache_index(index, true);
+  ConstantPoolCacheEntry* cache = method->constants()->cache()->entry_at(decoded_index);
+
+  if (!cache->is_resolved(Bytecodes::_invokeinterface)) {
+    CallInfo info;
+    Handle receiver(thread, object);
+    constantPoolHandle pool(thread, method->constants());
+
+    LinkResolver::resolve_invoke(info, receiver, pool, index, Bytecodes::_invokeinterface, thread);
+    if (((ThreadShadow*)thread)->has_pending_exception()) {
+      ShouldNotReachHere();
+      return;
+    }
+
+    switch (info.call_kind()) {
+    case CallInfo::vtable_call:
+      cache->set_vtable_call(
+        Bytecodes::_invokeinterface, info.resolved_method(), info.vtable_index());
+      break;
+    case CallInfo::itable_call:
+      cache->set_itable_call(
+        Bytecodes::_invokeinterface, info.resolved_klass(), info.resolved_method(), info.itable_index());
+      break;
+    default:
+      ShouldNotReachHere();
+      return;
+    }
+  }
+
+  Method* callee;
+  if (cache->is_vfinal()) {
+    callee = cache->f2_as_vfinal_method();
+  } else {
+    InstanceKlass* rcvrKlass = (InstanceKlass*) object->klass();
+    callee = (Method*) rcvrKlass->start_of_vtable()[cache->f2_as_index()];
+  }
+#if 0
+  {
+    ResourceMark rm;
+    tty->print_cr("trace: %s", callee->name_and_sig_as_C_string());
+  }
+#endif
+  thread->set_vm_result_2(callee);
+  return;
+}
+JRT_END
 
 int SharkRuntime::uncommon_trap(JavaThread* thread, int trap_request) {
   Thread *THREAD = thread;

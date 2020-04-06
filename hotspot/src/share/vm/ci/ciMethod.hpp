@@ -92,7 +92,7 @@ class ciMethod : public ciMetadata {
 
   ciMethod(methodHandle h_m, ciInstanceKlass* holder);
   ciMethod(ciInstanceKlass* holder, ciSymbol* name, ciSymbol* signature, ciInstanceKlass* accessor);
-
+public:
   Method* get_Method() const {
     Method* m = (Method*)_metadata;
     assert(m != NULL, "illegal use of unloaded method");
@@ -199,6 +199,7 @@ class ciMethod : public ciMetadata {
   int           vtable_index();
 #ifdef SHARK
   int           itable_index();
+  bool          has_itable_index();
 #endif // SHARK
   address       native_entry();
   address       interpreter_entry();

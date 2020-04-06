@@ -352,6 +352,9 @@ SharkPHIState::SharkPHIState(SharkTopLevelBlock* block)
       value = SharkValue::address_constant(type->as_return_address()->bci());
       break;
 
+    case ciTypeFlow::StateVector::T_BOTTOM:
+      break;
+
     case ciTypeFlow::StateVector::T_LONG2:
     case ciTypeFlow::StateVector::T_DOUBLE2:
       break;
@@ -376,17 +379,21 @@ void SharkPHIState::add_incoming(SharkState* incoming_state) {
 
   // Local variables
   for (int i = 0; i < max_locals(); i++) {
-    if (local(i) != NULL)
-      local(i)->addIncoming(incoming_state->local(i), predecessor);
+    if (local(i) != NULL) {
+      SharkValue *incoming_local = incoming_state->local(i);
+      //assert(incoming_state->local(i) != NULL, "should be");
+      local(i)->addIncoming(incoming_local ? incoming_local : SharkValue::null(), predecessor);
+    }
   }
 
   // Expression stack
   int stack_depth = block()->stack_depth_at_entry();
   assert(stack_depth == incoming_state->stack_depth(), "should be");
   for (int i = 0; i < stack_depth; i++) {
-    assert((stack(i) == NULL) == (incoming_state->stack(i) == NULL), "oops");
-    if (stack(i))
+    if (stack(i)) {
+      assert(incoming_state->stack(i) != NULL, "oops");
       stack(i)->addIncoming(incoming_state->stack(i), predecessor);
+    }
   }
 
   // Monitors

@@ -162,13 +162,18 @@ Value* SharkStack::CreatePopFrame(int result_slots) {
   return sp;
 }
 
-Value* SharkStack::slot_addr(int         offset,
-                             Type* type,
-                             const char* name) const {
+Value* SharkStack::slot_addr(int          offset,
+                             Type*        type,
+                             const char*  name) const {
   bool needs_cast = type && type != SharkType::intptr_type();
 
-  Value* result = builder()->CreateStructGEP(
-    _frame, offset, needs_cast ? "" : name);
+  Value *bc = builder()->CreateBitCast(_frame,
+                             PointerType::getUnqual(SharkType::intptr_type()));
+  Value *result = builder()->CreateGEP(SharkType::intptr_type(),
+                                       bc,
+                                       ConstantInt::get(SharkType::jint_type(),
+                                                        offset),
+                                       needs_cast ? "" : name);
 
   if (needs_cast) {
     result = builder()->CreateBitCast(

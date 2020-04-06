@@ -207,6 +207,7 @@ class SharkBlock : public SharkTargetInvariants {
  protected:
   virtual void do_aload(BasicType basic_type);
   virtual void do_astore(BasicType basic_type);
+  virtual void do_aastore();
 
   // *div and *rem
  private:

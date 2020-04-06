@@ -2291,6 +2291,10 @@ methodHandle SystemDictionary::find_method_handle_intrinsic(vmIntrinsics::ID iid
     spe = NULL;
     // Must create lots of stuff here, but outside of the SystemDictionary lock.
     m = Method::make_method_handle_intrinsic(iid, signature, CHECK_(empty));
+#ifdef SHARK
+    CompileBroker::compile_method(m, InvocationEntryBci, CompLevel_highest_tier,
+                                     methodHandle(), CompileThreshold, "MH", CHECK_(empty));
+#else
     if (!Arguments::is_interpreter_only()) {
       // Generate a compiled form of the MH intrinsic.
       AdapterHandlerLibrary::create_native_wrapper(m);
@@ -2300,6 +2304,7 @@ methodHandle SystemDictionary::find_method_handle_intrinsic(vmIntrinsics::ID iid
                    "out of space in CodeCache for method handle intrinsic", empty);
       }
     }
+#endif // SHARK
     // Now grab the lock.  We might have to throw away the new method,
     // if a racing thread has managed to install one at the same time.
     {
@@ -2313,9 +2318,11 @@ methodHandle SystemDictionary::find_method_handle_intrinsic(vmIntrinsics::ID iid
   }
 
   assert(spe != NULL && spe->method() != NULL, "");
+#ifndef SHARK
   assert(Arguments::is_interpreter_only() || (spe->method()->has_compiled_code() &&
          spe->method()->code()->entry_point() == spe->method()->from_compiled_entry()),
          "MH intrinsic invariant");
+#endif // !SHARK
   return spe->method();
 }
 

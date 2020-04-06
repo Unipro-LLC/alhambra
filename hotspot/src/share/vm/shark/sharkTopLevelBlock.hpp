@@ -339,6 +339,15 @@ class SharkTopLevelBlock : public SharkBlock {
     builder()->CreateStore(LLVMValue::null(), addr);
     return result;
   }
+  llvm::LoadInst* get_vm_result_2() const {
+    llvm::Value *addr = builder()->CreateAddressOfStructEntry(
+      thread(), JavaThread::vm_result_2_offset(),
+      llvm::PointerType::getUnqual(SharkType::Metadata_type()),
+      "vm_result_2_addr");
+    llvm::LoadInst *result = builder()->CreateLoad(addr, "vm_result_2");
+    builder()->CreateStore(LLVMValue::nullMetadata(), addr);
+    return result;
+  }
 
   // Synchronization
  private:
@@ -382,6 +391,7 @@ class SharkTopLevelBlock : public SharkBlock {
  private:
   void do_aload(BasicType basic_type);
   void do_astore(BasicType basic_type);
+  void do_aastore();
 
   // *return and athrow
  private:

@@ -52,6 +52,9 @@
 #ifdef CC_INTERP
 #include "interpreter/cppInterpreter.hpp"
 #endif
+#ifdef SHARK
+#include "shark/sharkRuntime.hpp"
+#endif
 
 address AbstractInterpreterGenerator::generate_slow_signature_handler() {
   _masm->advance(1);
@@ -68,7 +71,11 @@ address InterpreterGenerator::generate_math_entry(
 }
 
 address InterpreterGenerator::generate_abstract_entry() {
+#ifdef SHARK
+  return generate_entry((address) SharkRuntime::throw_AbstractMethodError_entry);
+#else // SHARK
   return generate_entry((address) ShouldNotCallThisEntry());
+#endif // !SHARK
 }
 
 bool AbstractInterpreter::can_be_compiled(methodHandle m) {

@@ -33,6 +33,8 @@
 
 using namespace llvm;
 
+typedef llvm::ArrayRef<llvm::Type*> TypeArray;
+
 SharkContext::SharkContext(const char* name)
   : LLVMContext(),
     _free_queue(NULL) {
@@ -54,7 +56,7 @@ SharkContext::SharkContext(const char* name)
     ArrayType::get(jbyte_type(), itableOffsetEntry::size() * wordSize));
 
   _Metadata_type = PointerType::getUnqual(
-    ArrayType::get(jbyte_type(), sizeof(Metadata)));
+    ArrayType::get(jbyte_type(), sizeof(::Metadata)));
 
   _klass_type = PointerType::getUnqual(
     ArrayType::get(jbyte_type(), sizeof(Klass)));
@@ -74,8 +76,8 @@ SharkContext::SharkContext(const char* name)
   _oop_type = PointerType::getUnqual(
     ArrayType::get(jbyte_type(), sizeof(oopDesc)));
 
-  _thread_type = PointerType::getUnqual(
-    ArrayType::get(jbyte_type(), sizeof(JavaThread)));
+  _thread_type = PointerType::getUnqual(ArrayType::get(jbyte_type(),
+                                                       sizeof(JavaThread)));
 
   _zeroStack_type = PointerType::getUnqual(
     ArrayType::get(jbyte_type(), sizeof(ZeroStack)));

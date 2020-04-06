@@ -48,6 +48,7 @@
 # include "depChecker_ppc.hpp"
 #endif
 #ifdef SHARK
+#include "interpreter/interpreter.hpp"
 #include "shark/sharkEntry.hpp"
 #endif
 

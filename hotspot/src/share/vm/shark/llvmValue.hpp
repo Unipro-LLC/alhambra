@@ -60,6 +60,14 @@ class LLVMValue : public AllStatic {
   {
     return llvm::ConstantPointerNull::get(SharkType::klass_type());
   }
+  static llvm::ConstantPointerNull* nullMethod()
+  {
+    return llvm::ConstantPointerNull::get(SharkType::Method_type());
+  }
+  static llvm::ConstantPointerNull* nullMetadata()
+  {
+    return llvm::ConstantPointerNull::get(SharkType::Metadata_type());
+  }
 
  public:
   static llvm::ConstantInt* bit_constant(int value)

@@ -34,7 +34,6 @@
 #include "ci/ciEnv.hpp"
 #include "ci/ciKlass.hpp"
 #include "ci/ciMethodBlocks.hpp"
-#include "shark/shark_globals.hpp"
 #endif
 
 

@@ -220,7 +220,7 @@ void SharkNativeWrapper::initialize(const char *name) {
   // Make sure new state is visible in the GC thread
   if (os::is_MP()) {
     if (UseMembar)
-      builder()->CreateFence(llvm::SequentiallyConsistent, llvm::CrossThread);
+      builder()->CreateFence(llvm::AtomicOrdering::SequentiallyConsistent, llvm::SyncScope::System);
     else
       CreateWriteMemorySerializePage();
   }

@@ -61,10 +61,11 @@ SharkCompiler::SharkCompiler()
   : AbstractCompiler() {
   // Create the lock to protect the memory manager and execution engine
   _execution_engine_lock = new Monitor(Mutex::leaf, "SharkExecutionEngineLock");
+  {
   MutexLocker locker(execution_engine_lock());
 
   // Make LLVM safe for multithreading
-  if (!llvm_start_multithreaded())
+  if (!LLVMStartMultithreaded())
     fatal("llvm_start_multithreaded() failed");
 
   // Initialize the native target
@@ -77,13 +78,15 @@ SharkCompiler::SharkCompiler()
   _normal_context = new SharkContext("normal");
   _native_context = new SharkContext("native");
 
+  initializeModule();
+
   // Create the memory manager
   _memory_manager = new SharkMemoryManager();
 
   // Finetune LLVM for the current host CPU.
   StringMap<bool> Features;
   bool gotCpuFeatures = llvm::sys::getHostCPUFeatures(Features);
-  std::string cpu("-mcpu=" + llvm::sys::getHostCPUName());
+  std::string cpu("-mcpu=" + std::string(llvm::sys::getHostCPUName()));
 
   std::vector<const char*> args;
   args.push_back(""); // program name
@@ -101,16 +104,25 @@ SharkCompiler::SharkCompiler()
     args.push_back(mattr.c_str());
   }
 
+  if (SharkFastSelect) {
+    args.push_back("-fast-isel=true");
+  }
+
+  if (SharkPrintLLVM) {
+    args.push_back("-print-after-all");
+    llvm:DebugFlag = true;
+  }
+
   args.push_back(0);  // terminator
   cl::ParseCommandLineOptions(args.size() - 1, (char **) &args[0]);
 
   // Create the JIT
   std::string ErrorMsg;
 
-  EngineBuilder builder(_normal_context->module());
+  EngineBuilder builder(std::move(_normal_owner));
   builder.setMCPU(MCPU);
   builder.setMAttrs(MAttrs);
-  builder.setJITMemoryManager(memory_manager());
+  builder.setMCJITMemoryManager(std::unique_ptr<SectionMemoryManager>(memory_manager()));
   builder.setEngineKind(EngineKind::JIT);
   builder.setErrorStr(&ErrorMsg);
   if (! fnmatch(SharkOptimizationLevel, "None", 0)) {
@@ -124,6 +136,7 @@ SharkCompiler::SharkCompiler()
     builder.setOptLevel(llvm::CodeGenOpt::Aggressive);
   } // else Default is selected by, well, default :-)
   _execution_engine = builder.create();
+  execution_engine()->setVerifyModules(false);
 
   if (!execution_engine()) {
     if (!ErrorMsg.empty())
@@ -133,10 +146,31 @@ SharkCompiler::SharkCompiler()
     exit(1);
   }
 
-  execution_engine()->addModule(_native_context->module());
+  } // locker scope
 
   // All done
   set_state(initialized);
+}
+
+void SharkCompiler::initializeModule() {
+  _normal_owner = llvm::make_unique<llvm::Module>("normal", *_normal_context);
+  _normal_module = _normal_owner.get();
+  if (execution_engine() != nullptr) {
+    _normal_owner->setDataLayout(
+          execution_engine()->getTargetMachine()->createDataLayout());
+    execution_engine()->addModule(std::move(_normal_owner));
+  }
+}
+
+void SharkCompiler::initializeFPM() {
+  if (_shark_fpm != nullptr) {
+    delete _shark_fpm;
+  }
+  legacy::FunctionPassManager* FPM =
+      new legacy::FunctionPassManager(_normal_module);
+  FPM->add(llvm::createUnreachableBlockEliminationPass());
+
+  _shark_fpm = FPM;
 }
 
 void SharkCompiler::initialize() {
@@ -148,9 +182,21 @@ void SharkCompiler::compile_method(ciEnv*    env,
                                    int       entry_bci) {
   assert(is_initialized(), "should be");
   ResourceMark rm;
+
+  {
+    ThreadInVMfromNative tiv(JavaThread::current());
+    MutexLocker locker(execution_engine_lock());
+    initializeModule();
+    initializeFPM();
+  }
+
   const char *name = methodname(
     target->holder()->name()->as_utf8(), target->name()->as_utf8());
 
+  if (!target->has_balanced_monitors()) {
+    env->record_method_not_compilable("not compilable (unbalanced monitors)");
+    return;
+  }
   // Do the typeflow analysis
   ciTypeFlow *flow;
   if (entry_bci == InvocationEntryBci)
@@ -165,7 +211,7 @@ void SharkCompiler::compile_method(ciEnv*    env,
   }
 
   // Create the recorders
-  Arena arena;
+  Arena arena(mtCompiler);
   env->set_oop_recorder(new OopRecorder(&arena));
   OopMapSet oopmaps;
   env->set_debug_info(new DebugInformationRecorder(env->oop_recorder()));
@@ -183,7 +229,8 @@ void SharkCompiler::compile_method(ciEnv*    env,
   SharkEntry *entry = (SharkEntry *) cb.malloc(sizeof(SharkEntry));
 
   // Build the LLVM IR for the method
-  Function *function = SharkFunction::build(env, &builder, flow, name);
+  Function *function = SharkFunction::build(env, &builder, flow, name,
+                                            _normal_module);
   if (env->failing()) {
     return;
   }
@@ -260,10 +307,14 @@ nmethod* SharkCompiler::generate_native_wrapper(MacroAssembler* masm,
 void SharkCompiler::generate_native_code(SharkEntry* entry,
                                          Function*   function,
                                          const char* name) {
+  _shark_fpm->run(*function);
+
   // Print the LLVM bitcode, if requested
   if (SharkPrintBitcodeOf != NULL) {
+#ifndef NDEBUG
     if (!fnmatch(SharkPrintBitcodeOf, name, 0))
       function->dump();
+#endif
   }
 
   if (SharkVerifyFunction != NULL) {
@@ -274,15 +325,11 @@ void SharkCompiler::generate_native_code(SharkEntry* entry,
 
   // Compile to native code
   address code = NULL;
-  context()->add_function(function);
   {
     MutexLocker locker(execution_engine_lock());
     free_queued_methods();
 
 #ifndef NDEBUG
-#if SHARK_LLVM_VERSION <= 31
-#define setCurrentDebugType SetCurrentDebugType
-#endif
     if (SharkPrintAsmOf != NULL) {
       if (!fnmatch(SharkPrintAsmOf, name, 0)) {
         llvm::setCurrentDebugType(X86_ONLY("x86-emitter") NOT_X86("jit"));
@@ -293,12 +340,10 @@ void SharkCompiler::generate_native_code(SharkEntry* entry,
         llvm::DebugFlag = false;
       }
     }
-#ifdef setCurrentDebugType
-#undef setCurrentDebugType
-#endif
 #endif // !NDEBUG
     memory_manager()->set_entry_for_function(function, entry);
     code = (address) execution_engine()->getPointerToFunction(function);
+    execution_engine()->finalizeObject();
   }
   assert(code != NULL, "code must be != NULL");
   entry->set_entry_point(code);
@@ -307,6 +352,8 @@ void SharkCompiler::generate_native_code(SharkEntry* entry,
   address code_start = entry->code_start();
   address code_limit = entry->code_limit();
 
+  function->deleteBody();
+
   // Register generated code for profiling, etc
   if (JvmtiExport::should_post_dynamic_code_generated())
     JvmtiExport::post_dynamic_code_generated(name, code_start, code_limit);
@@ -314,8 +361,9 @@ void SharkCompiler::generate_native_code(SharkEntry* entry,
   // Print debug information, if requested
   if (SharkTraceInstalls) {
     tty->print_cr(
-      " [%p-%p): %s (%d bytes code)",
+      " [%p-%p): %s (%ld bytes code)",
       code_start, code_limit, name, code_limit - code_start);
+      raise(SIGTRAP);
   }
 }
 
@@ -341,7 +389,6 @@ void SharkCompiler::free_queued_methods() {
     if (function == NULL)
       break;
 
-    execution_engine()->freeMachineCodeForFunction(function);
     function->eraseFromParent();
   }
 }

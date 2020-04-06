@@ -51,6 +51,8 @@ class SharkRuntime : public AllStatic {
 
   static void register_finalizer(JavaThread* thread, oop object);
 
+  static void get_interface_uncommon(JavaThread* thread, Method* method, oop object, int index);
+
   static void throw_ArithmeticException(JavaThread* thread,
                                         const char* file,
                                         int         line);
@@ -64,6 +66,14 @@ class SharkRuntime : public AllStatic {
   static void throw_NullPointerException(JavaThread* thread,
                                          const char* file,
                                          int         line);
+  static void throw_ArrayStoreException(JavaThread* thread,
+                                        const char* file,
+                                        int         line);
+  static void throw_AbstractMethodError(JavaThread* thread,
+                                        const char* file,
+                                        int         line,
+                                        const char* msg);
+  static int throw_AbstractMethodError_entry(Method* method, intptr_t UNUSED, TRAPS);
 
   // Helpers for VM calls
  private:
@@ -87,6 +97,7 @@ class SharkRuntime : public AllStatic {
  public:
   static void dump(const char *name, intptr_t value);
   static bool is_subtype_of(Klass* check_klass, Klass* object_klass);
+  static bool aastore_check(oop array, oop object);
   static int uncommon_trap(JavaThread* thread, int trap_request);
 };
 

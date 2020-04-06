@@ -182,7 +182,7 @@ define SetupArchive
       (cd $$(src) && \
        if [ "`$(WC) -w _the.$$($1_JARNAME)_contents | $(AWK) '{ print $$$$1 }'`" -gt "0" ]; then \
          $(ECHO) "  updating" `$(WC) -l _the.$$($1_JARNAME)_contents | $(AWK) '{ print $$$$1 }'` files && \
-         $(JAR) $$($1_JAR_UPDATE_OPTIONS) $$@ @_the.$$($1_JARNAME)_contents; \
+         $(JAR) $$($1_JAR_UPDATE_OPTIONS) $$@ @_the.$$($1_JARNAME)_contents && $(CHMOD) 664 $$@; \
        fi) $$(NEWLINE))
   # The s-variants of the above macros are used when the jar is created from scratch.
   # NOTICE: please leave the parentheses space separated otherwise the AIX build will break!
@@ -198,7 +198,7 @@ define SetupArchive
         $$(src)/_the.$$($1_JARNAME)_contents) $$(NEWLINE))
   endif
   $1_SUPDATE_CONTENTS=$$(foreach src,$$($1_SRCS), \
-      (cd $$(src) && $(JAR) $$($1_JAR_UPDATE_OPTIONS) $$@ @$$(src)/_the.$$($1_JARNAME)_contents) $$(NEWLINE))
+      (cd $$(src) && $(JAR) $$($1_JAR_UPDATE_OPTIONS) $$@ @$$(src)/_the.$$($1_JARNAME)_contents &&  $(CHMOD) 664 $$@) $$(NEWLINE))
 
   # Use a slightly shorter name for logging, but with enough path to identify this jar.
   $1_NAME:=$$(subst $$(OUTPUT_ROOT)/,,$$($1_JAR))

@@ -709,6 +709,12 @@ bool SharkInlinerHelper::do_field_access(bool is_get, bool is_field) {
   if (is_field == field->is_static())
     return false;
 
+  // Bail out if we are trying to access a static variable
+  // before the class initializer has completed.
+  if (!is_field && !field->holder()->is_initialized()) {
+      return false;
+  }
+
   // Pop the value off the stack if necessary
   if (!is_get) {
     pop();

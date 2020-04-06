@@ -76,6 +76,13 @@ class SharkCompiler : public AbstractCompiler {
   SharkContext* _normal_context;
   SharkContext* _native_context;
 
+  llvm::legacy::FunctionPassManager *_shark_fpm = NULL;
+  std::unique_ptr<llvm::Module> _normal_owner;
+  llvm::Module* _normal_module;
+
+  void initializeModule();
+  void initializeFPM();
+
  public:
   SharkContext* context() const {
     if (JavaThread::current()->is_Compiler_thread()) {
@@ -95,7 +102,7 @@ class SharkCompiler : public AbstractCompiler {
  private:
   Monitor*               _execution_engine_lock;
   SharkMemoryManager*    _memory_manager;
-  llvm::ExecutionEngine* _execution_engine;
+  llvm::ExecutionEngine* _execution_engine = NULL;
 
  private:
   Monitor* execution_engine_lock() const {

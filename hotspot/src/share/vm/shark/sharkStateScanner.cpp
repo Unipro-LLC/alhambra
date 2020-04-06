@@ -84,7 +84,7 @@ void SharkStateScanner::stack_integrity_checks(SharkState* state) {
         assert(state->stack(i - 1) == NULL, "should be");
     }
     else {
-      assert(state->stack(i + 1)->is_two_word(), "should be");
+      assert(i+1 == state->stack_depth() || state->stack(i + 1)->is_two_word(), "should be");
     }
   }
 }

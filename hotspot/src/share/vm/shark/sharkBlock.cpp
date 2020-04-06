@@ -295,7 +295,8 @@ void SharkBlock::parse_bytecode(int start, int limit) {
       do_astore(T_DOUBLE);
       break;
     case Bytecodes::_aastore:
-      do_astore(T_OBJECT);
+      // do_astore(T_OBJECT);
+      do_aastore();
       break;
 
     case Bytecodes::_pop:
@@ -1218,6 +1219,10 @@ void SharkBlock::do_aload(BasicType basic_type) {
 }
 
 void SharkBlock::do_astore(BasicType basic_type) {
+  ShouldNotCallThis();
+}
+
+void SharkBlock::do_aastore() {
   ShouldNotCallThis();
 }
 

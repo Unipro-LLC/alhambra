@@ -46,6 +46,9 @@
   product(ccstr, SharkOptimizationLevel, "Default",                           \
           "The optimization level passed to LLVM, possible values: None, Less, Default and Agressive") \
                                                                               \
+  product(bool, SharkFastSelect, true,                                        \
+          "Use fast-isel option for llvm")                                    \
+                                                                              \
   /* compiler debugging */                                                    \
   develop(ccstr, SharkPrintTypeflowOf, NULL,                                  \
           "Print the typeflow of the specified method")                       \
@@ -64,6 +67,9 @@
                                                                               \
   diagnostic(bool, SharkPerformanceWarnings, false,                           \
           "Warn about things that could be made faster")                      \
+                                                                              \
+  develop(bool, SharkPrintLLVM, false,                                        \
+          "Print the LLVM IR after all passes")                               \
                                                                               \
   develop(ccstr, SharkVerifyFunction, NULL,                                   \
           "Runs LLVM verify over LLVM IR")                                    \

@@ -26,6 +26,7 @@
 #ifndef SHARE_VM_SHARK_SHARKBUILDER_HPP
 #define SHARE_VM_SHARK_SHARKBUILDER_HPP
 
+#include "oops/metadata.hpp"
 #include "ci/ciType.hpp"
 #include "memory/barrierSet.hpp"
 #include "memory/cardTableModRefBS.hpp"
@@ -56,15 +57,15 @@ class SharkBuilder : public llvm::IRBuilder<> {
  public:
   llvm::LoadInst* CreateAtomicLoad(llvm::Value* ptr,
                                    unsigned align = HeapWordSize,
-                                   llvm::AtomicOrdering ordering = llvm::SequentiallyConsistent,
-                                   llvm::SynchronizationScope synchScope = llvm::CrossThread,
+                                   llvm::AtomicOrdering ordering = llvm::AtomicOrdering::SequentiallyConsistent,
+                                   llvm::SyncScope::ID synchScope = llvm::SyncScope::System,
                                    bool isVolatile = true,
                                    const char *name = "");
   llvm::StoreInst* CreateAtomicStore(llvm::Value *val,
                                      llvm::Value *ptr,
                                      unsigned align = HeapWordSize,
-                                     llvm::AtomicOrdering ordering = llvm::SequentiallyConsistent,
-                                     llvm::SynchronizationScope SynchScope = llvm::CrossThread,
+                                     llvm::AtomicOrdering ordering = llvm::AtomicOrdering::SequentiallyConsistent,
+                                     llvm::SyncScope::ID SynchScope = llvm::SyncScope::System,
                                      bool isVolatile = true,
                                      const char *name = "");
 
@@ -99,7 +100,6 @@ class SharkBuilder : public llvm::IRBuilder<> {
                                   const char*  name = "");
 
   // Helpers for creating intrinsics and external functions.
- private:
   static llvm::Type* make_type(char type, bool void_ok);
   static llvm::FunctionType* make_ftype(const char* params,
                                               const char* ret);
@@ -130,6 +130,7 @@ class SharkBuilder : public llvm::IRBuilder<> {
   llvm::Value* throw_ArrayIndexOutOfBoundsException();
   llvm::Value* throw_ClassCastException();
   llvm::Value* throw_NullPointerException();
+  llvm::Value* throw_ArrayStoreException();
 
   // Intrinsics and external functions, part 2: High-level non-VM calls.
   //   These are called like normal functions.  The stack is not set
@@ -141,6 +142,8 @@ class SharkBuilder : public llvm::IRBuilder<> {
   llvm::Value* d2i();
   llvm::Value* d2l();
   llvm::Value* is_subtype_of();
+  llvm::Value* aastore_check();
+  llvm::Value* get_interface_uncommon();
   llvm::Value* current_time_millis();
   llvm::Value* sin();
   llvm::Value* cos();
@@ -149,7 +152,6 @@ class SharkBuilder : public llvm::IRBuilder<> {
   llvm::Value* sqrt();
   llvm::Value* log();
   llvm::Value* log10();
-  llvm::Value* pow();
   llvm::Value* exp();
   llvm::Value* fabs();
   llvm::Value* unsafe_field_offset_to_byte_offset();
@@ -182,6 +184,7 @@ class SharkBuilder : public llvm::IRBuilder<> {
   llvm::Value* frame_address();
   llvm::Value* memset();
   llvm::Value* unimplemented();
+  NOT_PRODUCT(llvm::Value* breakpoint();)
   llvm::Value* should_not_reach_here();
   llvm::Value* dump();
 
@@ -193,6 +196,7 @@ class SharkBuilder : public llvm::IRBuilder<> {
                                llvm::Value* len,
                                llvm::Value* align);
   llvm::CallInst* CreateUnimplemented(const char* file, int line);
+  NOT_PRODUCT(llvm::CallInst* CreateBreakpoint();)
   llvm::CallInst* CreateShouldNotReachHere(const char* file, int line);
   NOT_PRODUCT(llvm::CallInst* CreateDump(llvm::Value* value));
 
@@ -208,7 +212,7 @@ class SharkBuilder : public llvm::IRBuilder<> {
     return CreateInlineOop(object->constant_encoding(), name);
   }
 
-  llvm::Value* CreateInlineMetadata(Metadata* metadata, llvm::PointerType* type, const char* name = "");
+  llvm::Value* CreateInlineMetadata(::Metadata* metadata, llvm::PointerType* type, const char* name = "");
   llvm::Value* CreateInlineMetadata(ciMetadata* metadata, llvm::PointerType* type, const char* name = "") {
     return CreateInlineMetadata(metadata->constant_encoding(), type, name);
   }

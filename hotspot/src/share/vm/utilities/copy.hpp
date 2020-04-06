@@ -26,6 +26,7 @@
 #define SHARE_VM_UTILITIES_COPY_HPP
 
 #include "runtime/stubRoutines.hpp"
+#include "runtime/sharedRuntime.hpp"
 
 // Assembly code for platforms that need it.
 extern "C" {

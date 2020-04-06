@@ -294,6 +294,17 @@ int ciMethod::itable_index() {
     return Method::nonvirtual_vtable_index;
   return m->itable_index();
 }
+// ------------------------------------------------------------------
+// ciMethod::has_itable_index
+//
+// Get the position of this method's entry in the itable, if any.
+bool ciMethod::has_itable_index() {
+  check_is_loaded();
+  assert(holder()->is_linked(), "must be linked");
+  VM_ENTRY_MARK;
+  Method* m = get_Method();
+  return m->has_itable_index();
+}
 #endif // SHARK
 
 

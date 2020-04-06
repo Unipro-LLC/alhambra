@@ -58,7 +58,7 @@ class SharkContext : public llvm::LLVMContext {
   void add_function(llvm::Function* function) const {
     module()->getFunctionList().push_back(function);
   }
-  llvm::Constant* get_external(const char*               name,
+  llvm::FunctionCallee get_external(const char*               name,
                                llvm::FunctionType* sig) {
     return module()->getOrInsertFunction(name, sig);
   }

@@ -47,8 +47,9 @@ class SharkFunction : public SharkTargetInvariants {
   static llvm::Function* build(ciEnv*        env,
                                SharkBuilder* builder,
                                ciTypeFlow*   flow,
-                               const char*   name) {
-    SharkFunction function(env, builder, flow, name);
+                               const char*   name,
+                               llvm::Module* jitModule) {
+    SharkFunction function(env, builder, flow, name, jitModule);
     return function.function();
   }
 
@@ -56,11 +57,12 @@ class SharkFunction : public SharkTargetInvariants {
   SharkFunction(ciEnv*        env,
                 SharkBuilder* builder,
                 ciTypeFlow*   flow,
-                const char*   name)
-    : SharkTargetInvariants(env, builder, flow) { initialize(name); }
+                const char*   name,
+                llvm::Module* jitModule)
+    : SharkTargetInvariants(env, builder, flow) { initialize(name, jitModule); }
 
  private:
-  void initialize(const char* name);
+  void initialize(const char* name, llvm::Module* jitModule);
 
  private:
   llvm::Function*                   _function;

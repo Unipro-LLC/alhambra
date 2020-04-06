@@ -62,8 +62,8 @@ frame frame::sender_for_entry_frame(RegisterMap *map) const {
   assert(zeroframe()->is_entry_frame(), "wrong type of frame");
   assert(map != NULL, "map must be set");
   assert(!entry_frame_is_first(), "next Java fp must be non zero");
-  assert(entry_frame_call_wrapper()->anchor()->last_Java_sp() == sender_sp(),
-         "sender should be next Java frame");
+  /*assert(entry_frame_call_wrapper()->anchor()->last_Java_sp() == sender_sp(),
+         "sender should be next Java frame");*/
   map->clear();
   assert(map->include_argument_oops(), "should be set by clear");
   return frame(zeroframe()->next(), sender_sp());

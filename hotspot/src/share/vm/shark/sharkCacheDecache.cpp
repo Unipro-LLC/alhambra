@@ -228,9 +228,13 @@ void SharkCacher::process_local_slot(int          index,
   }
 }
 
-Value* SharkOSREntryCacher::CreateAddressOfOSRBufEntry(int         offset,
-                                                       Type* type) {
-  Value *result = builder()->CreateStructGEP(osr_buf(), offset);
+Value* SharkOSREntryCacher::CreateAddressOfOSRBufEntry(int offset, Type* type) {
+  Value *bc = builder()->CreateBitCast(osr_buf(),
+                             PointerType::getUnqual(SharkType::intptr_type()));
+  Value *result = builder()->CreateGEP(SharkType::intptr_type(),
+                                       bc,
+                                       ConstantInt::get(SharkType::jint_type(),
+                                                        offset));
   if (type != SharkType::intptr_type())
     result = builder()->CreateBitCast(result, PointerType::getUnqual(type));
   return result;

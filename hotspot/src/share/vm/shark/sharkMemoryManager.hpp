@@ -33,18 +33,9 @@
 // this to run our own memory allocation policies, but for now all we
 // use it for is figuring out where the resulting native code ended up.
 
-class SharkMemoryManager : public llvm::JITMemoryManager {
+class SharkMemoryManager : public llvm::SectionMemoryManager {
  public:
-  SharkMemoryManager()
-    : _mm(llvm::JITMemoryManager::CreateDefaultMemManager()) {}
-
- private:
-  llvm::JITMemoryManager* _mm;
-
- private:
-  llvm::JITMemoryManager* mm() const {
-    return _mm;
-  }
+  SharkMemoryManager()   : llvm::SectionMemoryManager() {}
 
  private:
   std::map<const llvm::Function*, SharkEntry*> _entry_map;
@@ -59,41 +50,13 @@ class SharkMemoryManager : public llvm::JITMemoryManager {
   }
 
  public:
-  void AllocateGOT();
-  unsigned char* getGOTBase() const;
-  unsigned char* allocateStub(const llvm::GlobalValue* F,
-                              unsigned StubSize,
-                              unsigned Alignment);
-  unsigned char* startFunctionBody(const llvm::Function* F,
-                                   uintptr_t& ActualSize);
-  void endFunctionBody(const llvm::Function* F,
-                       unsigned char* FunctionStart,
-                       unsigned char* FunctionEnd);
-
   void *getPointerToNamedFunction(const std::string &Name, bool AbortOnFailure = true);
-  void setPoisonMemory(bool);
-  uint8_t* allocateGlobal(uintptr_t, unsigned int);
-  void setMemoryWritable();
-  void setMemoryExecutable();
-  void deallocateFunctionBody(void *ptr);
-  unsigned char *allocateSpace(intptr_t Size,
-                               unsigned int Alignment);
 
-#if SHARK_LLVM_VERSION <= 32
-uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment, unsigned SectionID);
-uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment, unsigned SectionID);
-unsigned char* startExceptionTable(const llvm::Function* F,
-                                   uintptr_t& ActualSize);
-void deallocateExceptionTable(void *ptr);
-void endExceptionTable(const llvm::Function* F,
-                                   unsigned char* TableStart,
-                                   unsigned char* TableEnd,
-                                   unsigned char* FrameRegister);
-#else
-uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment, unsigned SectionID, llvm::StringRef SectionName);
-uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment, unsigned SectionID, llvm::StringRef SectionName, bool IsReadOnly);
-bool finalizeMemory(std::string *ErrMsg = 0);
-#endif
+  uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment, unsigned SectionID, llvm::StringRef SectionName);
+  uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment, unsigned SectionID, llvm::StringRef SectionName, bool IsReadOnly);
+  bool finalizeMemory(std::string *ErrMsg = 0);
+  void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override {}
+  void deregisterEHFrames() override {}
 
 };
 

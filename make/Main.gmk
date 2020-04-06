@@ -102,6 +102,10 @@ jaxws-only: start-make
 	@($(CD) $(JAXWS_TOPDIR)/make && $(BUILD_LOG_WRAPPER) $(MAKE) $(MAKE_ARGS) -f BuildJaxws.gmk)
 	@$(call TargetExit)
 
+ifeq ($(JVM_VARIANT_ZEROSHARK), true)
+include $(SRC_ROOT)/make/LLVM.gmk
+endif
+
 ifeq ($(BUILD_HOTSPOT),true)
   hotspot: hotspot-only
   hotspot-only: start-make
@@ -230,6 +234,24 @@ clean-docs:
 	$(call CleanComponent,docstemp)
 clean-test:
 	$(call CleanComponent,testoutput)
+
+
+# Upload targets
+SCP ?= scp
+SSH_HOST = $(shell echo $(SCP_DST) | sed -e 's/\([^:]*\):\(.*\)/\1/')
+SSH_DIR  = $(shell echo $(SCP_DST) | sed -e 's/\([^:]*\):\(.*\)/\2/')
+
+upload-jvm: hotspot-only
+    ifneq ($(SCP_DST), $(SSH_DIR))
+		ssh $(SSH_HOST) rm -f $(SSH_DIR)/jre/lib/$(OPENJDK_TARGET_CPU)/server/libjvm.*
+    else
+		rm -f $(SSH_DIR)/jre/lib/$(OPENJDK_TARGET_CPU)/server/libjvm.*
+    endif
+	$(SCP) $(HOTSPOT_OUTPUTDIR)/dist/jre/lib/$(OPENJDK_TARGET_CPU)/server/libjvm.* $(SCP_DST)/jre/lib/$(OPENJDK_TARGET_CPU)/server/
+
+upload-dist: images
+	sh -c "cd $(JDK_IMAGE_DIR);  zip ../jdk.zip -n .jar -r ./"
+	$(SCP) $(JDK_IMAGE_DIR)/../jdk.zip $(SCP_DST).zip
 
 .PHONY: langtools corba jaxp jaxws hotspot jdk nashorn images overlay-images install test docs
 .PHONY: langtools-only corba-only jaxp-only jaxws-only hotspot-only jdk-only nashorn-only images-only overlay-images-only install-only test-only docs-only

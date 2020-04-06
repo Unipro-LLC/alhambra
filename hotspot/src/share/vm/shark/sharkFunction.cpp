@@ -38,12 +38,13 @@
 
 using namespace llvm;
 
-void SharkFunction::initialize(const char *name) {
+void SharkFunction::initialize(const char *name, Module *jitModule) {
   // Create the function
   _function = Function::Create(
-    entry_point_type(),
-    GlobalVariable::InternalLinkage,
-    name);
+        entry_point_type(),
+        Function::InternalLinkage,
+        name,
+        jitModule);
 
   // Get our arguments
   Function::arg_iterator ai = function()->arg_begin();

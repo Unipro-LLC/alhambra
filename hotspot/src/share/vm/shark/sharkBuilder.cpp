@@ -49,7 +49,15 @@ Value* SharkBuilder::CreateAddressOfStructEntry(Value*      base,
                                                 ByteSize    offset,
                                                 Type* type,
                                                 const char* name) {
-  return CreateBitCast(CreateStructGEP(base, in_bytes(offset)), type, name);
+  Constant* off = ConstantInt::get(SharkType::jint_type(), in_bytes(offset));
+  Type* et = base->getType()->getScalarType()->getContainedType(0u);
+  PointerType* ct = PointerType::getUnqual(SharkType::jbyte_type());
+  Value* bval = base;
+  if ( cast<PointerType>(et) != ct) {
+    bval = CreateBitCast(base, ct, name);
+  }
+  Value* eptr = CreateGEP(SharkType::jbyte_type(), bval, off);
+  return CreateBitCast(eptr, type, name);
 }
 
 LoadInst* SharkBuilder::CreateValueOfStructEntry(Value*      base,
@@ -148,6 +156,8 @@ Type* SharkBuilder::make_type(char type, bool void_ok) {
     return SharkType::oop_type();
   case 'K':
     return SharkType::klass_type();
+  case 'm':
+    return SharkType::Method_type();
 
     // Miscellaneous
   case 'v':
@@ -183,7 +193,7 @@ FunctionType* SharkBuilder::make_ftype(const char* params,
 Value* SharkBuilder::make_function(const char* name,
                                    const char* params,
                                    const char* ret) {
-  return SharkContext::current().get_external(name, make_ftype(params, ret));
+  return SharkContext::current().get_external(name, make_ftype(params, ret)).getCallee();
 }
 
 // Create an object representing an external function by inlining a
@@ -257,6 +267,11 @@ Value* SharkBuilder::throw_NullPointerException() {
     (address) SharkRuntime::throw_NullPointerException, "TCi", "v");
 }
 
+Value* SharkBuilder::throw_ArrayStoreException() {
+  return make_function(
+    (address) SharkRuntime::throw_ArrayStoreException, "TCi", "v");
+}
+
 // High-level non-VM calls
 
 Value* SharkBuilder::f2i() {
@@ -277,6 +292,14 @@ Value* SharkBuilder::d2l() {
 
 Value* SharkBuilder::is_subtype_of() {
   return make_function((address) SharkRuntime::is_subtype_of, "KK", "c");
+}
+
+Value* SharkBuilder::aastore_check() {
+  return make_function((address) SharkRuntime::aastore_check, "OO", "c");
+}
+
+Value* SharkBuilder::get_interface_uncommon() {
+  return make_function((address) SharkRuntime::get_interface_uncommon, "TmOi", "v");
 }
 
 Value* SharkBuilder::current_time_millis() {
@@ -309,10 +332,6 @@ Value* SharkBuilder::log() {
 
 Value* SharkBuilder::log10() {
   return make_function("llvm.log10.f64", "d", "d");
-}
-
-Value* SharkBuilder::pow() {
-  return make_function("llvm.pow.f64", "dd", "d");
 }
 
 Value* SharkBuilder::exp() {
@@ -361,12 +380,18 @@ Value* SharkBuilder::frame_address() {
 Value* SharkBuilder::memset() {
   // LLVM 2.8 added a fifth isVolatile field for memset
   // introduced with LLVM r100304
-  return make_function("llvm.memset.p0i8.i32", "Cciii", "v");
+  return make_function("llvm.memset.p0i8.i32", "Ccii1", "v");
 }
 
 Value* SharkBuilder::unimplemented() {
   return make_function((address) report_unimplemented, "Ci", "v");
 }
+
+NOT_PRODUCT(
+Value* SharkBuilder::breakpoint() {
+  return make_function((address) ::breakpoint, "", "v");
+}
+)
 
 Value* SharkBuilder::should_not_reach_here() {
   return make_function((address) report_should_not_reach_here, "Ci", "v");
@@ -386,26 +411,42 @@ CallInst* SharkBuilder::CreateMemset(Value* dst,
                                      Value* value,
                                      Value* len,
                                      Value* align) {
-  return CreateCall5(memset(), dst, value, len, align,
-                     LLVMValue::jint_constant(0));
+  std::vector<Value *> ArgsV;
+  ArgsV.push_back(dst);
+  ArgsV.push_back(value                     );
+  ArgsV.push_back(len                       );
+  ArgsV.push_back(align                     );
+  ArgsV.push_back(LLVMValue::bit_constant(0));
+
+  return CreateCall(memset(), ArgsV);
 }
 
 CallInst* SharkBuilder::CreateUnimplemented(const char* file, int line) {
-  return CreateCall2(
-    unimplemented(),
-    CreateIntToPtr(
-      LLVMValue::intptr_constant((intptr_t) file),
-      PointerType::getUnqual(SharkType::jbyte_type())),
-    LLVMValue::jint_constant(line));
+  std::vector<Value *> ArgsV;
+  ArgsV.push_back(CreateIntToPtr(
+                    LLVMValue::intptr_constant((intptr_t) file),
+                    PointerType::getUnqual(SharkType::jbyte_type())));
+  ArgsV.push_back(LLVMValue::jint_constant(line));
+  return CreateCall(unimplemented(),ArgsV);
 }
 
+NOT_PRODUCT(
+CallInst* SharkBuilder::CreateBreakpoint() {
+  return CreateCall(
+    breakpoint()
+    );
+}
+)
+
 CallInst* SharkBuilder::CreateShouldNotReachHere(const char* file, int line) {
-  return CreateCall2(
-    should_not_reach_here(),
-    CreateIntToPtr(
-      LLVMValue::intptr_constant((intptr_t) file),
-      PointerType::getUnqual(SharkType::jbyte_type())),
-    LLVMValue::jint_constant(line));
+  std::vector<Value *> ArgsV;
+  ArgsV.push_back(CreateIntToPtr(
+                    LLVMValue::intptr_constant((intptr_t) file),
+                    PointerType::getUnqual(SharkType::jbyte_type())));
+  ArgsV.push_back(LLVMValue::jint_constant(line));
+
+  return CreateCall(
+    should_not_reach_here(),ArgsV);
 }
 
 #ifndef PRODUCT
@@ -426,12 +467,13 @@ CallInst* SharkBuilder::CreateDump(Value* value) {
   else
     Unimplemented();
 
-  return CreateCall2(
-    dump(),
-    CreateIntToPtr(
-      LLVMValue::intptr_constant((intptr_t) name),
-      PointerType::getUnqual(SharkType::jbyte_type())),
-    value);
+  std::vector<Value *> ArgsV;
+  ArgsV.push_back(CreateIntToPtr(LLVMValue::intptr_constant((intptr_t) name),
+                                 PointerType::getUnqual(SharkType::jbyte_type())));
+
+  ArgsV.push_back(value);
+
+  return CreateCall(dump(), ArgsV);
 }
 #endif // PRODUCT
 
@@ -469,7 +511,7 @@ Value* SharkBuilder::CreateInlineOop(jobject object, const char* name) {
     name);
 }
 
-Value* SharkBuilder::CreateInlineMetadata(Metadata* metadata, llvm::PointerType* type, const char* name) {
+llvm::Value* SharkBuilder::CreateInlineMetadata(::Metadata* metadata, llvm::PointerType* type, const char* name) {
   assert(metadata != NULL, "inlined metadata must not be NULL");
   assert(metadata->is_metaspace_object(), "sanity check");
   return CreateLoad(
@@ -509,7 +551,7 @@ BasicBlock* SharkBuilder::GetBlockInsertionPoint() const {
   if (iter == end)
     return NULL;
   else
-    return iter;
+    return &*iter;
 }
 
 BasicBlock* SharkBuilder::CreateBlock(BasicBlock* ip, const char* name) const {
@@ -517,10 +559,10 @@ BasicBlock* SharkBuilder::CreateBlock(BasicBlock* ip, const char* name) const {
     SharkContext::current(), name, GetInsertBlock()->getParent(), ip);
 }
 
-LoadInst* SharkBuilder::CreateAtomicLoad(Value* ptr, unsigned align, AtomicOrdering ordering, SynchronizationScope synchScope, bool isVolatile, const char* name) {
+LoadInst* SharkBuilder::CreateAtomicLoad(Value* ptr, unsigned align, AtomicOrdering ordering, SyncScope::ID synchScope, bool isVolatile, const char* name) {
   return Insert(new LoadInst(ptr, name, isVolatile, align, ordering, synchScope), name);
 }
 
-StoreInst* SharkBuilder::CreateAtomicStore(Value* val, Value* ptr, unsigned align, AtomicOrdering ordering, SynchronizationScope synchScope, bool isVolatile, const char* name) {
+StoreInst* SharkBuilder::CreateAtomicStore(Value* val, Value* ptr, unsigned align, AtomicOrdering ordering, SyncScope::ID synchScope, bool isVolatile, const char* name) {
   return Insert(new StoreInst(val, ptr, isVolatile, align, ordering, synchScope), name);
 }

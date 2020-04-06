@@ -35,51 +35,41 @@
   #undef DEBUG
 #endif
 
-#include <llvm/Analysis/Verifier.h>
+#include <string.h>
+#include <stdarg.h>
+#include <stdlib.h>
+
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 
-// includes specific to each version
-#if SHARK_LLVM_VERSION <= 31
-#include <llvm/Support/IRBuilder.h>
-#include <llvm/Type.h>
-#include <llvm/Argument.h>
-#include <llvm/Constants.h>
-#include <llvm/DerivedTypes.h>
-#include <llvm/Instructions.h>
-#include <llvm/LLVMContext.h>
-#include <llvm/Module.h>
-#elif SHARK_LLVM_VERSION <= 32
-#include <llvm/IRBuilder.h>
-#include <llvm/Type.h>
-#include <llvm/Argument.h>
-#include <llvm/Constants.h>
-#include <llvm/DerivedTypes.h>
-#include <llvm/Instructions.h>
-#include <llvm/LLVMContext.h>
-#include <llvm/Module.h>
-#else // SHARK_LLVM_VERSION <= 34
+// includes specific to 6.0 version
+#include <llvm/ADT/StringRef.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Argument.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DerivedTypes.h>
-#include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
-#include <llvm/ADT/StringRef.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/IR/Type.h>
-#endif
+#include "llvm/IR/LegacyPassManager.h"
+#include <llvm/ExecutionEngine/ExecutionEngine.h>
+#include "llvm/ExecutionEngine/RTDyldMemoryManager.h"
+#include <llvm/ExecutionEngine/SectionMemoryManager.h>
+#include <llvm-c/Core.h>
 
 // common includes
 #include <llvm/Support/Threading.h>
 #include <llvm/Support/TargetSelect.h>
-#include <llvm/ExecutionEngine/JITMemoryManager.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/ExecutionEngine/MCJIT.h>
-#include <llvm/ExecutionEngine/JIT.h>
 #include <llvm/ADT/StringMap.h>
 #include <llvm/Support/Debug.h>
 #include <llvm/Support/Host.h>
+#include <llvm/CodeGen/Passes.h>
+
+#include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Scalar/GVN.h"
 
 #include <map>
 
