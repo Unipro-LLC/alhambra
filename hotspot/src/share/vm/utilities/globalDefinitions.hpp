@@ -423,6 +423,9 @@ enum RTMState {
 #ifdef TARGET_ARCH_zero
 # include "globalDefinitions_zero.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "globalDefinitions_llvm.hpp"
+#endif
 #ifdef TARGET_ARCH_arm
 # include "globalDefinitions_arm.hpp"
 #endif

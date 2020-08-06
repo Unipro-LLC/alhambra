@@ -32,9 +32,15 @@
 #ifdef TARGET_ARCH_zero
 # include "entry_zero.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "entry_llvm.hpp"
+#endif
 
 #ifdef TARGET_ARCH_zero
 # include "entry_zero.hpp"
+#endif
+#ifdef TARGET_ARCH_llvm
+# include "entry_llvm.hpp"
 #endif
 class CppInterpreterGenerator: public AbstractInterpreterGenerator {
   protected:
@@ -58,6 +64,9 @@ class CppInterpreterGenerator: public AbstractInterpreterGenerator {
 #endif
 #ifdef TARGET_ARCH_zero
 # include "cppInterpreterGenerator_zero.hpp"
+#endif
+#ifdef TARGET_ARCH_llvm
+# include "cppInterpreterGenerator_llvm.hpp"
 #endif
 #ifdef TARGET_ARCH_arm
 # include "cppInterpreterGenerator_arm.hpp"

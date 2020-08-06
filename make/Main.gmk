@@ -106,6 +106,10 @@ ifeq ($(JVM_VARIANT_ZEROSHARK), true)
 include $(SRC_ROOT)/make/LLVM.gmk
 endif
 
+ifeq ($(JVM_VARIANTS), ,alhambra,)
+include $(SRC_ROOT)/make/LLVM.gmk
+endif
+
 ifeq ($(BUILD_HOTSPOT),true)
   hotspot: hotspot-only
   hotspot-only: start-make

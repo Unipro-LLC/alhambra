@@ -40,6 +40,9 @@
 #ifdef TARGET_ARCH_zero
 # include "jniTypes_zero.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "jniTypes_llvm.hpp"
+#endif
 #ifdef TARGET_ARCH_arm
 # include "jniTypes_arm.hpp"
 #endif
@@ -51,6 +54,12 @@
 # include "fakeStubFrame_zero.hpp"
 # include "interpreterFrame_zero.hpp"
 # include "sharkFrame_zero.hpp"
+#endif
+#ifdef TARGET_ARCH_llvm
+# include "entryFrame_llvm.hpp"
+# include "fakeStubFrame_llvm.hpp"
+# include "interpreterFrame_llvm.hpp"
+# include "sharkFrame_llvm.hpp"
 #endif
 
 // This file holds platform-independent bodies of inline functions for frames.
@@ -102,6 +111,9 @@ inline oop* frame::interpreter_frame_temp_oop_addr() const {
 #endif
 #ifdef TARGET_ARCH_zero
 # include "frame_zero.inline.hpp"
+#endif
+#ifdef TARGET_ARCH_llvm
+# include "frame_llvm.inline.hpp"
 #endif
 #ifdef TARGET_ARCH_arm
 # include "frame_arm.inline.hpp"

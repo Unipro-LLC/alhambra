@@ -27,7 +27,7 @@
 #define CPU_ZERO_VM_STACK_ZERO_INLINE_HPP
 
 #include "runtime/thread.hpp"
-#include "stack_zero.hpp"
+#include "stack_llvm.hpp"
 
 // This function should match SharkStack::CreateStackOverflowCheck
 inline void ZeroStack::overflow_check(int required_words, TRAPS) {

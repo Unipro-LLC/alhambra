@@ -25,14 +25,14 @@
 
 #include "precompiled.hpp"
 #include "asm/assembler.hpp"
-#include "assembler_zero.inline.hpp"
+#include "assembler_llvm.inline.hpp"
 #include "code/vtableStubs.hpp"
-#include "interp_masm_zero.hpp"
+#include "interp_masm_llvm.hpp"
 #include "memory/resourceArea.hpp"
 #include "oops/instanceKlass.hpp"
 #include "oops/klassVtable.hpp"
 #include "runtime/sharedRuntime.hpp"
-#include "vmreg_zero.inline.hpp"
+#include "vmreg_llvm.inline.hpp"
 #ifdef COMPILER2
 #include "opto/runtime.hpp"
 #endif

@@ -59,6 +59,17 @@ ifeq ($(findstring true, $(JVM_VARIANT_ZERO) $(JVM_VARIANT_ZEROSHARK)), true)
   ARCH             = zero
 endif
 
+#alhambra
+ifeq ($(findstring true, $(JVM_VARIANT_ALHAMBRA)), true)
+  ifeq ($(ARCH_DATA_MODEL), 64)
+    MAKE_ARGS      += LP64=1
+  endif
+  PLATFORM         = linux-llvm
+  VM_PLATFORM      = linux_$(subst i386,i486,$(ZERO_LIBARCH))
+  HS_ARCH          = llvm
+  ARCH             = llvm
+endif
+
 # ia64
 ifeq ($(ARCH), ia64)
   ARCH_DATA_MODEL = 64
@@ -249,7 +260,8 @@ EXPORT_SERVER_DIR = $(EXPORT_JRE_LIB_ARCH_DIR)/server
 EXPORT_CLIENT_DIR = $(EXPORT_JRE_LIB_ARCH_DIR)/client
 EXPORT_MINIMAL_DIR = $(EXPORT_JRE_LIB_ARCH_DIR)/minimal
 
-ifeq ($(findstring true, $(JVM_VARIANT_SERVER) $(JVM_VARIANT_ZERO) $(JVM_VARIANT_ZEROSHARK) $(JVM_VARIANT_CORE)), true)
+
+ifeq ($(findstring true, $(JVM_VARIANT_SERVER) $(JVM_VARIANT_ZERO) $(JVM_VARIANT_ZEROSHARK) $(JVM_VARIANT_ALHAMBRA) $(JVM_VARIANT_CORE)), true)
   EXPORT_LIST += $(EXPORT_SERVER_DIR)/Xusage.txt
   EXPORT_LIST += $(EXPORT_SERVER_DIR)/libjvm.$(LIBRARY_SUFFIX)
   ifeq ($(ENABLE_FULL_DEBUG_SYMBOLS),1)
@@ -305,6 +317,7 @@ ADD_SA_BINARIES/ppc   =
 ADD_SA_BINARIES/ia64  =
 ADD_SA_BINARIES/arm   =
 ADD_SA_BINARIES/zero  =
+ADD_SA_BINARIES/llvm  =
 
 -include $(HS_ALT_MAKE)/linux/makefiles/defs.make
 

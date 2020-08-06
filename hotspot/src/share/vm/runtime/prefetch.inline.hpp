@@ -37,6 +37,9 @@
 #ifdef TARGET_OS_ARCH_linux_zero
 # include "prefetch_linux_zero.inline.hpp"
 #endif
+#ifdef TARGET_OS_ARCH_linux_llvm
+# include "prefetch_linux_llvm.inline.hpp"
+#endif
 #ifdef TARGET_OS_ARCH_linux_arm
 # include "prefetch_linux_arm.inline.hpp"
 #endif

@@ -66,12 +66,16 @@ QUIETLY$(MAKE_VERBOSE)	= @
 ifeq ($(findstring true, $(JVM_VARIANT_ZERO) $(JVM_VARIANT_ZEROSHARK)), true)
   PLATFORM_FILE = $(shell dirname $(shell dirname $(shell pwd)))/platform_zero
 else
-  ifdef USE_SUNCC
-    PLATFORM_FILE = $(GAMMADIR)/make/$(OS_FAMILY)/platform_$(BUILDARCH).suncc
+  ifeq ($(findstring true, $(JVM_VARIANT_ALHAMBRA)), true)
+    PLATFORM_FILE = $(shell dirname $(shell dirname $(shell pwd)))/platform_alhambra
   else
-    PLATFORM_FILE = $(GAMMADIR)/make/$(OS_FAMILY)/platform_$(BUILDARCH)
-    ALT_PLATFORM_FILE = $(HS_ALT_MAKE)/$(OS_FAMILY)/platform_$(BUILDARCH)
-    PLATFORM_FILE := $(if $(wildcard $(ALT_PLATFORM_FILE)),$(ALT_PLATFORM_FILE),$(PLATFORM_FILE))
+    ifdef USE_SUNCC
+      PLATFORM_FILE = $(GAMMADIR)/make/$(OS_FAMILY)/platform_$(BUILDARCH).suncc
+    else
+      PLATFORM_FILE = $(GAMMADIR)/make/$(OS_FAMILY)/platform_$(BUILDARCH)
+      ALT_PLATFORM_FILE = $(HS_ALT_MAKE)/$(OS_FAMILY)/platform_$(BUILDARCH)
+      PLATFORM_FILE := $(if $(wildcard $(ALT_PLATFORM_FILE)),$(ALT_PLATFORM_FILE),$(PLATFORM_FILE))
+    endif
   endif
 endif
 

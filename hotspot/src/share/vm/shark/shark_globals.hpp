@@ -30,6 +30,9 @@
 #ifdef TARGET_ARCH_zero
 # include "shark_globals_zero.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "shark_globals_llvm.hpp"
+#endif
 
 #define SHARK_FLAGS(develop, develop_pd, product, product_pd, diagnostic, notproduct) \
                                                                               \

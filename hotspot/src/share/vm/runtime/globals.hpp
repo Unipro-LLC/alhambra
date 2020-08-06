@@ -46,6 +46,9 @@
 #ifdef TARGET_ARCH_zero
 # include "globals_zero.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "globals_llvm.hpp"
+#endif
 #ifdef TARGET_ARCH_arm
 # include "globals_arm.hpp"
 #endif
@@ -75,6 +78,9 @@
 #endif
 #ifdef TARGET_OS_ARCH_linux_zero
 # include "globals_linux_zero.hpp"
+#endif
+#ifdef TARGET_OS_ARCH_linux_llvm
+# include "globals_linux_llvm.hpp"
 #endif
 #ifdef TARGET_OS_ARCH_solaris_x86
 # include "globals_solaris_x86.hpp"
@@ -161,6 +167,9 @@
 #ifdef SHARK
 #ifdef TARGET_ARCH_zero
 # include "shark_globals_zero.hpp"
+#endif
+#ifdef TARGET_ARCH_llvm
+# include "shark_globals_llvm.hpp"
 #endif
 #endif
 

@@ -36,6 +36,9 @@
 #ifdef TARGET_ARCH_zero
 # include "register_zero.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "register_llvm.hpp"
+#endif
 #ifdef TARGET_ARCH_arm
 # include "register_arm.hpp"
 #endif
@@ -143,6 +146,9 @@ class RegisterMap : public StackObj {
 #endif
 #ifdef TARGET_ARCH_zero
 # include "registerMap_zero.hpp"
+#endif
+#ifdef TARGET_ARCH_llvm
+# include "registerMap_llvm.hpp"
 #endif
 #ifdef TARGET_ARCH_arm
 # include "registerMap_arm.hpp"

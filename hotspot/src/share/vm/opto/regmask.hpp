@@ -38,6 +38,8 @@
 # include "adfiles/adGlobals_sparc.hpp"
 #elif defined TARGET_ARCH_MODEL_zero
 # include "adfiles/adGlobals_zero.hpp"
+#elif defined TARGET_ARCH_MODEL_llvm
+# include "adfiles/adGlobals_llvm.hpp"
 #elif defined TARGET_ARCH_MODEL_ppc_64
 # include "adfiles/adGlobals_ppc_64.hpp"
 #endif

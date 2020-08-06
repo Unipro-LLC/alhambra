@@ -41,6 +41,9 @@
 #ifdef TARGET_ARCH_zero
 # include "depChecker_zero.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "depChecker_llvm.hpp"
+#endif
 #ifdef TARGET_ARCH_arm
 # include "depChecker_arm.hpp"
 #endif

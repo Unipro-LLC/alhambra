@@ -24,7 +24,7 @@
  */
 
 #include "precompiled.hpp"
-#include "assembler_zero.inline.hpp"
+#include "assembler_llvm.inline.hpp"
 #include "memory/resourceArea.hpp"
 #include "prims/jniFastGetField.hpp"
 #include "prims/jvm_misc.hpp"

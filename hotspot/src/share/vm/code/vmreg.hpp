@@ -42,6 +42,8 @@
 # include "adfiles/adGlobals_sparc.hpp"
 #elif defined TARGET_ARCH_MODEL_zero
 # include "adfiles/adGlobals_zero.hpp"
+#elif defined TARGET_ARCH_MODEL_llvm
+# include "adfiles/adGlobals_zero.hpp"
 #elif defined TARGET_ARCH_MODEL_ppc_64
 # include "adfiles/adGlobals_ppc_64.hpp"
 #endif
@@ -161,6 +163,9 @@ public:
 #endif
 #ifdef TARGET_ARCH_zero
 # include "vmreg_zero.hpp"
+#endif
+#ifdef TARGET_ARCH_llvm
+# include "vmreg_llvm.hpp"
 #endif
 #ifdef TARGET_ARCH_arm
 # include "vmreg_arm.hpp"

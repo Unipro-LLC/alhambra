@@ -59,6 +59,9 @@
 #ifdef TARGET_ARCH_zero
 # include "vmreg_zero.inline.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "vmreg_llvm.inline.hpp"
+#endif
 #ifdef TARGET_ARCH_arm
 # include "vmreg_arm.inline.hpp"
 #endif
@@ -76,6 +79,8 @@
 # include "adfiles/ad_sparc.hpp"
 #elif defined TARGET_ARCH_MODEL_zero
 # include "adfiles/ad_zero.hpp"
+#elif defined TARGET_ARCH_MODEL_llvm
+# include "adfiles/ad_llvm.hpp"
 #elif defined TARGET_ARCH_MODEL_ppc_64
 # include "adfiles/ad_ppc_64.hpp"
 #endif

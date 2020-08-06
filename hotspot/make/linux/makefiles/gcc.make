@@ -145,6 +145,10 @@ ifeq ($(JVM_VARIANT_ZEROSHARK), true)
 CFLAGS += $(LIBFFI_CFLAGS)
 CFLAGS += $(LLVM_CFLAGS) -Wno-narrowing -Wno-literal-suffix
 endif
+ifeq ($(JVM_VARIANT_ALHAMBRA), true)
+CFLAGS += $(LIBFFI_CFLAGS)
+CFLAGS += $(LLVM_CFLAGS) -Wno-narrowing -Wno-literal-suffix
+endif
 CFLAGS += $(VM_PICFLAG)
 CFLAGS += -fno-rtti
 CFLAGS += -fno-exceptions
@@ -178,6 +182,7 @@ ARCHFLAG/sparc   = -m32 -mcpu=v9
 ARCHFLAG/sparcv9 = -m64 -mcpu=v9
 ARCHFLAG/zero    = $(ZERO_ARCHFLAG)
 ARCHFLAG/ppc64   =  -m64
+ARCHFLAG/llvm    = $(ZERO_ARCHFLAG)
 
 CFLAGS     += $(ARCHFLAG)
 AOUT_FLAGS += $(ARCHFLAG)

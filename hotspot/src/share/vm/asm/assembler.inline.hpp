@@ -36,6 +36,9 @@
 #ifdef TARGET_ARCH_zero
 # include "assembler_zero.inline.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "assembler_llvm.inline.hpp"
+#endif
 #ifdef TARGET_ARCH_arm
 # include "assembler_arm.inline.hpp"
 #endif

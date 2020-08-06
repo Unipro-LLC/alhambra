@@ -871,6 +871,7 @@ JVM_VARIANT_KERNEL
 JVM_VARIANT_MINIMAL1
 JVM_VARIANT_CLIENT
 JVM_VARIANT_SERVER
+JVM_VARIANT_ALHAMBRA
 JVM_VARIANTS
 JVM_INTERPRETER
 JDK_VARIANT
@@ -7959,10 +7960,10 @@ fi
   fi
 
   JVM_VARIANTS=",$with_jvm_variants,"
-  TEST_VARIANTS=`$ECHO "$JVM_VARIANTS" | $SED -e 's/server,//' -e 's/client,//'  -e 's/minimal1,//' -e 's/kernel,//' -e 's/zero,//' -e 's/zeroshark,//' -e 's/core,//'`
+  TEST_VARIANTS=`$ECHO "$JVM_VARIANTS" | $SED -e 's/server,//' -e 's/client,//'  -e 's/minimal1,//' -e 's/kernel,//' -e 's/zero,//' -e 's/zeroshark,//' -e 's/core,//'  -e 's/alhambra,//'`
 
   if test "x$TEST_VARIANTS" != "x,"; then
-     as_fn_error $? "The available JVM variants are: server, client, minimal1, kernel, zero, zeroshark, core" "$LINENO" 5
+     as_fn_error $? "The available JVM variants are: server, client, minimal1, kernel, zero, zeroshark, core, alhambra" "$LINENO" 5
   fi
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: $with_jvm_variants" >&5
 $as_echo "$with_jvm_variants" >&6; }
@@ -7974,6 +7975,7 @@ $as_echo "$with_jvm_variants" >&6; }
   JVM_VARIANT_ZERO=`$ECHO "$JVM_VARIANTS" | $SED -e '/,zero,/!s/.*/false/g' -e '/,zero,/s/.*/true/g'`
   JVM_VARIANT_ZEROSHARK=`$ECHO "$JVM_VARIANTS" | $SED -e '/,zeroshark,/!s/.*/false/g' -e '/,zeroshark,/s/.*/true/g'`
   JVM_VARIANT_CORE=`$ECHO "$JVM_VARIANTS" | $SED -e '/,core,/!s/.*/false/g' -e '/,core,/s/.*/true/g'`
+  JVM_VARIANT_ALHAMBRA=`$ECHO "$JVM_VARIANTS" | $SED -e '/,alhambra,/!s/.*/false/g' -e '/,alhambra,/s/.*/true/g'`
 
   if test "x$JVM_VARIANT_CLIENT" = xtrue; then
     if test "x$OPENJDK_TARGET_CPU_BITS" = x64; then
@@ -7993,7 +7995,7 @@ $as_echo "$with_jvm_variants" >&6; }
 
   # Replace the commas with AND for use in the build directory name.
   ANDED_JVM_VARIANTS=`$ECHO "$JVM_VARIANTS" | $SED -e 's/^,//' -e 's/,$//' -e 's/,/AND/g'`
-  COUNT_VARIANTS=`$ECHO "$JVM_VARIANTS" | $SED -e 's/server,/1/' -e 's/client,/1/' -e 's/minimal1,/1/' -e 's/kernel,/1/' -e 's/zero,/1/' -e 's/zeroshark,/1/' -e 's/core,/1/'`
+  COUNT_VARIANTS=`$ECHO "$JVM_VARIANTS" | $SED -e 's/server,/1/' -e 's/client,/1/' -e 's/minimal1,/1/' -e 's/kernel,/1/' -e 's/zero,/1/' -e 's/zeroshark,/1/' -e 's/core,/1/' -e 's/alhambra,/1/'`
   if test "x$COUNT_VARIANTS" != "x,1"; then
     BUILDING_MULTIPLE_JVM_VARIANTS=yes
   else
@@ -8007,13 +8009,14 @@ $as_echo "$with_jvm_variants" >&6; }
 
 
 
-
-
   INCLUDE_SA=true
   if test "x$JVM_VARIANT_ZERO" = xtrue ; then
     INCLUDE_SA=false
   fi
   if test "x$JVM_VARIANT_ZEROSHARK" = xtrue ; then
+    INCLUDE_SA=false
+  fi
+  if test "x$JVM_VARIANT_ALHAMBRA" = xtrue ; then
     INCLUDE_SA=false
   fi
   if test "x$VAR_CPU" = xppc64 ; then
@@ -8135,6 +8138,10 @@ $as_echo "$DEBUG_LEVEL" >&6; }
 
   if test "x$JVM_VARIANT_ZEROSHARK" = xtrue; then
     HOTSPOT_TARGET="$HOTSPOT_TARGET${HOTSPOT_DEBUG_LEVEL}shark "
+  fi
+
+  if test "x$JVM_VARIANT_ALHAMBRA" = xtrue; then
+    HOTSPOT_TARGET="$HOTSPOT_TARGET${HOTSPOT_DEBUG_LEVEL}alhambra "
   fi
 
   if test "x$JVM_VARIANT_CORE" = xtrue; then
@@ -29737,6 +29744,11 @@ fi
       if test "x$JVM_VARIANT_ZEROSHARK" = xtrue; then
         CXXSTD_CXXFLAG="-std=c++11"
       fi
+        if test "x$JVM_VARIANT_AlHAMBRA" = xtrue; then
+        CXXSTD_CXXFLAG="-std=c++11"
+      fi
+
+
 
   { $as_echo "$as_me:${as_lineno-$LINENO}: checking if the C++ compiler supports \"$CXXSTD_CXXFLAG $CFLAGS_WARNINGS_ARE_ERRORS\"" >&5
 $as_echo_n "checking if the C++ compiler supports \"$CXXSTD_CXXFLAG $CFLAGS_WARNINGS_ARE_ERRORS\"... " >&6; }
@@ -35740,7 +35752,7 @@ $as_echo "$has_static_libstdcxx" >&6; }
 $as_echo_n "checking how to link with libstdc++... " >&6; }
     # If dynamic was requested, it's available since it would fail above otherwise.
     # If dynamic wasn't requested, go with static unless it isn't available.
-    if test "x$with_stdc__lib" = xdynamic || test "x$has_static_libstdcxx" = xno || test "x$JVM_VARIANT_ZEROSHARK" = xtrue; then
+    if test "x$with_stdc__lib" = xdynamic || test "x$has_static_libstdcxx" = xno || test "x$JVM_VARIANT_ZEROSHARK" = xtrue || test "x$JVM_VARIANT_ALHAMBRA" = xtrue; then
       LIBCXX="$LIBCXX -lstdc++"
       LDCXX="$CXX"
       STATIC_CXX_SETTING="STATIC_CXX=false"
@@ -35756,7 +35768,7 @@ $as_echo "static" >&6; }
   fi
 
 
-  if test "x$JVM_VARIANT_ZERO" = xtrue || test "x$JVM_VARIANT_ZEROSHARK" = xtrue; then
+  if test "x$JVM_VARIANT_ZERO" = xtrue || test "x$JVM_VARIANT_ZEROSHARK" = xtrue || test "x$JVM_VARIANT_ALHAMBRA" = xtrue; then
     # Figure out LIBFFI_CFLAGS and LIBFFI_LIBS
 
 pkg_failed=no
@@ -35847,7 +35859,7 @@ fi
 
   fi
 
-  if test "x$JVM_VARIANT_ZEROSHARK" = xtrue; then
+  if test "x$JVM_VARIANT_ZEROSHARK" = xtrue || test "x$JVM_VARIANT_ALHAMBRA" = xtrue; then
     # Extract the first word of "llvm-config", so it can be a program name with args.
 set dummy llvm-config; ac_word=$2
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5

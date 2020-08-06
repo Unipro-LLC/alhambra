@@ -35,6 +35,9 @@
 #ifdef TARGET_ARCH_zero
 # include "vm_version_zero.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "vm_version_llvm.hpp"
+#endif
 #ifdef TARGET_ARCH_arm
 # include "vm_version_arm.hpp"
 #endif

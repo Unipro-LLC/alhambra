@@ -33,6 +33,9 @@
 #ifdef TARGET_ARCH_zero
 # include "jniTypes_zero.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "jniTypes_llvm.hpp"
+#endif
 #ifdef TARGET_ARCH_arm
 # include "jniTypes_arm.hpp"
 #endif

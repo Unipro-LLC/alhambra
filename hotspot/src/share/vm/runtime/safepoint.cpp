@@ -65,6 +65,10 @@
 # include "nativeInst_zero.hpp"
 # include "vmreg_zero.inline.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "nativeInst_llvm.hpp"
+# include "vmreg_llvm.inline.hpp"
+#endif
 #ifdef TARGET_ARCH_arm
 # include "nativeInst_arm.hpp"
 # include "vmreg_arm.inline.hpp"

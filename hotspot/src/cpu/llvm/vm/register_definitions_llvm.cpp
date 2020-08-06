@@ -26,7 +26,7 @@
 #include "precompiled.hpp"
 #include "asm/assembler.hpp"
 #include "asm/register.hpp"
-#include "interp_masm_zero.hpp"
-#include "register_zero.hpp"
+#include "interp_masm_llvm.hpp"
+#include "register_llvm.hpp"
 
 // This file is intentionally empty

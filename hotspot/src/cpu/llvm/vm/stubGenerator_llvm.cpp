@@ -25,9 +25,9 @@
 
 #include "precompiled.hpp"
 #include "asm/assembler.hpp"
-#include "assembler_zero.inline.hpp"
+#include "assembler_llvm.inline.hpp"
 #include "interpreter/interpreter.hpp"
-#include "nativeInst_zero.hpp"
+#include "nativeInst_llvm.hpp"
 #include "oops/instanceOop.hpp"
 #include "oops/method.hpp"
 #include "oops/objArrayKlass.hpp"
@@ -39,7 +39,7 @@
 #include "runtime/stubCodeGenerator.hpp"
 #include "runtime/stubRoutines.hpp"
 #include "runtime/thread.inline.hpp"
-#include "stack_zero.inline.hpp"
+#include "stack_llvm.inline.hpp"
 #include "utilities/top.hpp"
 #ifdef COMPILER2
 #include "opto/runtime.hpp"

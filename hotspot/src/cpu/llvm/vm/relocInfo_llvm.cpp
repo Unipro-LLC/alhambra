@@ -25,9 +25,9 @@
 
 #include "precompiled.hpp"
 #include "asm/assembler.inline.hpp"
-#include "assembler_zero.inline.hpp"
+#include "assembler_llvm.inline.hpp"
 #include "code/relocInfo.hpp"
-#include "nativeInst_zero.hpp"
+#include "nativeInst_llvm.hpp"
 #include "oops/oop.inline.hpp"
 #include "runtime/safepoint.hpp"
 

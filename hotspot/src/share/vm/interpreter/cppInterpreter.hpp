@@ -90,6 +90,9 @@ class CppInterpreter: public AbstractInterpreter {
 #ifdef TARGET_ARCH_zero
 # include "cppInterpreter_zero.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "cppInterpreter_llvm.hpp"
+#endif
 #ifdef TARGET_ARCH_arm
 # include "cppInterpreter_arm.hpp"
 #endif

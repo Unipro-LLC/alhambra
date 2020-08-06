@@ -50,6 +50,9 @@ InterpreterGenerator(StubQueue* _code);
 #ifdef TARGET_ARCH_zero
 # include "interpreterGenerator_zero.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "interpreterGenerator_llvm.hpp"
+#endif
 #ifdef TARGET_ARCH_arm
 # include "interpreterGenerator_arm.hpp"
 #endif

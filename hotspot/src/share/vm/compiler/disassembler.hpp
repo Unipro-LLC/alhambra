@@ -87,6 +87,9 @@ class Disassembler {
 #ifdef TARGET_ARCH_zero
 # include "disassembler_zero.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "disassembler_llvm.hpp"
+#endif
 #ifdef TARGET_ARCH_arm
 # include "disassembler_arm.hpp"
 #endif

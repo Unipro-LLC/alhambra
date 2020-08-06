@@ -54,6 +54,9 @@
 #ifdef TARGET_ARCH_zero
 # include "stack_zero.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "stack_llvm.hpp"
+#endif
 
 class ThreadSafepointState;
 class ThreadProfiler;
@@ -1711,6 +1714,9 @@ public:
 #endif
 #ifdef TARGET_OS_ARCH_linux_zero
 # include "thread_linux_zero.hpp"
+#endif
+#ifdef TARGET_OS_ARCH_linux_llvm
+# include "thread_linux_llvm.hpp"
 #endif
 #ifdef TARGET_OS_ARCH_solaris_x86
 # include "thread_solaris_x86.hpp"

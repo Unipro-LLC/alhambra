@@ -38,6 +38,8 @@
 # include "interp_masm_sparc.hpp"
 #elif defined TARGET_ARCH_MODEL_zero
 # include "interp_masm_zero.hpp"
+#elif defined TARGET_ARCH_MODEL_llvm
+# include "interp_masm_llvm.hpp"
 #elif defined TARGET_ARCH_MODEL_ppc_64
 # include "interp_masm_ppc_64.hpp"
 #endif

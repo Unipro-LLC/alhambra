@@ -27,7 +27,7 @@
 #define CPU_ZERO_VM_SHARKFRAME_ZERO_HPP
 
 #include "oops/method.hpp"
-#include "stack_zero.hpp"
+#include "stack_llvm.hpp"
 
 // |  ...               |
 // +--------------------+  ------------------

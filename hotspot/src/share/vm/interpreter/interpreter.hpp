@@ -31,6 +31,9 @@
 #ifdef TARGET_ARCH_zero
 # include "entry_zero.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "entry_llvm.hpp"
+#endif
 
 // This file contains the platform-independent parts
 // of the interpreter and the interpreter generator.
@@ -153,6 +156,9 @@ class Interpreter: public CC_INTERP_ONLY(CppInterpreter) NOT_CC_INTERP(TemplateI
 #endif
 #ifdef TARGET_ARCH_zero
 # include "interpreter_zero.hpp"
+#endif
+#ifdef TARGET_ARCH_llvm
+# include "interpreter_llvm.hpp"
 #endif
 #ifdef TARGET_ARCH_arm
 # include "interpreter_arm.hpp"

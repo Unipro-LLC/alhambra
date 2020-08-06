@@ -833,6 +833,9 @@ class os: AllStatic {
 #ifdef TARGET_OS_ARCH_linux_zero
 # include "os_linux_zero.hpp"
 #endif
+#ifdef TARGET_OS_ARCH_linux_llvm
+# include "os_linux_llvm.hpp"
+#endif
 #ifdef TARGET_OS_ARCH_solaris_x86
 # include "os_solaris_x86.hpp"
 #endif

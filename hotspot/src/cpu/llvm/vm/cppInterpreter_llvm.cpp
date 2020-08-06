@@ -46,7 +46,7 @@
 #include "runtime/synchronizer.hpp"
 #include "runtime/timer.hpp"
 #include "runtime/vframeArray.hpp"
-#include "stack_zero.inline.hpp"
+#include "stack_llvm.inline.hpp"
 #include "utilities/debug.hpp"
 #include "utilities/macros.hpp"
 #ifdef SHARK

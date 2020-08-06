@@ -113,6 +113,9 @@
 #ifdef TARGET_ARCH_zero
 # include "vmStructs_zero.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "vmStructs_llvm.hpp"
+#endif
 #ifdef TARGET_ARCH_arm
 # include "vmStructs_arm.hpp"
 #endif
@@ -127,6 +130,9 @@
 #endif
 #ifdef TARGET_OS_ARCH_linux_zero
 # include "vmStructs_linux_zero.hpp"
+#endif
+#ifdef TARGET_OS_ARCH_linux_llvm
+# include "vmStructs_linux_llvm.hpp"
 #endif
 #ifdef TARGET_OS_ARCH_solaris_x86
 # include "vmStructs_solaris_x86.hpp"
@@ -202,6 +208,8 @@
 # include "adfiles/adGlobals_sparc.hpp"
 #elif defined TARGET_ARCH_MODEL_zero
 # include "adfiles/adGlobals_zero.hpp"
+#elif defined TARGET_ARCH_MODEL_llvm
+# include "adfiles/adGlobals_llvm.hpp"
 #elif defined TARGET_ARCH_MODEL_ppc_64
 # include "adfiles/adGlobals_ppc_64.hpp"
 #endif

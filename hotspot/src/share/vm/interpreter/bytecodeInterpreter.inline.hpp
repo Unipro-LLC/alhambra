@@ -52,6 +52,9 @@
 #ifdef TARGET_ARCH_zero
 # include "bytecodeInterpreter_zero.inline.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "bytecodeInterpreter_llvm.inline.hpp"
+#endif
 #ifdef TARGET_ARCH_arm
 # include "bytecodeInterpreter_arm.inline.hpp"
 #endif

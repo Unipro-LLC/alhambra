@@ -36,6 +36,9 @@
 #ifdef TARGET_ARCH_zero
 # include "assembler_zero.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "assembler_llvm.hpp"
+#endif
 #ifdef TARGET_ARCH_arm
 # include "macroAssembler_arm.hpp"
 #endif

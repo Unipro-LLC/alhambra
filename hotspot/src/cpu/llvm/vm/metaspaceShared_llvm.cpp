@@ -24,7 +24,7 @@
  */
 
 #include "precompiled.hpp"
-#include "assembler_zero.inline.hpp"
+#include "assembler_llvm.inline.hpp"
 #include "memory/metaspaceShared.hpp"
 
 void MetaspaceShared::generate_vtable_methods(void** vtbl_list,

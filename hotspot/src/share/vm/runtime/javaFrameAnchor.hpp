@@ -86,6 +86,9 @@ friend class JavaCallWrapper;
 #ifdef TARGET_ARCH_zero
 # include "javaFrameAnchor_zero.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "javaFrameAnchor_llvm.hpp"
+#endif
 #ifdef TARGET_ARCH_arm
 # include "javaFrameAnchor_arm.hpp"
 #endif

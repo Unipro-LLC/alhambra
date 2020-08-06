@@ -6,7 +6,7 @@ BUILD_DIR=$ROOT_DIR/build
 # default values
 BUILDTYPE=release
 TARCH=x86
-JVM_TYPE=zeroshark
+JVM_TYPE=alhambra
 JOBS=$(cat /proc/cpuinfo | grep 'model name' | sed -e 's/.*: //' | wc -l)
 UPLOAD=
 SCP_DST_DEFINED=
@@ -22,6 +22,9 @@ for arg; do
   [ "${arg:0:9}" == "BOOT_JDK=" ] && BOOT_JDK="${arg:9}" && continue
   [ "${arg:0:14}" == "-make-threads=" ] && JOBS="${arg:14}" && continue
   [ "${arg:0:6}" == "-JOBS=" ] && JOBS="${arg:6}" && continue
+  [ "$arg" == "-zeroshark" ] && JVM_TYPE=zeroshark && continue
+  [ "$arg" == "-server" ] && JVM_TYPE=server && continue
+  [ "$arg" == "-alhambra" ] && JVM_TYPE=alhambra && continue
   [ "$arg" == "-release" -o "$arg" == "-debug=off" ] && BUILDTYPE=release && continue
   [ "$arg" == "-debug" -o "$arg" == "-debug=slow" -o "$arg" == "-slowdebug" ] && BUILDTYPE=slowdebug && continue
   [ "$arg" == "-fastdebug" -o "$arg" == "-debug=fast" ] && BUILDTYPE=fastdebug && continue

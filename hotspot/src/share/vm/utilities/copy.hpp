@@ -332,6 +332,9 @@ class Copy : AllStatic {
 #ifdef TARGET_ARCH_zero
 # include "copy_zero.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "copy_llvm.hpp"
+#endif
 #ifdef TARGET_ARCH_arm
 # include "copy_arm.hpp"
 #endif

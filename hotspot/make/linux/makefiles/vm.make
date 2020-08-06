@@ -45,9 +45,13 @@ DEP_DIR       = $(GENERATED)/dependencies
 ifeq ($(findstring true, $(JVM_VARIANT_ZERO) $(JVM_VARIANT_ZEROSHARK)), true)
   include $(MAKEFILES_DIR)/zeroshark.make
 else
-  BUILDARCH_MAKE = $(MAKEFILES_DIR)/$(BUILDARCH).make
-  ALT_BUILDARCH_MAKE = $(HS_ALT_MAKE)/$(Platform_os_family)/makefiles/$(BUILDARCH).make
-  include $(if $(wildcard $(ALT_BUILDARCH_MAKE)),$(ALT_BUILDARCH_MAKE),$(BUILDARCH_MAKE))
+  ifeq ($(findstring true, $(JVM_VARIANT_ALHAMBRA)), true)
+    include $(MAKEFILES_DIR)/llvm.make
+  else
+    BUILDARCH_MAKE = $(MAKEFILES_DIR)/$(BUILDARCH).make
+    ALT_BUILDARCH_MAKE = $(HS_ALT_MAKE)/$(Platform_os_family)/makefiles/$(BUILDARCH).make
+    include $(if $(wildcard $(ALT_BUILDARCH_MAKE)),$(ALT_BUILDARCH_MAKE),$(BUILDARCH_MAKE))
+  endif
 endif
 
 # set VPATH so make knows where to look for source files
@@ -185,12 +189,14 @@ Src_Dirs/COMPILER2 := $(CORE_PATHS) $(COMPILER2_PATHS)
 Src_Dirs/TIERED    := $(CORE_PATHS) $(COMPILER1_PATHS) $(COMPILER2_PATHS)
 Src_Dirs/ZERO      := $(CORE_PATHS)
 Src_Dirs/SHARK     := $(CORE_PATHS) $(SHARK_PATHS)
+Src_Dirs/LLVM      := $(CORE_PATHS)
 Src_Dirs := $(Src_Dirs/$(TYPE))
 
 COMPILER2_SPECIFIC_FILES := opto libadt bcEscapeAnalyzer.cpp c2_\* runtime_\*
 COMPILER1_SPECIFIC_FILES := c1_\*
 SHARK_SPECIFIC_FILES     := shark
 ZERO_SPECIFIC_FILES      := zero
+LLVM_SPECIFIC_FILES      := llvm
 
 # Always exclude these.
 Src_Files_EXCLUDE += jsig.c jvmtiEnvRecommended.cpp jvmtiEnvStub.cpp
@@ -202,6 +208,7 @@ Src_Files_EXCLUDE/COMPILER2 := $(COMPILER1_SPECIFIC_FILES) $(ZERO_SPECIFIC_FILES
 Src_Files_EXCLUDE/TIERED    := $(ZERO_SPECIFIC_FILES) $(SHARK_SPECIFIC_FILES)
 Src_Files_EXCLUDE/ZERO      := $(COMPILER1_SPECIFIC_FILES) $(COMPILER2_SPECIFIC_FILES) $(SHARK_SPECIFIC_FILES) ciTypeFlow.cpp
 Src_Files_EXCLUDE/SHARK     := $(COMPILER1_SPECIFIC_FILES) $(COMPILER2_SPECIFIC_FILES) $(ZERO_SPECIFIC_FILES)
+Src_Files_EXCLUDE/LLVM      := $(COMPILER1_SPECIFIC_FILES) $(COMPILER2_SPECIFIC_FILES) $(LLVM_SPECIFIC_FILES)
 
 Src_Files_EXCLUDE +=  $(Src_Files_EXCLUDE/$(TYPE))
 
@@ -231,6 +238,7 @@ Src_Files := $(foreach e,$(Src_Dirs),$(call findsrc,$(e)))
 Obj_Files = $(sort $(addsuffix .o,$(basename $(Src_Files))))
 
 JVM_OBJ_FILES = $(Obj_Files)
+
 
 vm_version.o: $(filter-out vm_version.o,$(JVM_OBJ_FILES))
 
@@ -262,7 +270,8 @@ mapfile_ext:
 	  cat $(HS_ALT_MAKE)/linux/makefiles/mapfile-ext > $@; \
 	fi
 
-ifeq ($(JVM_VARIANT_ZEROSHARK), true)
+
+ifeq ($(findstring true, $(JVM_VARIANT_ZEROSHARK) $(JVM_VARIANT_ALHAMBRA)), true)
   STATIC_CXX = false
 else
   ifeq ($(ZERO_LIBARCH), ppc64)
@@ -271,6 +280,7 @@ else
     STATIC_CXX = true
   endif
 endif
+
 
 ifeq ($(LINK_INTO),AOUT)
   LIBJVM.o                 =
@@ -298,6 +308,11 @@ ifeq ($(JVM_VARIANT_ZERO), true)
   LIBS_VM += $(LIBFFI_LIBS)
 endif
 ifeq ($(JVM_VARIANT_ZEROSHARK), true)
+  LIBS_VM   += $(LIBFFI_LIBS) $(LLVM_LIBS)
+  LFLAGS_VM += $(LLVM_LDFLAGS)
+endif
+
+ifeq ($(JVM_VARIANT_ALHAMBRA), true)
   LIBS_VM   += $(LIBFFI_LIBS) $(LLVM_LIBS)
   LFLAGS_VM += $(LLVM_LDFLAGS)
 endif

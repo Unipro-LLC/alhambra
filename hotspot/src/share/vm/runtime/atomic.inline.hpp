@@ -37,6 +37,9 @@
 #ifdef TARGET_OS_ARCH_linux_zero
 # include "atomic_linux_zero.inline.hpp"
 #endif
+#ifdef TARGET_OS_ARCH_linux_llvm
+# include "atomic_linux_llvm.inline.hpp"
+#endif
 #ifdef TARGET_OS_ARCH_linux_arm
 # include "atomic_linux_arm.inline.hpp"
 #endif

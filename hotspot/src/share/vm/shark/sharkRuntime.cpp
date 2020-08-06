@@ -33,6 +33,9 @@
 #ifdef TARGET_ARCH_zero
 # include "stack_zero.inline.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "stack_llvm.inline.hpp"
+#endif
 
 using namespace llvm;
 

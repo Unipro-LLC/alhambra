@@ -25,7 +25,7 @@
 
 #include "precompiled.hpp"
 #include "asm/assembler.hpp"
-#include "assembler_zero.inline.hpp"
+#include "assembler_llvm.inline.hpp"
 #include "code/debugInfoRec.hpp"
 #include "code/icBuffer.hpp"
 #include "code/vtableStubs.hpp"
@@ -34,7 +34,7 @@
 #include "prims/jvmtiRedefineClassesTrace.hpp"
 #include "runtime/sharedRuntime.hpp"
 #include "runtime/vframeArray.hpp"
-#include "vmreg_zero.inline.hpp"
+#include "vmreg_llvm.inline.hpp"
 
 #ifdef COMPILER1
 #include "c1/c1_Runtime1.hpp"

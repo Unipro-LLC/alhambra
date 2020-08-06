@@ -27,7 +27,7 @@
 #define CPU_ZERO_VM_ENTRYFRAME_ZERO_HPP
 
 #include "runtime/javaCalls.hpp"
-#include "stack_zero.hpp"
+#include "stack_llvm.hpp"
 
 // |  ...               |
 // +--------------------+  ------------------

@@ -26,7 +26,7 @@
 #ifndef CPU_ZERO_VM_FAKESTUBFRAME_ZERO_HPP
 #define CPU_ZERO_VM_FAKESTUBFRAME_ZERO_HPP
 
-#include "stack_zero.hpp"
+#include "stack_llvm.hpp"
 
 // |  ...               |
 // +--------------------+  ------------------

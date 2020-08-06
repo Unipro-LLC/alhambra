@@ -41,6 +41,9 @@
 #ifdef TARGET_ARCH_zero
 # include "bytes_zero.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "bytes_llvm.hpp"
+#endif
 #ifdef TARGET_ARCH_arm
 # include "bytes_arm.hpp"
 #endif
@@ -594,6 +597,9 @@ void print();
 #endif
 #ifdef TARGET_ARCH_zero
 # include "bytecodeInterpreter_zero.hpp"
+#endif
+#ifdef TARGET_ARCH_llvm
+# include "bytecodeInterpreter_llvm.hpp"
 #endif
 #ifdef TARGET_ARCH_arm
 # include "bytecodeInterpreter_arm.hpp"

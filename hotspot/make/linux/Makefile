@@ -187,7 +187,7 @@ VARIANTARCH = $(subst i386,i486,$(ZERO_LIBARCH))
 # in the build.sh script:
 TARGETS           = debug fastdebug optimized product
 
-ifeq ($(findstring true, $(JVM_VARIANT_ZERO) $(JVM_VARIANT_ZEROSHARK)), true)
+ifeq ($(findstring true, $(JVM_VARIANT_ZERO) $(JVM_VARIANT_ZEROSHARK) $(JVM_VARIANT_ALHAMBRA)), true)
   SUBDIR_DOCS     = $(OSNAME)_$(VARIANTARCH)_docs
 else
   SUBDIR_DOCS     = $(OSNAME)_$(BUILDARCH)_docs
@@ -199,6 +199,7 @@ SUBDIRS_CORE      = $(addprefix $(OSNAME)_$(BUILDARCH)_core/,$(TARGETS))
 SUBDIRS_ZERO      = $(addprefix $(OSNAME)_$(VARIANTARCH)_zero/,$(TARGETS))
 SUBDIRS_SHARK     = $(addprefix $(OSNAME)_$(VARIANTARCH)_shark/,$(TARGETS))
 SUBDIRS_MINIMAL1  = $(addprefix $(OSNAME)_$(BUILDARCH)_minimal1/,$(TARGETS))
+SUBDIRS_ALHAMBRA  = $(addprefix $(OSNAME)_$(VARIANTARCH)_alhambra/,$(TARGETS))
 
 TARGETS_C2        = $(TARGETS)
 TARGETS_C1        = $(addsuffix 1,$(TARGETS))
@@ -207,6 +208,7 @@ TARGETS_CORE      = $(addsuffix core,$(TARGETS))
 TARGETS_ZERO      = $(addsuffix zero,$(TARGETS))
 TARGETS_SHARK     = $(addsuffix shark,$(TARGETS))
 TARGETS_MINIMAL1 =  $(addsuffix minimal1,$(TARGETS))
+TARGETS_ALHAMBRA =  $(addsuffix alhambra,$(TARGETS))
 
 BUILDTREE_MAKE    = $(GAMMADIR)/make/$(OSNAME)/makefiles/buildtree.make
 BUILDTREE_VARS    = GAMMADIR=$(GAMMADIR) OS_FAMILY=$(OSNAME) SRCARCH=$(SRCARCH) BUILDARCH=$(BUILDARCH) LIBARCH=$(LIBARCH)
@@ -286,9 +288,16 @@ $(SUBDIRS_SHARK): $(BUILDTREE_MAKE) platform_zero
 $(SUBDIRS_MINIMAL1): $(BUILDTREE_MAKE)
 	$(QUIETLY) $(MAKE) -f $(GAMMADIR)/make/$(OSNAME)/Makefile checks
 	$(BUILDTREE) VARIANT=minimal1
+	
+$(SUBDIRS_ALHAMBRA): $(BUILDTREE_MAKE) platform_alhambra
+	$(QUIETLY) $(MAKE) -f $(GAMMADIR)/make/$(OSNAME)/Makefile checks
+	$(BUILDTREE) VARIANT=alhambra VARIANTARCH=$(VARIANTARCH)
 
 
 platform_zero: $(GAMMADIR)/make/$(OSNAME)/platform_zero.in
+	$(SED) 's/@ZERO_ARCHDEF@/$(ZERO_ARCHDEF)/g;s/@ZERO_LIBARCH@/$(ZERO_LIBARCH)/g;' < $< > $@
+	
+platform_alhambra: $(GAMMADIR)/make/$(OSNAME)/platform_alhambra.in
 	$(SED) 's/@ZERO_ARCHDEF@/$(ZERO_ARCHDEF)/g;s/@ZERO_LIBARCH@/$(ZERO_LIBARCH)/g;' < $< > $@
 
 # Define INSTALL=y at command line to automatically copy JVM into JAVA_HOME
@@ -335,6 +344,12 @@ ifdef INSTALL
 	cd $(OSNAME)_$(BUILDARCH)_minimal1/$(patsubst %minimal1,%,$@) && $(MAKE) $(MFLAGS) install
 endif
 
+$(TARGETS_ALHAMBRA):  $(SUBDIRS_ALHAMBRA)
+	cd $(OSNAME)_$(VARIANTARCH)_alhambra/$(patsubst %alhambra,%,$@) && $(MAKE) $(MFLAGS)
+ifdef INSTALL
+	cd $(OSNAME)_$(VARIANTARCH)_alhambra/$(patsubst %alhambra,%,$@) && $(MAKE) $(MFLAGS) install
+endif
+
 # Just build the tree, and nothing else:
 tree:      $(SUBDIRS_C2)
 tree1:     $(SUBDIRS_C1)
@@ -342,6 +357,7 @@ treecore:  $(SUBDIRS_CORE)
 treezero:  $(SUBDIRS_ZERO)
 treeshark: $(SUBDIRS_SHARK)
 treeminimal1: $(SUBDIRS_MINIMAL1)
+treealhambra: $(SUBDIRS_ALHAMBRA)
 
 # Doc target.  This is the same for all build options.
 #     Hence create a docs directory beside ...$(ARCH)_[...]
@@ -379,7 +395,7 @@ jvmgshark: warn_jvmg_deprecated debugshark
 clean_docs:
 	rm -rf $(SUBDIR_DOCS)
 
-clean_compiler1 clean_compiler2 clean_core clean_zero clean_shark clean_minimal1:
+clean_compiler1 clean_compiler2 clean_core clean_zero clean_shark clean_minimal1 clean_alhambra:
 	rm -rf $(OSNAME)_$(BUILDARCH)_$(subst clean_,,$@)
 
 clean:  clean_compiler2 clean_compiler1 clean_core clean_zero clean_shark clean_minimal1 clean_docs
@@ -393,7 +409,7 @@ include $(GAMMADIR)/make/cscope.make
 
 #-------------------------------------------------------------------------------
 
-.PHONY: $(TARGETS_C2) $(TARGETS_C1) $(TARGETS_CORE) $(TARGETS_ZERO) $(TARGETS_SHARK) $(TARGETS_MINIMAL1)
+.PHONY: $(TARGETS_C2) $(TARGETS_C1) $(TARGETS_CORE) $(TARGETS_ZERO) $(TARGETS_SHARK) $(TARGETS_MINIMAL1) $(TARGETS_ALHAMBRA)
 .PHONY: tree tree1 treecore treezero treeshark
 .PHONY: all compiler1 compiler2 core zero shark
 .PHONY: clean clean_compiler1 clean_compiler2 clean_core clean_zero clean_shark docs clean_docs

@@ -25,8 +25,8 @@
 
 #include "precompiled.hpp"
 #include "interpreter/interpreterRuntime.hpp"
-#include "stack_zero.hpp"
-#include "stack_zero.inline.hpp"
+#include "stack_llvm.hpp"
+#include "stack_llvm.inline.hpp"
 
 int ZeroStack::suggest_size(Thread *thread) const {
   assert(needs_setup(), "already set up");

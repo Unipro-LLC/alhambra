@@ -24,11 +24,11 @@
  */
 
 #include "precompiled.hpp"
-#include "assembler_zero.inline.hpp"
-#include "entry_zero.hpp"
+#include "assembler_llvm.inline.hpp"
+#include "entry_llvm.hpp"
 #include "interpreter/cppInterpreter.hpp"
 #include "memory/resourceArea.hpp"
-#include "nativeInst_zero.hpp"
+#include "nativeInst_llvm.hpp"
 #include "oops/oop.inline.hpp"
 #include "runtime/handles.hpp"
 #include "runtime/sharedRuntime.hpp"

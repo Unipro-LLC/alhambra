@@ -38,6 +38,9 @@
 #ifdef TARGET_OS_ARCH_linux_zero
 # include "orderAccess_linux_zero.inline.hpp"
 #endif
+#ifdef TARGET_OS_ARCH_linux_llvm
+# include "orderAccess_linux_llvm.inline.hpp"
+#endif
 #ifdef TARGET_OS_ARCH_linux_arm
 # include "orderAccess_linux_arm.inline.hpp"
 #endif

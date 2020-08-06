@@ -25,12 +25,12 @@
 
 #include "precompiled.hpp"
 #include "asm/assembler.hpp"
-#include "assembler_zero.inline.hpp"
+#include "assembler_llvm.inline.hpp"
 #include "code/icBuffer.hpp"
 #include "gc_interface/collectedHeap.inline.hpp"
 #include "interpreter/bytecodes.hpp"
 #include "memory/resourceArea.hpp"
-#include "nativeInst_zero.hpp"
+#include "nativeInst_llvm.hpp"
 #include "oops/oop.inline.hpp"
 #include "oops/oop.inline2.hpp"
 

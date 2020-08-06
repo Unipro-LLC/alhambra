@@ -22,8 +22,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_VMREG_ZERO_HPP
-#define CPU_ZERO_VM_VMREG_ZERO_HPP
+#ifndef CPU_ZERO_VM_VMREG_LLVM_HPP
+#define CPU_ZERO_VM_VMREG_LLVM_HPP
 
   bool is_Register();
   Register as_Register();

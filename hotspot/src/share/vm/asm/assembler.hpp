@@ -45,6 +45,10 @@
 # include "register_zero.hpp"
 # include "vm_version_zero.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "register_llvm.hpp"
+# include "vm_version_llvm.hpp"
+#endif
 #ifdef TARGET_ARCH_arm
 # include "register_arm.hpp"
 # include "vm_version_arm.hpp"
@@ -445,6 +449,9 @@ class AbstractAssembler : public ResourceObj  {
 #endif
 #ifdef TARGET_ARCH_zero
 # include "assembler_zero.hpp"
+#endif
+#ifdef TARGET_ARCH_llvm
+# include "assembler_llvm.hpp"
 #endif
 #ifdef TARGET_ARCH_arm
 # include "assembler_arm.hpp"

@@ -188,6 +188,9 @@ public:
 #ifdef TARGET_ARCH_zero
 # include "methodHandles_zero.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "methodHandles_llvm.hpp"
+#endif
 #ifdef TARGET_ARCH_arm
 # include "methodHandles_arm.hpp"
 #endif

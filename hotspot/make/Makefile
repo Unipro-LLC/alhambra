@@ -91,11 +91,13 @@ CORE_VM_TARGETS=productcore fastdebugcore optimizedcore debugcore
 ZERO_VM_TARGETS=productzero fastdebugzero optimizedzero debugzero
 SHARK_VM_TARGETS=productshark fastdebugshark optimizedshark debugshark
 MINIMAL1_VM_TARGETS=productminimal1 fastdebugminimal1 debugminimal1
+ALHAMBRA_VM_TARGETS=productalhambra fastdebugalhambra debugalhambra
 
 COMMON_VM_PRODUCT_TARGETS=product product1 docs export_product
 COMMON_VM_FASTDEBUG_TARGETS=fastdebug fastdebug1 docs export_fastdebug
 COMMON_VM_DEBUG_TARGETS=debug debug1 docs export_debug
 COMMON_VM_OPTIMIZED_TARGETS=optimized optimized1 docs export_optimized
+
 
 # JDK directory list
 JDK_DIRS=bin include jre lib demo
@@ -133,6 +135,12 @@ all_fastdebugzero: fastdebugzero docs export_fastdebug
 all_debugzero:     debugzero docs export_debug
 all_optimizedzero: optimizedzero docs export_optimized
 
+allalhambra:           all_productalhambra all_fastdebugalhambra
+all_productalhambra:   productalhambra docs export_product
+all_fastdebugalhambra: fastdebugalhambra docs export_fastdebug
+all_debugalhambra:     debugalhambra docs export_debug
+all_optimizedalhambra: optimizedalhambra docs export_optimized
+
 allshark:           all_productshark all_fastdebugshark
 all_productshark:   productshark docs export_product
 all_fastdebugshark: fastdebugshark docs export_fastdebug
@@ -167,6 +175,7 @@ CORE_DIR    =$(OUTPUTDIR)/$(VM_PLATFORM)_core
 MINIMAL1_DIR=$(OUTPUTDIR)/$(VM_PLATFORM)_minimal1
 ZERO_DIR    =$(OUTPUTDIR)/$(VM_PLATFORM)_zero
 SHARK_DIR   =$(OUTPUTDIR)/$(VM_PLATFORM)_shark
+ALHAMBRA_DIR   =$(OUTPUTDIR)/$(VM_PLATFORM)_alhambra
 
 # Build variation of hotspot
 $(C1_VM_TARGETS):
@@ -192,6 +201,10 @@ $(SHARK_VM_TARGETS):
 $(MINIMAL1_VM_TARGETS):
 	$(CD) $(GAMMADIR)/make; \
 	$(MAKE) BUILD_DIR=$(MINIMAL1_DIR) BUILD_FLAVOR=$(@:%minimal1=%) VM_TARGET=$@ generic_buildminimal1 $(ALT_OUT)
+	
+$(ALHAMBRA_VM_TARGETS):
+	$(CD) $(GAMMADIR)/make; \
+	$(MAKE) BUILD_DIR=$(ALHAMBRA_DIR) BUILD_FLAVOR=$(@:%alhambra=%) VM_TARGET=$@ generic_buildalhambra $(ALT_OUT)
 
 # Install hotspot script in build directory
 HOTSPOT_SCRIPT=$(BUILD_DIR)/$(BUILD_FLAVOR)/hotspot
@@ -261,12 +274,19 @@ generic_buildzero: $(HOTSPOT_SCRIPT)
 	$(CD) $(OUTPUTDIR); \
 		$(MAKE) -f $(ABS_OS_MAKEFILE) \
 			$(MAKE_ARGS) $(VM_TARGET)
+			
+generic_buildalhambra: $(HOTSPOT_SCRIPT)
+	$(MKDIR) -p $(OUTPUTDIR)
+	$(CD) $(OUTPUTDIR); \
+		$(MAKE) -f $(ABS_OS_MAKEFILE) \
+			$(MAKE_ARGS) $(VM_TARGET)
 
 generic_buildshark: $(HOTSPOT_SCRIPT)
 	$(MKDIR) -p $(OUTPUTDIR)
 	$(CD) $(OUTPUTDIR); \
 		$(MAKE) -f $(ABS_OS_MAKEFILE) \
 			$(MAKE_ARGS) $(VM_TARGET)
+			
 
 generic_buildminimal1: $(HOTSPOT_SCRIPT)
 ifeq ($(JVM_VARIANT_MINIMAL1),true)
@@ -319,6 +339,7 @@ CORE_BUILD_DIR    =$(CORE_DIR)/$(BUILD_FLAVOR)
 MINIMAL1_BUILD_DIR=$(MINIMAL1_DIR)/$(BUILD_FLAVOR)
 ZERO_BUILD_DIR    =$(ZERO_DIR)/$(BUILD_FLAVOR)
 SHARK_BUILD_DIR   =$(SHARK_DIR)/$(BUILD_FLAVOR)
+ALHAMBRA_BUILD_DIR   =$(ALHAMBRA_DIR)/$(BUILD_FLAVOR)
 
 # Server (C2)
 ifeq ($(JVM_VARIANT_SERVER), true)
@@ -515,6 +536,33 @@ $(EXPORT_SERVER_DIR)/%.diz:			$(CORE_BUILD_DIR)/%.diz
 	$(install-file)
 endif
 
+# Alhambra
+ifeq ($(JVM_VARIANT_ALHAMBRA), true)
+# Common
+$(EXPORT_LIB_DIR)/%.jar:			$(ALHAMBRA_BUILD_DIR)/../generated/%.jar
+	$(install-file)
+$(EXPORT_INCLUDE_DIR)/%:			$(ALHAMBRA_BUILD_DIR)/../generated/jvmtifiles/%
+	$(install-file)
+# Unix
+$(EXPORT_JRE_LIB_ARCH_DIR)/%.$(LIBRARY_SUFFIX): $(ALHAMBRA_BUILD_DIR)/%.$(LIBRARY_SUFFIX)
+	$(install-file)
+$(EXPORT_JRE_LIB_ARCH_DIR)/%.debuginfo):	$(ALHAMBRA_BUILD_DIR)/%.debuginfo
+	$(install-file)
+$(EXPORT_JRE_LIB_ARCH_DIR)/%.diz:		$(ALHAMBRA_BUILD_DIR)/%.diz
+	$(install-file)
+$(EXPORT_SERVER_DIR)/%.$(LIBRARY_SUFFIX):       $(ALHAMBRA_BUILD_DIR)/%.$(LIBRARY_SUFFIX)
+	$(install-file)
+$(EXPORT_SERVER_DIR)/%.debuginfo:		$(ALHAMBRA_BUILD_DIR)/%.debuginfo
+	$(install-file)
+$(EXPORT_SERVER_DIR)/%.diz:			$(ALHAMBRA_BUILD_DIR)/%.diz
+	$(install-file)
+# MacOS X
+$(EXPORT_JRE_LIB_ARCH_DIR)/%.dSYM: 		$(ALHAMBRA_BUILD_DIR)/%.dSYM
+	$(install-dir)
+$(EXPORT_SERVER_DIR)/%.dSYM:			$(ALHAMBRA_BUILD_DIR)/%.dSYM
+	$(install-dir)
+endif
+
 # Shark
 ifeq ($(JVM_VARIANT_ZEROSHARK), true)
 # Common
@@ -586,6 +634,7 @@ clean_build:
 	$(RM) -r $(ZERO_DIR)
 	$(RM) -r $(SHARK_DIR)
 	$(RM) -r $(MINIMAL1_DIR)
+	$(RM) -r $(ALHAMBRA_DIR)
 clean_export:
 	$(RM) -r $(EXPORT_PATH)
 clean_jdk:
@@ -638,6 +687,10 @@ test_productshark test_optimizedshark test_fastdebugshark test_debugshark:
 # Minimal1 test targets
 test_productminimal1 test_optimizedminimal1 test_fastdebugminimal1 test_debugminimal1:
 	@$(MAKE) generic_test ALTJVM_DIR="$(MINIMAL1_DIR)/$(@:test_%minimal1=%)"
+	
+# Alhambra test targets
+test_productalhambra test_optimizedalhambra test_fastdebugalhambra test_debugalhambra:
+	@$(MAKE) generic_test ALTJVM_DIR="$(ALHAMBRA_DIR)/$(@:test_%alhambra=%)"
 
 
 test_jdk:

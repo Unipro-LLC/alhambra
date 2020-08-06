@@ -24,7 +24,7 @@
  */
 
 #include "precompiled.hpp"
-#include "assembler_zero.inline.hpp"
+#include "assembler_llvm.inline.hpp"
 #include "gc_interface/collectedHeap.inline.hpp"
 #include "interpreter/interpreter.hpp"
 #include "memory/cardTableModRefBS.hpp"

@@ -24,7 +24,7 @@
  */
 
 #include "precompiled.hpp"
-#include "interp_masm_zero.hpp"
+#include "interp_masm_llvm.hpp"
 #include "interpreter/interpreter.hpp"
 #include "interpreter/interpreterRuntime.hpp"
 #include "oops/arrayOop.hpp"

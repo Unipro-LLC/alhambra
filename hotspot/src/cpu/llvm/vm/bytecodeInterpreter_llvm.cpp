@@ -25,7 +25,7 @@
 
 #include "precompiled.hpp"
 #include "asm/assembler.hpp"
-#include "interp_masm_zero.hpp"
+#include "interp_masm_llvm.hpp"
 #include "interpreter/bytecodeInterpreter.hpp"
 #include "interpreter/bytecodeInterpreter.inline.hpp"
 #include "interpreter/interpreter.hpp"

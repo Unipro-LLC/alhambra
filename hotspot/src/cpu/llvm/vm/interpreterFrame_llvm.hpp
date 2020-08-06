@@ -29,7 +29,7 @@
 #include "interpreter/bytecodeInterpreter.hpp"
 #include "oops/method.hpp"
 #include "runtime/thread.hpp"
-#include "stack_zero.hpp"
+#include "stack_llvm.hpp"
 
 #ifdef CC_INTERP
 // |  ...               |

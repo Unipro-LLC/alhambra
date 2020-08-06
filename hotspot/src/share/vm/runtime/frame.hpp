@@ -41,12 +41,17 @@
 # include "adfiles/adGlobals_sparc.hpp"
 #elif defined TARGET_ARCH_MODEL_zero
 # include "adfiles/adGlobals_zero.hpp"
+#elif defined TARGET_ARCH_MODEL_llvm
+# include "adfiles/adGlobals_llvm.hpp"
 #elif defined TARGET_ARCH_MODEL_ppc_64
 # include "adfiles/adGlobals_ppc_64.hpp"
 #endif
 #endif // COMPILER2
 #ifdef TARGET_ARCH_zero
 # include "stack_zero.hpp"
+#endif
+#ifdef TARGET_ARCH_llvm
+# include "stack_llvm.hpp"
 #endif
 
 typedef class BytecodeInterpreter* interpreterState;
@@ -490,6 +495,9 @@ class frame VALUE_OBJ_CLASS_SPEC {
 #endif
 #ifdef TARGET_ARCH_zero
 # include "frame_zero.hpp"
+#endif
+#ifdef TARGET_ARCH_llvm
+# include "frame_llvm.hpp"
 #endif
 #ifdef TARGET_ARCH_arm
 # include "frame_arm.hpp"

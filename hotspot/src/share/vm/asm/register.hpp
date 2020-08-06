@@ -102,6 +102,9 @@ const type name = ((type)name##_##type##EnumValue)
 #ifdef TARGET_ARCH_zero
 # include "register_zero.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "register_llvm.hpp"
+#endif
 #ifdef TARGET_ARCH_arm
 # include "register_arm.hpp"
 #endif
