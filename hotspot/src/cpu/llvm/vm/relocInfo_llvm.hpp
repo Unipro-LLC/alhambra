@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright 2007 Red Hat, Inc.
+ * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,9 +28,16 @@
   // machine-dependent parts of class relocInfo
  private:
   enum {
-    // these constants mean nothing without an assembler
-    offset_unit  =  1,
-    format_width =  1
+    // Intel instructions are byte-aligned.
+    offset_unit        =  1,
+
+    // Encodes Assembler::disp32_operand vs. Assembler::imm32_operand.
+#ifndef AMD64
+    format_width       =  1
+#else
+    // vs Assembler::narrow_oop_operand.
+    format_width       =  2
+#endif
   };
 
 #endif // CPU_LLVM_VM_RELOCINFO_LLVM_HPP

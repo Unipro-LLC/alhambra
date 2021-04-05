@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
- * Copyright 2009 Red Hat, Inc.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,6 +23,10 @@
  * questions.
  */
 
+#ifndef _JAVASOFT_JNI_MD_H_
+#define _JAVASOFT_JNI_MD_H_
+
+#if defined(SOLARIS) || defined(LINUX) || defined(_ALLBSD_SOURCE)
 
 
 // Note: please do not change these without also changing jni_md.h in the JDK
@@ -38,13 +41,24 @@
   #define JNIEXPORT
   #define JNIIMPORT
 #endif
-#define JNICALL
 
-typedef int jint;
+  #define JNICALL
+  typedef int jint;
+#if defined(_LP64)
+  typedef long jlong;
+#else
+  typedef long long jlong;
+#endif
+
+#else
+  #define JNIEXPORT __declspec(dllexport)
+  #define JNIIMPORT __declspec(dllimport)
+  #define JNICALL __stdcall
+
+  typedef int jint;
+  typedef __int64 jlong;
+#endif
+
 typedef signed char jbyte;
 
-#ifdef _LP64
-typedef long jlong;
-#else
-typedef long long jlong;
-#endif
+#endif /* !_JAVASOFT_JNI_MD_H_ */

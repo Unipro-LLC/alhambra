@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2003, 2012, Oracle and/or its affiliates. All rights reserved.
- * Copyright 2007, 2008 Red Hat, Inc.
+ * Copyright (c) 1997, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,25 +26,17 @@
 #define CPU_LLVM_VM_INTERPRETER_LLVM_HPP
 
  public:
-  static void invoke_method(Method* method, address entry_point, TRAPS) {
-    ((ZeroEntry *) entry_point)->invoke(method, THREAD);
-  }
-  static void invoke_osr(Method* method,
-                         address   entry_point,
-                         address   osr_buf,
-                         TRAPS) {
-    ((ZeroEntry *) entry_point)->invoke_osr(method, osr_buf, THREAD);
+  static Address::ScaleFactor stackElementScale() {
+    return NOT_LP64(Address::times_4) LP64_ONLY(Address::times_8);
   }
 
- public:
-  static int expr_index_at(int i) {
-    return stackElementWords * i;
-  }
+  // Offset from rsp (which points to the last stack element)
+  static int expr_offset_in_bytes(int i) { return stackElementSize * i; }
 
-  static int expr_offset_in_bytes(int i) {
-    return stackElementSize * i;
-  }
+  // Stack index relative to tos (which points at value)
+  static int expr_index_at(int i)        { return stackElementWords * i; }
 
+  // Already negated by c++ interpreter
   static int local_index_at(int i) {
     assert(i <= 0, "local direction already negated");
     return stackElementWords * i;

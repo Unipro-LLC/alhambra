@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2003, 2012, Oracle and/or its affiliates. All rights reserved.
- * Copyright 2008 Red Hat, Inc.
+ * Copyright (c) 2007, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,7 +24,6 @@
 
 #include "precompiled.hpp"
 #include "asm/assembler.hpp"
-#include "interp_masm_llvm.hpp"
 #include "interpreter/bytecodeInterpreter.hpp"
 #include "interpreter/bytecodeInterpreter.inline.hpp"
 #include "interpreter/interpreter.hpp"
@@ -42,30 +40,10 @@
 #include "runtime/synchronizer.hpp"
 #include "runtime/vframeArray.hpp"
 #include "utilities/debug.hpp"
+#ifdef TARGET_ARCH_LLVM
+# include "interp_masm_llvm.hpp"
+#endif
 
 #ifdef CC_INTERP
 
-const char *BytecodeInterpreter::name_of_field_at_address(address addr) {
-#define DO(member) {if (addr == (address) &(member)) return XSTR(member);}
-  DO(_thread);
-  DO(_bcp);
-  DO(_locals);
-  DO(_constants);
-  DO(_method);
-  DO(_mdx);
-  DO(_stack);
-  DO(_msg);
-  DO(_result);
-  DO(_prev_link);
-  DO(_oop_temp);
-  DO(_stack_base);
-  DO(_stack_limit);
-  DO(_monitor_base);
-  DO(_self_link);
-#undef DO
-  if (addr > (address) &_result && addr < (address) (&_result + 1))
-    return "_result)";
-  return NULL;
-}
-
-#endif // CC_INTERP
+#endif // CC_INTERP (all)

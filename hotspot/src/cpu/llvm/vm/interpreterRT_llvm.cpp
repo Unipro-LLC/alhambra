@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2003, 2012, Oracle and/or its affiliates. All rights reserved.
- * Copyright 2007, 2008, 2010 Red Hat, Inc.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,138 +33,462 @@
 #include "runtime/icache.hpp"
 #include "runtime/interfaceSupport.hpp"
 #include "runtime/signature.hpp"
-#include "stack_llvm.inline.hpp"
 
-void InterpreterRuntime::SignatureHandlerGeneratorBase::pass_int() {
-  push(T_INT);
-  _cif->nargs++;
-}
+#define __ _masm->
 
-void InterpreterRuntime::SignatureHandlerGeneratorBase::pass_long() {
-  push(T_LONG);
-  _cif->nargs++;
-}
+// Implementation of SignatureHandlerGenerator
 
-void InterpreterRuntime::SignatureHandlerGeneratorBase::pass_float() {
-  push(T_FLOAT);
-  _cif->nargs++;
-}
+Register InterpreterRuntime::SignatureHandlerGenerator::from() { return r14; }
+Register InterpreterRuntime::SignatureHandlerGenerator::to()   { return rsp; }
+Register InterpreterRuntime::SignatureHandlerGenerator::temp() { return rscratch1; }
 
-void InterpreterRuntime::SignatureHandlerGeneratorBase::pass_double() {
-  push(T_DOUBLE);
-  _cif->nargs++;
-}
+void InterpreterRuntime::SignatureHandlerGenerator::pass_int() {
+  const Address src(from(), Interpreter::local_offset_in_bytes(offset()));
 
-void InterpreterRuntime::SignatureHandlerGeneratorBase::pass_object() {
-  push(T_OBJECT);
-  _cif->nargs++;
-}
-
-void InterpreterRuntime::SignatureHandlerGeneratorBase::push(BasicType type) {
-  ffi_type *ftype;
-  switch (type) {
-  case T_VOID:
-    ftype = &ffi_type_void;
+#ifdef _WIN64
+  switch (_num_args) {
+  case 0:
+    __ movl(c_rarg1, src);
+    _num_args++;
     break;
-
-  case T_BOOLEAN:
-    ftype = &ffi_type_uint8;
+  case 1:
+    __ movl(c_rarg2, src);
+    _num_args++;
     break;
-
-  case T_CHAR:
-    ftype = &ffi_type_uint16;
+  case 2:
+    __ movl(c_rarg3, src);
+    _num_args++;
     break;
-
-  case T_BYTE:
-    ftype = &ffi_type_sint8;
-    break;
-
-  case T_SHORT:
-    ftype = &ffi_type_sint16;
-    break;
-
-  case T_INT:
-    ftype = &ffi_type_sint32;
-    break;
-
-  case T_LONG:
-    ftype = &ffi_type_sint64;
-    break;
-
-  case T_FLOAT:
-    ftype = &ffi_type_float;
-    break;
-
-  case T_DOUBLE:
-    ftype = &ffi_type_double;
-    break;
-
-  case T_OBJECT:
-  case T_ARRAY:
-    ftype = &ffi_type_pointer;
-    break;
-
   default:
-    ShouldNotReachHere();
+    __ movl(rax, src);
+    __ movl(Address(to(), _stack_offset), rax);
+    _stack_offset += wordSize;
+    break;
   }
-  push((intptr_t) ftype);
+#else
+  switch (_num_int_args) {
+  case 0:
+    __ movl(c_rarg1, src);
+    _num_int_args++;
+    break;
+  case 1:
+    __ movl(c_rarg2, src);
+    _num_int_args++;
+    break;
+  case 2:
+    __ movl(c_rarg3, src);
+    _num_int_args++;
+    break;
+  case 3:
+    __ movl(c_rarg4, src);
+    _num_int_args++;
+    break;
+  case 4:
+    __ movl(c_rarg5, src);
+    _num_int_args++;
+    break;
+  default:
+    __ movl(rax, src);
+    __ movl(Address(to(), _stack_offset), rax);
+    _stack_offset += wordSize;
+    break;
+  }
+#endif
 }
 
-// For fast signature handlers the "signature handler" is generated
-// into a temporary buffer.  It is then copied to its final location,
-// and pd_set_handler is called on it.  We have this two stage thing
-// to accomodate this.
+void InterpreterRuntime::SignatureHandlerGenerator::pass_long() {
+  const Address src(from(), Interpreter::local_offset_in_bytes(offset() + 1));
 
-void InterpreterRuntime::SignatureHandlerGeneratorBase::generate(
-  uint64_t fingerprint) {
+#ifdef _WIN64
+  switch (_num_args) {
+  case 0:
+    __ movptr(c_rarg1, src);
+    _num_args++;
+    break;
+  case 1:
+    __ movptr(c_rarg2, src);
+    _num_args++;
+    break;
+  case 2:
+    __ movptr(c_rarg3, src);
+    _num_args++;
+    break;
+  case 3:
+  default:
+    __ movptr(rax, src);
+    __ movptr(Address(to(), _stack_offset), rax);
+    _stack_offset += wordSize;
+    break;
+  }
+#else
+  switch (_num_int_args) {
+  case 0:
+    __ movptr(c_rarg1, src);
+    _num_int_args++;
+    break;
+  case 1:
+    __ movptr(c_rarg2, src);
+    _num_int_args++;
+    break;
+  case 2:
+    __ movptr(c_rarg3, src);
+    _num_int_args++;
+    break;
+  case 3:
+    __ movptr(c_rarg4, src);
+    _num_int_args++;
+    break;
+  case 4:
+    __ movptr(c_rarg5, src);
+    _num_int_args++;
+    break;
+  default:
+    __ movptr(rax, src);
+    __ movptr(Address(to(), _stack_offset), rax);
+    _stack_offset += wordSize;
+    break;
+  }
+#endif
+}
 
-  // Build the argument types list
-  pass_object();
-  if (method()->is_static())
-    pass_object();
+void InterpreterRuntime::SignatureHandlerGenerator::pass_float() {
+  const Address src(from(), Interpreter::local_offset_in_bytes(offset()));
+
+#ifdef _WIN64
+  if (_num_args < Argument::n_float_register_parameters_c-1) {
+    __ movflt(as_XMMRegister(++_num_args), src);
+  } else {
+    __ movl(rax, src);
+    __ movl(Address(to(), _stack_offset), rax);
+    _stack_offset += wordSize;
+  }
+#else
+  if (_num_fp_args < Argument::n_float_register_parameters_c) {
+    __ movflt(as_XMMRegister(_num_fp_args++), src);
+  } else {
+    __ movl(rax, src);
+    __ movl(Address(to(), _stack_offset), rax);
+    _stack_offset += wordSize;
+  }
+#endif
+}
+
+void InterpreterRuntime::SignatureHandlerGenerator::pass_double() {
+  const Address src(from(), Interpreter::local_offset_in_bytes(offset() + 1));
+
+#ifdef _WIN64
+  if (_num_args < Argument::n_float_register_parameters_c-1) {
+    __ movdbl(as_XMMRegister(++_num_args), src);
+  } else {
+    __ movptr(rax, src);
+    __ movptr(Address(to(), _stack_offset), rax);
+    _stack_offset += wordSize;
+  }
+#else
+  if (_num_fp_args < Argument::n_float_register_parameters_c) {
+    __ movdbl(as_XMMRegister(_num_fp_args++), src);
+  } else {
+    __ movptr(rax, src);
+    __ movptr(Address(to(), _stack_offset), rax);
+    _stack_offset += wordSize;
+  }
+#endif
+}
+
+void InterpreterRuntime::SignatureHandlerGenerator::pass_object() {
+  const Address src(from(), Interpreter::local_offset_in_bytes(offset()));
+
+#ifdef _WIN64
+  switch (_num_args) {
+  case 0:
+    assert(offset() == 0, "argument register 1 can only be (non-null) receiver");
+    __ lea(c_rarg1, src);
+    _num_args++;
+    break;
+  case 1:
+    __ lea(rax, src);
+    __ xorl(c_rarg2, c_rarg2);
+    __ cmpptr(src, 0);
+    __ cmov(Assembler::notEqual, c_rarg2, rax);
+    _num_args++;
+    break;
+  case 2:
+    __ lea(rax, src);
+    __ xorl(c_rarg3, c_rarg3);
+    __ cmpptr(src, 0);
+    __ cmov(Assembler::notEqual, c_rarg3, rax);
+    _num_args++;
+    break;
+  default:
+    __ lea(rax, src);
+    __ xorl(temp(), temp());
+    __ cmpptr(src, 0);
+    __ cmov(Assembler::notEqual, temp(), rax);
+    __ movptr(Address(to(), _stack_offset), temp());
+    _stack_offset += wordSize;
+    break;
+  }
+#else
+  switch (_num_int_args) {
+  case 0:
+    assert(offset() == 0, "argument register 1 can only be (non-null) receiver");
+    __ lea(c_rarg1, src);
+    _num_int_args++;
+    break;
+  case 1:
+    __ lea(rax, src);
+    __ xorl(c_rarg2, c_rarg2);
+    __ cmpptr(src, 0);
+    __ cmov(Assembler::notEqual, c_rarg2, rax);
+    _num_int_args++;
+    break;
+  case 2:
+    __ lea(rax, src);
+    __ xorl(c_rarg3, c_rarg3);
+    __ cmpptr(src, 0);
+    __ cmov(Assembler::notEqual, c_rarg3, rax);
+    _num_int_args++;
+    break;
+  case 3:
+    __ lea(rax, src);
+    __ xorl(c_rarg4, c_rarg4);
+    __ cmpptr(src, 0);
+    __ cmov(Assembler::notEqual, c_rarg4, rax);
+    _num_int_args++;
+    break;
+  case 4:
+    __ lea(rax, src);
+    __ xorl(c_rarg5, c_rarg5);
+    __ cmpptr(src, 0);
+    __ cmov(Assembler::notEqual, c_rarg5, rax);
+    _num_int_args++;
+    break;
+  default:
+    __ lea(rax, src);
+    __ xorl(temp(), temp());
+    __ cmpptr(src, 0);
+    __ cmov(Assembler::notEqual, temp(), rax);
+    __ movptr(Address(to(), _stack_offset), temp());
+    _stack_offset += wordSize;
+    break;
+  }
+#endif
+}
+
+void InterpreterRuntime::SignatureHandlerGenerator::generate(uint64_t fingerprint) {
+  // generate code to handle arguments
   iterate(fingerprint);
 
-  // Tack on the result type
-  push(method()->result_type());
+  // return result handler
+  __ lea(rax, ExternalAddress(Interpreter::result_handler(method()->result_type())));
+  __ ret(0);
+
+  __ flush();
 }
 
-void InterpreterRuntime::SignatureHandler::finalize() {
-  ffi_status status =
-    ffi_prep_cif(cif(),
-                 FFI_DEFAULT_ABI,
-                 argument_count(),
-                 result_type(),
-                 argument_types());
 
-  assert(status == FFI_OK, "should be");
-}
+// Implementation of SignatureHandlerLibrary
+
+void SignatureHandlerLibrary::pd_set_handler(address handler) {}
+
+
+#ifdef _WIN64
+class SlowSignatureHandler
+  : public NativeSignatureIterator {
+ private:
+  address   _from;
+  intptr_t* _to;
+  intptr_t* _reg_args;
+  intptr_t* _fp_identifiers;
+  unsigned int _num_args;
+
+  virtual void pass_int()
+  {
+    jint from_obj = *(jint *)(_from+Interpreter::local_offset_in_bytes(0));
+    _from -= Interpreter::stackElementSize;
+
+    if (_num_args < Argument::n_int_register_parameters_c-1) {
+      *_reg_args++ = from_obj;
+      _num_args++;
+    } else {
+      *_to++ = from_obj;
+    }
+  }
+
+  virtual void pass_long()
+  {
+    intptr_t from_obj = *(intptr_t*)(_from+Interpreter::local_offset_in_bytes(1));
+    _from -= 2*Interpreter::stackElementSize;
+
+    if (_num_args < Argument::n_int_register_parameters_c-1) {
+      *_reg_args++ = from_obj;
+      _num_args++;
+    } else {
+      *_to++ = from_obj;
+    }
+  }
+
+  virtual void pass_object()
+  {
+    intptr_t *from_addr = (intptr_t*)(_from + Interpreter::local_offset_in_bytes(0));
+    _from -= Interpreter::stackElementSize;
+    if (_num_args < Argument::n_int_register_parameters_c-1) {
+      *_reg_args++ = (*from_addr == 0) ? NULL : (intptr_t) from_addr;
+      _num_args++;
+    } else {
+      *_to++ = (*from_addr == 0) ? NULL : (intptr_t) from_addr;
+    }
+  }
+
+  virtual void pass_float()
+  {
+    jint from_obj = *(jint *)(_from+Interpreter::local_offset_in_bytes(0));
+    _from -= Interpreter::stackElementSize;
+
+    if (_num_args < Argument::n_float_register_parameters_c-1) {
+      *_reg_args++ = from_obj;
+      *_fp_identifiers |= (intptr_t)(0x01 << (_num_args*2)); // mark as float
+      _num_args++;
+    } else {
+      *_to++ = from_obj;
+    }
+  }
+
+  virtual void pass_double()
+  {
+    intptr_t from_obj = *(intptr_t*)(_from+Interpreter::local_offset_in_bytes(1));
+    _from -= 2*Interpreter::stackElementSize;
+
+    if (_num_args < Argument::n_float_register_parameters_c-1) {
+      *_reg_args++ = from_obj;
+      *_fp_identifiers |= (intptr_t)(0x3 << (_num_args*2)); // mark as double
+      _num_args++;
+    } else {
+      *_to++ = from_obj;
+    }
+  }
+
+ public:
+  SlowSignatureHandler(methodHandle method, address from, intptr_t* to)
+    : NativeSignatureIterator(method)
+  {
+    _from = from;
+    _to   = to;
+
+    _reg_args = to - (method->is_static() ? 4 : 5);
+    _fp_identifiers = to - 2;
+    _to = _to + 4;  // Windows reserves stack space for register arguments
+    *(int*) _fp_identifiers = 0;
+    _num_args = (method->is_static() ? 1 : 0);
+  }
+};
+#else
+class SlowSignatureHandler
+  : public NativeSignatureIterator {
+ private:
+  address   _from;
+  intptr_t* _to;
+  intptr_t* _int_args;
+  intptr_t* _fp_args;
+  intptr_t* _fp_identifiers;
+  unsigned int _num_int_args;
+  unsigned int _num_fp_args;
+
+  virtual void pass_int()
+  {
+    jint from_obj = *(jint *)(_from+Interpreter::local_offset_in_bytes(0));
+    _from -= Interpreter::stackElementSize;
+
+    if (_num_int_args < Argument::n_int_register_parameters_c-1) {
+      *_int_args++ = from_obj;
+      _num_int_args++;
+    } else {
+      *_to++ = from_obj;
+    }
+  }
+
+  virtual void pass_long()
+  {
+    intptr_t from_obj = *(intptr_t*)(_from+Interpreter::local_offset_in_bytes(1));
+    _from -= 2*Interpreter::stackElementSize;
+
+    if (_num_int_args < Argument::n_int_register_parameters_c-1) {
+      *_int_args++ = from_obj;
+      _num_int_args++;
+    } else {
+      *_to++ = from_obj;
+    }
+  }
+
+  virtual void pass_object()
+  {
+    intptr_t *from_addr = (intptr_t*)(_from + Interpreter::local_offset_in_bytes(0));
+    _from -= Interpreter::stackElementSize;
+
+    if (_num_int_args < Argument::n_int_register_parameters_c-1) {
+      *_int_args++ = (*from_addr == 0) ? NULL : (intptr_t)from_addr;
+      _num_int_args++;
+    } else {
+      *_to++ = (*from_addr == 0) ? NULL : (intptr_t) from_addr;
+    }
+  }
+
+  virtual void pass_float()
+  {
+    jint from_obj = *(jint*)(_from+Interpreter::local_offset_in_bytes(0));
+    _from -= Interpreter::stackElementSize;
+
+    if (_num_fp_args < Argument::n_float_register_parameters_c) {
+      *_fp_args++ = from_obj;
+      _num_fp_args++;
+    } else {
+      *_to++ = from_obj;
+    }
+  }
+
+  virtual void pass_double()
+  {
+    intptr_t from_obj = *(intptr_t*)(_from+Interpreter::local_offset_in_bytes(1));
+    _from -= 2*Interpreter::stackElementSize;
+
+    if (_num_fp_args < Argument::n_float_register_parameters_c) {
+      *_fp_args++ = from_obj;
+      *_fp_identifiers |= (1 << _num_fp_args); // mark as double
+      _num_fp_args++;
+    } else {
+      *_to++ = from_obj;
+    }
+  }
+
+ public:
+  SlowSignatureHandler(methodHandle method, address from, intptr_t* to)
+    : NativeSignatureIterator(method)
+  {
+    _from = from;
+    _to   = to;
+
+    _int_args = to - (method->is_static() ? 14 : 15);
+    _fp_args =  to - 9;
+    _fp_identifiers = to - 10;
+    *(int*) _fp_identifiers = 0;
+    _num_int_args = (method->is_static() ? 1 : 0);
+    _num_fp_args = 0;
+  }
+};
+#endif
+
 
 IRT_ENTRY(address,
           InterpreterRuntime::slow_signature_handler(JavaThread* thread,
-                                                     Method*     method,
-                                                     intptr_t*   unused1,
-                                                     intptr_t*   unused2))
-  ZeroStack *stack = thread->zero_stack();
+                                                     Method* method,
+                                                     intptr_t* from,
+                                                     intptr_t* to))
+  methodHandle m(thread, (Method*)method);
+  assert(m->is_native(), "sanity check");
 
-  int required_words =
-    (align_size_up(sizeof(ffi_cif), wordSize) >> LogBytesPerWord) +
-    (method->is_static() ? 2 : 1) + method->size_of_parameters() + 1;
+  // handle arguments
+  SlowSignatureHandler(m, (address)from, to + 1).iterate(UCONST64(-1));
 
-  stack->overflow_check(required_words, CHECK_NULL);
-
-  intptr_t *buf = (intptr_t *) stack->alloc(required_words * wordSize);
-  SlowSignatureHandlerGenerator sshg(methodHandle(thread, method), buf);
-  sshg.generate(UCONST64(-1));
-
-  SignatureHandler *handler = sshg.handler();
-  handler->finalize();
-
-  return (address) handler;
+  // return result handler
+  return Interpreter::result_handler(m->result_type());
 IRT_END
-
-void SignatureHandlerLibrary::pd_set_handler(address handlerAddr) {
-  InterpreterRuntime::SignatureHandler *handler =
-    InterpreterRuntime::SignatureHandler::from_handlerAddr(handlerAddr);
-
-  handler->finalize();
-}

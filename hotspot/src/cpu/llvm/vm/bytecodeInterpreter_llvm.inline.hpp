@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2002, 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright 2007, 2010 Red Hat, Inc.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,35 +25,17 @@
 #ifndef CPU_LLVM_VM_BYTECODEINTERPRETER_LLVM_INLINE_HPP
 #define CPU_LLVM_VM_BYTECODEINTERPRETER_LLVM_INLINE_HPP
 
-// Inline interpreter functions for zero
+// Inline interpreter functions for IA32
 
-inline jfloat BytecodeInterpreter::VMfloatAdd(jfloat op1, jfloat op2) {
-  return op1 + op2;
-}
+inline jfloat BytecodeInterpreter::VMfloatAdd(jfloat op1, jfloat op2) { return op1 + op2; }
+inline jfloat BytecodeInterpreter::VMfloatSub(jfloat op1, jfloat op2) { return op1 - op2; }
+inline jfloat BytecodeInterpreter::VMfloatMul(jfloat op1, jfloat op2) { return op1 * op2; }
+inline jfloat BytecodeInterpreter::VMfloatDiv(jfloat op1, jfloat op2) { return op1 / op2; }
+inline jfloat BytecodeInterpreter::VMfloatRem(jfloat op1, jfloat op2) { return fmod(op1, op2); }
 
-inline jfloat BytecodeInterpreter::VMfloatSub(jfloat op1, jfloat op2) {
-  return op1 - op2;
-}
+inline jfloat BytecodeInterpreter::VMfloatNeg(jfloat op) { return -op; }
 
-inline jfloat BytecodeInterpreter::VMfloatMul(jfloat op1, jfloat op2) {
-  return op1 * op2;
-}
-
-inline jfloat BytecodeInterpreter::VMfloatDiv(jfloat op1, jfloat op2) {
-  return op1 / op2;
-}
-
-inline jfloat BytecodeInterpreter::VMfloatRem(jfloat op1, jfloat op2) {
-  return fmod(op1, op2);
-}
-
-inline jfloat BytecodeInterpreter::VMfloatNeg(jfloat op) {
-  return -op;
-}
-
-inline int32_t BytecodeInterpreter::VMfloatCompare(jfloat  op1,
-                                                   jfloat  op2,
-                                                   int32_t direction) {
+inline int32_t BytecodeInterpreter::VMfloatCompare(jfloat op1, jfloat op2, int32_t direction) {
   return ( op1 < op2 ? -1 :
                op1 > op2 ? 1 :
                    op1 == op2 ? 0 :
@@ -62,10 +43,12 @@ inline int32_t BytecodeInterpreter::VMfloatCompare(jfloat  op1,
 
 }
 
-inline void BytecodeInterpreter::VMmemCopy64(uint32_t       to[2],
-                                             const uint32_t from[2]) {
-  *(uint64_t *) to = *(uint64_t *) from;
+inline void BytecodeInterpreter::VMmemCopy64(uint32_t to[2], const uint32_t from[2]) {
+  // x86 can do unaligned copies but not 64bits at a time
+  to[0] = from[0]; to[1] = from[1];
 }
+
+// The long operations depend on compiler support for "long long" on x86
 
 inline jlong BytecodeInterpreter::VMlongAdd(jlong op1, jlong op2) {
   return op1 + op2;
@@ -76,9 +59,8 @@ inline jlong BytecodeInterpreter::VMlongAnd(jlong op1, jlong op2) {
 }
 
 inline jlong BytecodeInterpreter::VMlongDiv(jlong op1, jlong op2) {
-  /* it's possible we could catch this special case implicitly */
-  if (op1 == (jlong) 0x8000000000000000LL && op2 == -1) return op1;
-  else return op1 / op2;
+  // QQQ what about check and throw...
+  return op1 / op2;
 }
 
 inline jlong BytecodeInterpreter::VMlongMul(jlong op1, jlong op2) {
@@ -98,12 +80,11 @@ inline jlong BytecodeInterpreter::VMlongXor(jlong op1, jlong op2) {
 }
 
 inline jlong BytecodeInterpreter::VMlongRem(jlong op1, jlong op2) {
-  /* it's possible we could catch this special case implicitly */
-  if (op1 == (jlong) 0x8000000000000000LL && op2 == -1) return 0;
-  else return op1 % op2;
+  return op1 % op2;
 }
 
 inline jlong BytecodeInterpreter::VMlongUshr(jlong op1, jint op2) {
+  // CVM did this 0x3f mask, is the really needed??? QQQ
   return ((unsigned long long) op1) >> (op2 & 0x3F);
 }
 
@@ -204,9 +185,7 @@ inline jdouble BytecodeInterpreter::VMdoubleSub(jdouble op1, jdouble op2) {
   return op1 - op2;
 }
 
-inline int32_t BytecodeInterpreter::VMdoubleCompare(jdouble op1,
-                                                    jdouble op2,
-                                                    int32_t direction) {
+inline int32_t BytecodeInterpreter::VMdoubleCompare(jdouble op1, jdouble op2, int32_t direction) {
   return ( op1 < op2 ? -1 :
                op1 > op2 ? 1 :
                    op1 == op2 ? 0 :
@@ -237,7 +216,7 @@ inline jint BytecodeInterpreter::VMintAnd(jint op1, jint op2) {
 
 inline jint BytecodeInterpreter::VMintDiv(jint op1, jint op2) {
   /* it's possible we could catch this special case implicitly */
-  if (op1 == (jint) 0x80000000 && op2 == -1) return op1;
+  if ((juint)op1 == 0x80000000 && op2 == -1) return op1;
   else return op1 / op2;
 }
 
@@ -255,24 +234,24 @@ inline jint BytecodeInterpreter::VMintOr(jint op1, jint op2) {
 
 inline jint BytecodeInterpreter::VMintRem(jint op1, jint op2) {
   /* it's possible we could catch this special case implicitly */
-  if (op1 == (jint) 0x80000000 && op2 == -1) return 0;
+  if ((juint)op1 == 0x80000000 && op2 == -1) return 0;
   else return op1 % op2;
 }
 
 inline jint BytecodeInterpreter::VMintShl(jint op1, jint op2) {
-  return op1 << (op2 & 0x1F);
+  return op1 << op2;
 }
 
 inline jint BytecodeInterpreter::VMintShr(jint op1, jint op2) {
-  return op1 >> (op2 & 0x1F);
+  return op1 >> (op2 & 0x1f);
 }
 
 inline jint BytecodeInterpreter::VMintSub(jint op1, jint op2) {
   return op1 - op2;
 }
 
-inline juint BytecodeInterpreter::VMintUshr(jint op1, jint op2) {
-  return ((juint) op1) >> (op2 & 0x1F);
+inline jint BytecodeInterpreter::VMintUshr(jint op1, jint op2) {
+  return ((juint) op1) >> (op2 & 0x1f);
 }
 
 inline jint BytecodeInterpreter::VMintXor(jint op1, jint op2) {

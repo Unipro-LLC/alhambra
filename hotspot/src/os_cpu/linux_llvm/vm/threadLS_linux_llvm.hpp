@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,14 +22,37 @@
  *
  */
 
-#ifndef OS_CPU_LINUX_ZERO_VM_THREADLS_LINUX_ZERO_HPP
-#define OS_CPU_LINUX_ZERO_VM_THREADLS_LINUX_ZERO_HPP
+#ifndef OS_CPU_LINUX_LLVM_VM_THREADLS_LINUX_LLVM_HPP
+#define OS_CPU_LINUX_LLVM_VM_THREADLS_LINUX_LLVM_HPP
 
-// Processor dependent parts of ThreadLocalStorage
+  // Processor dependent parts of ThreadLocalStorage
 
- public:
+#if !defined(AMD64) && !defined(MINIMIZE_RAM_USAGE)
+
+  // map stack pointer to thread pointer - see notes in threadLS_linux_x86.cpp
+  #define SP_BITLENGTH  32
+  #define PAGE_SHIFT    12
+  #define PAGE_SIZE     (1UL << PAGE_SHIFT)
+  static Thread* _sp_map[1UL << (SP_BITLENGTH - PAGE_SHIFT)];
+
+public:
+
+  static Thread** sp_map_addr() { return _sp_map; }
+
   static Thread* thread() {
-    return (Thread*) os::thread_local_storage_at(thread_index());
+    uintptr_t sp;
+    __asm__ volatile ("movl %%esp, %0" : "=r" (sp));
+    return _sp_map[sp >> PAGE_SHIFT];
   }
 
-#endif // OS_CPU_LINUX_ZERO_VM_THREADLS_LINUX_ZERO_HPP
+#else
+
+public:
+
+   static Thread* thread() {
+     return (Thread*) os::thread_local_storage_at(thread_index());
+   }
+
+#endif // AMD64 || MINIMIZE_RAM_USAGE
+
+#endif // OS_CPU_LINUX_LLVM_VM_THREADLS_LINUX_LLVM_HPP

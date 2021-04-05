@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright 2009 Red Hat, Inc.
+ * Copyright (c) 1999, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,13 +25,14 @@
 #ifndef CPU_LLVM_VM_GLOBALDEFINITIONS_LLVM_HPP
 #define CPU_LLVM_VM_GLOBALDEFINITIONS_LLVM_HPP
 
-#include <ffi.h>
-
 const int StackAlignmentInBytes  = 16;
+
 // Indicates whether the C calling conventions require that
 // 32-bit integer argument values are properly extended to 64 bits.
 // If set, SharedRuntime::c_calling_convention() must adapt
 // signatures accordingly.
 const bool CCallingConventionRequiresIntsAsLongs = false;
+
+#define SUPPORTS_NATIVE_CX8
 
 #endif // CPU_LLVM_VM_GLOBALDEFINITIONS_LLVM_HPP

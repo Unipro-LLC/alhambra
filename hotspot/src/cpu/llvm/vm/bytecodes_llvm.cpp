@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright 2007 Red Hat, Inc.
+ * Copyright (c) 1998, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,6 +25,13 @@
 #include "precompiled.hpp"
 #include "interpreter/bytecodes.hpp"
 
+
 void Bytecodes::pd_initialize() {
-  // No zero specific initialization
+  // No i486 specific initialization
+}
+
+
+Bytecodes::Code Bytecodes::pd_base_code_for(Code code) {
+  // No i486 specific bytecodes
+  return code;
 }

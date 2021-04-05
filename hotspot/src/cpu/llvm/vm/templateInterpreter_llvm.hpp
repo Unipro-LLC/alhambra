@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright 2009 Red Hat, Inc.
+ * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,6 +25,18 @@
 #ifndef CPU_LLVM_VM_TEMPLATEINTERPRETER_LLVM_HPP
 #define CPU_LLVM_VM_TEMPLATEINTERPRETER_LLVM_HPP
 
-// This file is intentionally empty
+
+  protected:
+
+  // Size of interpreter code.  Increase if too small.  Interpreter will
+  // fail with a guarantee ("not enough space for interpreter generation");
+  // if too small.
+  // Run with +PrintInterpreter to get the VM to print out the size.
+  // Max size with JVMTI
+#ifdef AMD64
+  const static int InterpreterCodeSize = 256 * 1024;
+#else
+  const static int InterpreterCodeSize = 224 * 1024;
+#endif // AMD64
 
 #endif // CPU_LLVM_VM_TEMPLATEINTERPRETER_LLVM_HPP

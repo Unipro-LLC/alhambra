@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2003, 2011, Oracle and/or its affiliates. All rights reserved.
- * Copyright 2007, 2008, 2009, 2010 Red Hat, Inc.
+ * Copyright (c) 2003, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,29 +22,111 @@
  *
  */
 
+#ifndef CPU_LLVM_VM_STUBROUTINES_LLVM_64_HPP
+#define CPU_LLVM_VM_STUBROUTINES_LLVM_64_HPP
+
+// This file holds the platform specific parts of the StubRoutines
+// definition. See stubRoutines.hpp for a description on how to
+// extend it.
+
+static bool    returns_to_call_stub(address return_pc)   { return return_pc == _call_stub_return_address; }
+
+enum platform_dependent_constants {
+  code_size1 = 19000,          // simply increase if too small (assembler will crash if too small)
+  code_size2 = 23000           // simply increase if too small (assembler will crash if too small)
+};
+
+class x86 {
+ friend class StubGenerator;
+
+ private:
+  static address _get_previous_fp_entry;
+  static address _get_previous_sp_entry;
+
+  static address _f2i_fixup;
+  static address _f2l_fixup;
+  static address _d2i_fixup;
+  static address _d2l_fixup;
+
+  static address _float_sign_mask;
+  static address _float_sign_flip;
+  static address _double_sign_mask;
+  static address _double_sign_flip;
+
+ public:
+
+  static address get_previous_fp_entry()
+  {
+    return _get_previous_fp_entry;
+  }
+
+  static address get_previous_sp_entry()
+  {
+    return _get_previous_sp_entry;
+  }
+
+  static address f2i_fixup()
+  {
+    return _f2i_fixup;
+  }
+
+  static address f2l_fixup()
+  {
+    return _f2l_fixup;
+  }
+
+  static address d2i_fixup()
+  {
+    return _d2i_fixup;
+  }
+
+  static address d2l_fixup()
+  {
+    return _d2l_fixup;
+  }
+
+  static address float_sign_mask()
+  {
+    return _float_sign_mask;
+  }
+
+  static address float_sign_flip()
+  {
+    return _float_sign_flip;
+  }
+
+  static address double_sign_mask()
+  {
+    return _double_sign_mask;
+  }
+
+  static address double_sign_flip()
+  {
+    return _double_sign_flip;
+  }
+
 #ifndef CPU_LLVM_VM_STUBROUTINES_LLVM_HPP
 #define CPU_LLVM_VM_STUBROUTINES_LLVM_HPP
 
-  // This file holds the platform specific parts of the StubRoutines
-  // definition. See stubRoutines.hpp for a description on how to
-  // extend it.
+// This file holds the platform specific parts of the StubRoutines
+// definition. See stubRoutines.hpp for a description on how to
+// extend it.
+
+ private:
+  static address _verify_mxcsr_entry;
+  // shuffle mask for fixing up 128-bit words consisting of big-endian 32-bit integers
+  static address _key_shuffle_mask_addr;
+  // masks and table for CRC32
+  static uint64_t _crc_by128_masks[];
+  static juint    _crc_table[];
 
  public:
-  static address call_stub_return_pc() {
-    return (address) -1;
-  }
+  static address verify_mxcsr_entry()    { return _verify_mxcsr_entry; }
+  static address key_shuffle_mask_addr() { return _key_shuffle_mask_addr; }
+  static address crc_by128_masks_addr()  { return (address)_crc_by128_masks; }
 
-  static bool returns_to_call_stub(address return_pc) {
-    return return_pc == call_stub_return_pc();
-  }
+#endif // CPU_LLVM_VM_STUBROUTINES_LLVM_32_HPP
 
-  enum platform_dependent_constants {
-    code_size1 = 0,      // The assembler will fail with a guarantee
-    code_size2 = 0       // if these are too small.  Simply increase
-  };                     // them if that happens.
+};
 
-  enum method_handles_platform_dependent_constants {
-    method_handles_adapters_code_size = 0
-  };
-
-#endif // CPU_LLVM_VM_STUBROUTINES_LLVM_HPP
+#endif // CPU_LLVM_VM_STUBROUTINES_LLVM_64_HPP

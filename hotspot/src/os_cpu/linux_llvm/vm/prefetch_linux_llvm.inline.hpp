@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright 2007, 2008 Red Hat, Inc.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,15 +22,26 @@
  *
  */
 
-#ifndef OS_CPU_LINUX_ZERO_VM_PREFETCH_LINUX_ZERO_INLINE_HPP
-#define OS_CPU_LINUX_ZERO_VM_PREFETCH_LINUX_ZERO_INLINE_HPP
+#ifndef OS_CPU_LINUX_LLVM_VM_PREFETCH_LINUX_LLVM_INLINE_HPP
+#define OS_CPU_LINUX_LLVM_VM_PREFETCH_LINUX_LLVM_INLINE_HPP
 
 #include "runtime/prefetch.hpp"
 
-inline void Prefetch::read(void* loc, intx interval) {
+
+inline void Prefetch::read (void *loc, intx interval) {
+#ifdef AMD64
+  __asm__ ("prefetcht0 (%0,%1,1)" : : "r" (loc), "r" (interval));
+#endif // AMD64
 }
 
-inline void Prefetch::write(void* loc, intx interval) {
+inline void Prefetch::write(void *loc, intx interval) {
+#ifdef AMD64
+
+  // Do not use the 3dnow prefetchw instruction.  It isn't supported on em64t.
+  //  __asm__ ("prefetchw (%0,%1,1)" : : "r" (loc), "r" (interval));
+  __asm__ ("prefetcht0 (%0,%1,1)" : : "r" (loc), "r" (interval));
+
+#endif // AMD64
 }
 
-#endif // OS_CPU_LINUX_ZERO_VM_PREFETCH_LINUX_ZERO_INLINE_HPP
+#endif // OS_CPU_LINUX_LLVM_VM_PREFETCH_LINUX_LLVM_INLINE_HPP

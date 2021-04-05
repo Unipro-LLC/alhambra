@@ -25,7 +25,7 @@
 #ifndef CPU_LLVM_VM_REGISTERMAP_LLVM_HPP
 #define CPU_LLVM_VM_REGISTERMAP_LLVM_HPP
 
-  // machine-dependent implemention for register maps
+// machine-dependent implemention for register maps
   friend class frame;
 
  private:
@@ -34,7 +34,7 @@
   // Since there is none, we just return NULL.
   // See registerMap_sparc.hpp for an example of grabbing registers
   // from register save areas of a standard layout.
-  address pd_location(VMReg reg) const { return NULL; }
+   address pd_location(VMReg reg) const {return NULL;}
 
   // no PD state to clear or copy:
   void pd_clear() {}

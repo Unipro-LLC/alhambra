@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
- * Copyright 2011 Red Hat, Inc.
+ * Copyright (c) 2010, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,17 +22,40 @@
  *
  */
 
+// Platform-specific definitions for method handles.
+// These definitions are inlined into class MethodHandles.
 
 // Adapters
 enum /* platform_dependent_constants */ {
-  adapter_code_size = sizeof(ZeroEntry) * (Interpreter::method_handle_invoke_LAST - Interpreter::method_handle_invoke_FIRST + 1)
+  adapter_code_size = NOT_LP64(16000 DEBUG_ONLY(+ 25000)) LP64_ONLY(32000 DEBUG_ONLY(+ 150000))
 };
 
-private:
-  static oop popFromStack(TRAPS);
-  static void invoke_target(Method* method, TRAPS);
-  static int method_handle_entry_invokeBasic(Method* method, intptr_t UNUSED, TRAPS);
-  static int method_handle_entry_linkToStaticOrSpecial(Method* method, intptr_t UNUSED, TRAPS);
-  static int method_handle_entry_linkToVirtual(Method* method, intptr_t UNUSED, TRAPS);
-  static int method_handle_entry_linkToInterface(Method* method, intptr_t UNUSED, TRAPS);
-  static int method_handle_entry_invalid(Method* method, intptr_t UNUSED, TRAPS);
+// Additional helper methods for MethodHandles code generation:
+public:
+  static void load_klass_from_Class(MacroAssembler* _masm, Register klass_reg);
+
+  static void verify_klass(MacroAssembler* _masm,
+                           Register obj, SystemDictionary::WKID klass_id,
+                           const char* error_message = "wrong klass") NOT_DEBUG_RETURN;
+
+  static void verify_method_handle(MacroAssembler* _masm, Register mh_reg) {
+    verify_klass(_masm, mh_reg, SystemDictionary::WK_KLASS_ENUM_NAME(java_lang_invoke_MethodHandle),
+                 "reference is a MH");
+  }
+
+  static void verify_ref_kind(MacroAssembler* _masm, int ref_kind, Register member_reg, Register temp) NOT_DEBUG_RETURN;
+
+  // Similar to InterpreterMacroAssembler::jump_from_interpreted.
+  // Takes care of special dispatch from single stepping too.
+  static void jump_from_method_handle(MacroAssembler* _masm, Register method, Register temp,
+                                      bool for_compiler_entry);
+
+  static void jump_to_lambda_form(MacroAssembler* _masm,
+                                  Register recv, Register method_temp,
+                                  Register temp2,
+                                  bool for_compiler_entry);
+
+  static Register saved_last_sp_register() {
+    // Should be in sharedRuntime, not here.
+    return LP64_ONLY(r13) NOT_LP64(rsi);
+  }

@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2002, 2012, Oracle and/or its affiliates. All rights reserved.
- * Copyright 2007, 2008, 2011 Red Hat, Inc.
+ * Copyright (c) 2002, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,83 +27,46 @@
 
 // Platform specific for C++ based Interpreter
 
-#if defined(PPC) || defined(SPARC) || defined(IA64)
-#define LOTS_OF_REGS   // Use plenty of registers
-#else
-#undef LOTS_OF_REGS    // Loser platforms
-#endif
+private:
 
- private:
-  interpreterState _self_link;
+    interpreterState _self_link;          /*  Previous interpreter state  */ /* sometimes points to self??? */
+    address   _result_handler;            /* temp for saving native result handler */
+    intptr_t* _sender_sp;                 /* sender's sp before stack (locals) extension */
 
- public:
-  inline void set_locals(intptr_t* new_locals) {
-    _locals = new_locals;
-  }
-  inline void set_method(Method* new_method) {
-    _method = new_method;
-  }
-  inline interpreterState self_link() {
-    return _self_link;
-  }
-  inline void set_self_link(interpreterState new_self_link) {
-    _self_link = new_self_link;
-  }
-  inline interpreterState prev_link() {
-    return _prev_link;
-  }
-  inline void set_prev_link(interpreterState new_prev_link) {
-    _prev_link = new_prev_link;
-  }
-  inline void set_stack_limit(intptr_t* new_stack_limit) {
-    _stack_limit = new_stack_limit;
-  }
-  inline void set_stack_base(intptr_t* new_stack_base) {
-    _stack_base = new_stack_base;
-  }
-  inline void set_monitor_base(BasicObjectLock *new_monitor_base) {
-    _monitor_base = new_monitor_base;
-  }
-  inline void set_thread(JavaThread* new_thread) {
-    _thread = new_thread;
-  }
-  inline void set_constants(ConstantPoolCache* new_constants) {
-    _constants = new_constants;
-  }
-  inline oop oop_temp() {
-    return _oop_temp;
-  }
-  inline oop *oop_temp_addr() {
-    return &_oop_temp;
-  }
-  inline void set_oop_temp(oop new_oop_temp) {
-    _oop_temp = new_oop_temp;
-  }
-  inline address callee_entry_point() {
-    return _result._to_call._callee_entry_point;
-  }
-  inline address osr_buf() {
-    return _result._osr._osr_buf;
-  }
-  inline address osr_entry() {
-    return _result._osr._osr_entry;
-  }
+    address   _extra_junk1;               /* temp to save on recompiles */
+    address   _extra_junk2;               /* temp to save on recompiles */
+    address   _extra_junk3;               /* temp to save on recompiles */
+    // address dummy_for_native2;         /* a native frame result handler would be here... */
+    // address dummy_for_native1;         /* native result type stored here in a interpreter native frame */
+    address   _extra_junk4;               /* temp to save on recompiles */
+    address   _extra_junk5;               /* temp to save on recompiles */
+    address   _extra_junk6;               /* temp to save on recompiles */
+public:
+                                                         // we have an interpreter frame...
+inline intptr_t* sender_sp() {
+  return _sender_sp;
+}
 
- public:
-  const char *name_of_field_at_address(address addr);
-
-// The frame manager handles this
+// The interpreter always has the frame anchor fully setup so we don't
+// have to do anything going to vm from the interpreter. On return
+// we do have to clear the flags in case they we're modified to
+// maintain the stack walking invariants.
+//
 #define SET_LAST_JAVA_FRAME()
+
 #define RESET_LAST_JAVA_FRAME()
 
-// ZeroStack Implementation
-
+/*
+ * Macros for accessing the stack.
+ */
 #undef STACK_INT
 #undef STACK_FLOAT
 #undef STACK_ADDR
 #undef STACK_OBJECT
 #undef STACK_DOUBLE
 #undef STACK_LONG
+
+// JavaStack Implementation
 
 #define GET_STACK_SLOT(offset)    (*((intptr_t*) &topOfStack[-(offset)]))
 #define STACK_SLOT(offset)    ((address) &topOfStack[-(offset)])
@@ -130,7 +92,7 @@
 
 #define LOCALS_SLOT(offset)    ((intptr_t*)&locals[-(offset)])
 #define LOCALS_ADDR(offset)    ((address)locals[-(offset)])
-#define LOCALS_INT(offset)     (*((jint*)&locals[-(offset)]))
+#define LOCALS_INT(offset)     ((jint)(locals[-(offset)]))
 #define LOCALS_FLOAT(offset)   (*((jfloat*)&locals[-(offset)]))
 #define LOCALS_OBJECT(offset)  (cast_to_oop(locals[-(offset)]))
 #define LOCALS_DOUBLE(offset)  (((VMJavaVal64*)&locals[-((offset) + 1)])->d)
@@ -149,23 +111,5 @@
                                                   ((VMJavaVal64*)(addr))->d)
 #define SET_LOCALS_LONG_FROM_ADDR(addr, offset) (((VMJavaVal64*)&locals[-((offset)+1)])->l = \
                                                 ((VMJavaVal64*)(addr))->l)
-
-// VMSlots implementation
-
-#define VMSLOTS_SLOT(offset)    ((intptr_t*)&vmslots[(offset)])
-#define VMSLOTS_ADDR(offset)    ((address)vmslots[(offset)])
-#define VMSLOTS_INT(offset)     (*((jint*)&vmslots[(offset)]))
-#define VMSLOTS_FLOAT(offset)   (*((jfloat*)&vmslots[(offset)]))
-#define VMSLOTS_OBJECT(offset)  ((oop)vmslots[(offset)])
-#define VMSLOTS_DOUBLE(offset)  (((VMJavaVal64*)&vmslots[(offset) - 1])->d)
-#define VMSLOTS_LONG(offset)    (((VMJavaVal64*)&vmslots[(offset) - 1])->l)
-
-#define SET_VMSLOTS_SLOT(value, offset)   (*(intptr_t*)&vmslots[(offset)] = *(intptr_t *)(value))
-#define SET_VMSLOTS_ADDR(value, offset)   (*((address *)&vmslots[(offset)]) = (value))
-#define SET_VMSLOTS_INT(value, offset)    (*((jint *)&vmslots[(offset)]) = (value))
-#define SET_VMSLOTS_FLOAT(value, offset)  (*((jfloat *)&vmslots[(offset)]) = (value))
-#define SET_VMSLOTS_OBJECT(value, offset) (*((oop *)&vmslots[(offset)]) = (value))
-#define SET_VMSLOTS_DOUBLE(value, offset) (((VMJavaVal64*)&vmslots[(offset) - 1])->d = (value))
-#define SET_VMSLOTS_LONG(value, offset)   (((VMJavaVal64*)&vmslots[(offset) - 1])->l = (value))
 
 #endif // CPU_LLVM_VM_BYTECODEINTERPRETER_LLVM_HPP

@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright 2009 Red Hat, Inc.
+ * Copyright (c) 1998, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,6 +25,6 @@
 #ifndef CPU_LLVM_VM_BYTECODES_LLVM_HPP
 #define CPU_LLVM_VM_BYTECODES_LLVM_HPP
 
-// This file is intentionally empty
+// No i486 specific bytecodes
 
 #endif // CPU_LLVM_VM_BYTECODES_LLVM_HPP

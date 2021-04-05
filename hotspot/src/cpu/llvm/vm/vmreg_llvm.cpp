@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2006, 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright 2007 Red Hat, Inc.
+ * Copyright (c) 2006, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,36 +26,34 @@
 #include "asm/assembler.hpp"
 #include "code/vmreg.hpp"
 
+
+
 void VMRegImpl::set_regName() {
-  int i = 0;
   Register reg = ::as_Register(0);
-  for ( ; i < ConcreteRegisterImpl::max_gpr ; ) {
+  int i;
+  for (i = 0; i < ConcreteRegisterImpl::max_gpr ; ) {
     regName[i++] = reg->name();
+#ifdef AMD64
+    regName[i++] = reg->name();
+#endif // AMD64
     reg = reg->successor();
   }
+
   FloatRegister freg = ::as_FloatRegister(0);
   for ( ; i < ConcreteRegisterImpl::max_fpr ; ) {
     regName[i++] = freg->name();
+    regName[i++] = freg->name();
     freg = freg->successor();
   }
-}
 
-bool VMRegImpl::is_Register() {
-  return value() >= 0 &&
-         value() < ConcreteRegisterImpl::max_gpr;
-}
-
-bool VMRegImpl::is_FloatRegister() {
-  return value() >= ConcreteRegisterImpl::max_gpr &&
-         value() < ConcreteRegisterImpl::max_fpr;
-}
-
-Register VMRegImpl::as_Register() {
-  assert(is_Register(), "must be");
-  return ::as_Register(value());
-}
-
-FloatRegister VMRegImpl::as_FloatRegister() {
-  assert(is_FloatRegister(), "must be" );
-  return ::as_FloatRegister(value() - ConcreteRegisterImpl::max_gpr);
+  XMMRegister xreg = ::as_XMMRegister(0);
+  for ( ; i < ConcreteRegisterImpl::max_xmm ; ) {
+    for (int j = 0 ; j < 8 ; j++) {
+      regName[i++] = xreg->name();
+    }
+    xreg = xreg->successor();
+  }
+  for ( ; i < ConcreteRegisterImpl::number_of_registers ; i ++ ) {
+    regName[i] = "NON-GPR-FPR-XMM";
+  }
 }

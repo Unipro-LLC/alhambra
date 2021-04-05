@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright 2007 Red Hat, Inc.
+ * Copyright (c) 2002, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,9 +25,10 @@
 #ifndef CPU_LLVM_VM_CODEBUFFER_LLVM_HPP
 #define CPU_LLVM_VM_CODEBUFFER_LLVM_HPP
 
- private:
+private:
   void pd_initialize() {}
- public:
+
+public:
   void flush_bundle(bool start_new_bundle) {}
 
 #endif // CPU_LLVM_VM_CODEBUFFER_LLVM_HPP

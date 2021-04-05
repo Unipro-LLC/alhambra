@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright 2009 Red Hat, Inc.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,6 +25,10 @@
 #ifndef CPU_LLVM_VM_TEMPLATEINTERPRETERGENERATOR_LLVM_HPP
 #define CPU_LLVM_VM_TEMPLATEINTERPRETERGENERATOR_LLVM_HPP
 
-// This file is intentionally empty
+ protected:
+
+ void generate_fixed_frame(bool native_call);
+
+ // address generate_asm_interpreter_entry(bool synchronized);
 
 #endif // CPU_LLVM_VM_TEMPLATEINTERPRETERGENERATOR_LLVM_HPP

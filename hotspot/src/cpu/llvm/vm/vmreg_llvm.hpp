@@ -31,4 +31,7 @@
   bool is_FloatRegister();
   FloatRegister as_FloatRegister();
 
-#endif // CPU_LLVM_VM_VMREG_ZERO_HPP
+  bool is_XMMRegister();
+  XMMRegister as_XMMRegister();
+
+#endif // CPU_LLVM_VM_VMREG_LLVM_HPP
