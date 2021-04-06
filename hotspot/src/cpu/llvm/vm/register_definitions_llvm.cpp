@@ -26,7 +26,7 @@
 #include "asm/assembler.hpp"
 #include "asm/register.hpp"
 #include "register_llvm.hpp"
-#ifdef TARGET_ARCH_LLVM
+#ifdef TARGET_ARCH_llvm
 # include "interp_masm_llvm.hpp"
 #endif
 

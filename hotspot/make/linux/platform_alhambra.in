@@ -14,4 +14,4 @@ compiler = gcc
 
 gnu_dis_arch = llvm
 
-sysdefs = -DLINUX -D_GNU_SOURCE -DCC_INTERP -DLLVM -DAMD64 -DZERO_LIBARCH=\"@ZERO_LIBARCH@\"
+sysdefs = -DLINUX -D_GNU_SOURCE -DLLVM -DAMD64 -DZERO_LIBARCH=\"@ZERO_LIBARCH@\"

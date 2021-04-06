@@ -4249,10 +4249,11 @@ void SharedRuntime::montgomery_square(jint *a_ints, jint *n_ints,
 //
 
 void OptoRuntime::generate_exception_blob() {
+  #ifdef AD_WORKAROUND
   assert(!OptoRuntime::is_callee_saved_register(RDX_num), "");
   assert(!OptoRuntime::is_callee_saved_register(RAX_num), "");
   assert(!OptoRuntime::is_callee_saved_register(RCX_num), "");
-
+  #endif
   assert(SimpleRuntimeFrame::framesize % 4 == 0, "sp not 16-byte aligned");
 
   // Allocate space for the code

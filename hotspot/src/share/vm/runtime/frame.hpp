@@ -50,9 +50,6 @@
 #ifdef TARGET_ARCH_zero
 # include "stack_zero.hpp"
 #endif
-#ifdef TARGET_ARCH_llvm
-# include "stack_llvm.hpp"
-#endif
 
 typedef class BytecodeInterpreter* interpreterState;
 

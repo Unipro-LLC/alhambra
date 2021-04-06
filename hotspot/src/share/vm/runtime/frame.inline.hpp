@@ -55,12 +55,6 @@
 # include "interpreterFrame_zero.hpp"
 # include "sharkFrame_zero.hpp"
 #endif
-#ifdef TARGET_ARCH_llvm
-# include "entryFrame_llvm.hpp"
-# include "fakeStubFrame_llvm.hpp"
-# include "interpreterFrame_llvm.hpp"
-# include "sharkFrame_llvm.hpp"
-#endif
 
 // This file holds platform-independent bodies of inline functions for frames.
 

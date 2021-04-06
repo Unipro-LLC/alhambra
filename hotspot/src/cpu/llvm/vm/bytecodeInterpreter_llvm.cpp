@@ -40,7 +40,7 @@
 #include "runtime/synchronizer.hpp"
 #include "runtime/vframeArray.hpp"
 #include "utilities/debug.hpp"
-#ifdef TARGET_ARCH_LLVM
+#ifdef TARGET_ARCH_llvm
 # include "interp_masm_llvm.hpp"
 #endif
 

@@ -574,7 +574,7 @@ void InterpreterGenerator::generate_counter_incr(Label* overflow, Label* profile
                 MethodCounters::invocation_counter_offset() +
                 InvocationCounter::counter_offset());
   const Address backedge_counter  (rax,
-                MethodCounter::backedge_counter_offset() +
+                MethodCounters::backedge_counter_offset() +
                 InvocationCounter::counter_offset());
 
   __ get_method_counters(rbx, rax, done);

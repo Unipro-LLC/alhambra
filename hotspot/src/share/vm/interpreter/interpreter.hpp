@@ -31,9 +31,6 @@
 #ifdef TARGET_ARCH_zero
 # include "entry_zero.hpp"
 #endif
-#ifdef TARGET_ARCH_llvm
-# include "entry_llvm.hpp"
-#endif
 
 // This file contains the platform-independent parts
 // of the interpreter and the interpreter generator.

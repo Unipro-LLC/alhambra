@@ -28,7 +28,8 @@
 // Inline functions for memory copy and fill.
 
 // Contains inline asm implementations
-#ifdef TARGET_OS_ARCH_linux_LLVM
+
+#ifdef TARGET_OS_ARCH_linux_llvm
 # include "copy_linux_llvm.inline.hpp"
 #endif
 /*

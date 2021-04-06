@@ -146,7 +146,7 @@ CFLAGS += $(LIBFFI_CFLAGS)
 CFLAGS += $(LLVM_CFLAGS) -Wno-narrowing -Wno-literal-suffix
 endif
 ifeq ($(JVM_VARIANT_ALHAMBRA), true)
-CFLAGS += $(LIBFFI_CFLAGS)
+#CFLAGS += $(LIBFFI_CFLAGS)
 CFLAGS += $(LLVM_CFLAGS) -Wno-narrowing -Wno-literal-suffix
 endif
 CFLAGS += $(VM_PICFLAG)
@@ -191,7 +191,7 @@ ASFLAGS    += $(ARCHFLAG)
 
 # Use C++ Interpreter
 ifdef CC_INTERP
-  CFLAGS += -DCC_INTERP
+#  CFLAGS += -DCC_INTERP
 endif
 
 # Keep temporary files (.ii, .s)

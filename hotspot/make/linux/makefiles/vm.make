@@ -317,7 +317,7 @@ ifeq ($(JVM_VARIANT_ZEROSHARK), true)
 endif
 
 ifeq ($(JVM_VARIANT_ALHAMBRA), true)
-  LIBS_VM   += $(LIBFFI_LIBS) $(LLVM_LIBS)
+  LIBS_VM   += $(LLVM_LIBS)
   LFLAGS_VM += $(LLVM_LDFLAGS)
 endif
 
