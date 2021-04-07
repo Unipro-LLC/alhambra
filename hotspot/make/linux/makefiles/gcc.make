@@ -188,6 +188,11 @@ AOUT_FLAGS += $(ARCHFLAG)
 LFLAGS     += $(ARCHFLAG)
 ASFLAGS    += $(ARCHFLAG)
 
+# Use C++ Interpreter
+ifdef CC_INTERP
+  CFLAGS += -DCC_INTERP
+endif
+
 # Keep temporary files (.ii, .s)
 ifdef NEED_ASM
   CFLAGS += -save-temps
