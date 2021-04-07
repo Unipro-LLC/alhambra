@@ -34,7 +34,6 @@
 
 
 class InterpreterMacroAssembler: public MacroAssembler {
-#ifdef TARGET_ARCH_MODEL_llvm
 #ifndef CC_INTERP
  protected:
   // Interpreter specific version of call_VM_base
@@ -251,7 +250,6 @@ class InterpreterMacroAssembler: public MacroAssembler {
   // support for jvmti/dtrace
   void notify_method_entry();
   void notify_method_exit(TosState state, NotifyMethodExitMode mode);
-#endif
 
  private:
 
