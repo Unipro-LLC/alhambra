@@ -98,3 +98,10 @@ address ShouldNotCallThisStub() {
 address ShouldNotCallThisEntry() {
   return (address) should_not_call;
 }
+
+bool Assembler::is_polling_page_far() {
+  intptr_t addr = (intptr_t)os::get_polling_page();
+  return ForceUnreachable ||
+         !is_simm32(addr - (intptr_t)CodeCache::low_bound()) ||
+         !is_simm32(addr - (intptr_t)CodeCache::high_bound());
+}

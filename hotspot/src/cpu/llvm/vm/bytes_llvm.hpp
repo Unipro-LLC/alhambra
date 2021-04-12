@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_BYTES_ZERO_HPP
-#define CPU_ZERO_VM_BYTES_ZERO_HPP
+#ifndef CPU_LLVM_VM_BYTES_LLVM_HPP
+#define CPU_LLVM_VM_BYTES_LLVM_HPP
 
 #include "memory/allocation.hpp"
 
@@ -177,4 +177,4 @@ class Bytes: AllStatic {
 
 #endif // VM_LITTLE_ENDIAN
 
-#endif // CPU_ZERO_VM_BYTES_ZERO_HPP
+#endif // CPU_LLVM_VM_BYTES_LLVM_HPP

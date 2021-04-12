@@ -297,6 +297,10 @@
 #if defined(ZERO)
 #define ZERO_ONLY(code) code
 #define NOT_ZERO(code)
+#elif defined(LLVM)
+#define LLVM_ONLY(code) code
+#define NOT_LLVM(code)
+#define NOT_ZERO(code)
 #else
 #define ZERO_ONLY(code)
 #define NOT_ZERO(code) code

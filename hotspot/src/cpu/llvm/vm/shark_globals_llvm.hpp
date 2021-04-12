@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_SHARK_GLOBALS_ZERO_HPP
-#define CPU_ZERO_VM_SHARK_GLOBALS_ZERO_HPP
+#ifndef CPU_LLVM_VM_SHARK_GLOBALS_LLVM_HPP
+#define CPU_LLVM_VM_SHARK_GLOBALS_LLVM_HPP
 
 // Set the default values for platform dependent flags used by the
 // Shark compiler.  See globals.hpp for details of what they do.
@@ -64,4 +64,4 @@ define_pd_global(bool,     NeverActAsServerClassMachine, true );
 define_pd_global(uint64_t, MaxRAM,                       1ULL*G);
 define_pd_global(bool,     CICompileOSR,                 true );
 
-#endif // CPU_ZERO_VM_SHARK_GLOBALS_ZERO_HPP
+#endif // CPU_LLVM_VM_SHARK_GLOBALS_LLVM_HPP

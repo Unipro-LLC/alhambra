@@ -23,10 +23,12 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_CODEBUFFER_ZERO_HPP
-#define CPU_ZERO_VM_CODEBUFFER_ZERO_HPP
+#ifndef CPU_LLVM_VM_CODEBUFFER_LLVM_HPP
+#define CPU_LLVM_VM_CODEBUFFER_LLVM_HPP
 
  private:
   void pd_initialize() {}
+ public:
+  void flush_bundle(bool start_new_bundle) {}
 
-#endif // CPU_ZERO_VM_CODEBUFFER_ZERO_HPP
+#endif // CPU_LLVM_VM_CODEBUFFER_LLVM_HPP

@@ -110,8 +110,12 @@ else
 ifeq		($(VARIANT),compiler2)
 TOPLEVEL_EXCLUDE_DIRS	= $(ALWAYS_EXCLUDE_DIRS) -o -name adlc -o -name c1 -o -name agent
 else
+ifeq		($(VARIANT),alhambra)
+TOPLEVEL_EXCLUDE_DIRS	= $(ALWAYS_EXCLUDE_DIRS) -o -name adlc -o -name c1 -o -name agent
+else
 # compiler1 and core use the same exclude list
 TOPLEVEL_EXCLUDE_DIRS	= $(ALWAYS_EXCLUDE_DIRS) -o -name adlc -o -name opto -o -name libadt -o -name agent
+endif
 endif
 endif
 
@@ -200,6 +204,7 @@ DATA_MODE/sparc = 32
 DATA_MODE/sparcv9 = 64
 DATA_MODE/amd64 = 64
 DATA_MODE/ppc64 = 64
+DATA_MODE/llvm = 64
 
 DATA_MODE = $(DATA_MODE/$(BUILDARCH))
 

@@ -24,7 +24,8 @@
 #
 
 # Select which files to use (in top.make)
-TYPE = ZERO
-
+TYPE = LLVM
 # Install libjvm.so, etc in in server directory.
 VM_SUBDIR = server
+
+CFLAGS += -DCOMPILER2

@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_CPPINTERPRETER_ZERO_HPP
-#define CPU_ZERO_VM_CPPINTERPRETER_ZERO_HPP
+#ifndef CPU_LLVM_VM_CPPINTERPRETER_LLVM_HPP
+#define CPU_LLVM_VM_CPPINTERPRETER_LLVM_HPP
 
  protected:
   // Size of interpreter code
@@ -49,4 +49,4 @@
   static intptr_t* calculate_unwind_sp(ZeroStack* stack, oop method_handle);
   static void throw_exception(JavaThread* thread, Symbol* name,char *msg=NULL);
 
-#endif // CPU_ZERO_VM_CPPINTERPRETER_ZERO_HPP
+#endif // CPU_LLVM_VM_CPPINTERPRETER_LLVM_HPP

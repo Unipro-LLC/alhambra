@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_STACK_ZERO_INLINE_HPP
-#define CPU_ZERO_VM_STACK_ZERO_INLINE_HPP
+#ifndef CPU_LLVM_VM_STACK_LLVM_INLINE_HPP
+#define CPU_LLVM_VM_STACK_LLVM_INLINE_HPP
 
 #include "runtime/thread.hpp"
 #include "stack_llvm.hpp"
@@ -55,4 +55,4 @@ inline int ZeroStack::abi_stack_available(Thread *thread) const {
   return stack_free;
 }
 
-#endif // CPU_ZERO_VM_STACK_ZERO_INLINE_HPP
+#endif // CPU_LLVM_VM_STACK_LLVM_INLINE_HPP

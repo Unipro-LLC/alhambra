@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_VM_VERSION_ZERO_HPP
-#define CPU_ZERO_VM_VM_VERSION_ZERO_HPP
+#ifndef CPU_LLVM_VM_VM_VERSION_LLVM_HPP
+#define CPU_LLVM_VM_VM_VERSION_LLVM_HPP
 
 #include "runtime/globals_extension.hpp"
 #include "runtime/vm_version.hpp"
@@ -36,4 +36,4 @@ class VM_Version : public Abstract_VM_Version {
   }
 };
 
-#endif // CPU_ZERO_VM_VM_VERSION_ZERO_HPP
+#endif // CPU_LLVM_VM_VM_VERSION_LLVM_HPP

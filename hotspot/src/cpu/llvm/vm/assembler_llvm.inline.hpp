@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_ASSEMBLER_ZERO_INLINE_HPP
-#define CPU_ZERO_VM_ASSEMBLER_ZERO_INLINE_HPP
+#ifndef CPU_LLVM_VM_ASSEMBLER_LLVM_INLINE_HPP
+#define CPU_LLVM_VM_ASSEMBLER_LLVM_INLINE_HPP
 
 #include "asm/assembler.inline.hpp"
 #include "asm/codeBuffer.hpp"
@@ -33,4 +33,4 @@
 
 // This file is intentionally empty
 
-#endif // CPU_ZERO_VM_ASSEMBLER_ZERO_INLINE_HPP
+#endif // CPU_LLVM_VM_ASSEMBLER_LLVM_INLINE_HPP

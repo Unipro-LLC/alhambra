@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_COPY_ZERO_HPP
-#define CPU_ZERO_VM_COPY_ZERO_HPP
+#ifndef CPU_LLVM_VM_COPY_LLVM_HPP
+#define CPU_LLVM_VM_COPY_LLVM_HPP
 
 // Inline functions for memory copy and fill.
 
@@ -180,4 +180,4 @@ static void pd_zero_to_bytes(void* to, size_t count) {
   memset(to, 0, count);
 }
 
-#endif // CPU_ZERO_VM_COPY_ZERO_HPP
+#endif // CPU_LLVM_VM_COPY_LLVM_HPP

@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_DISASSEMBLER_ZERO_HPP
-#define CPU_ZERO_VM_DISASSEMBLER_ZERO_HPP
+#ifndef CPU_LLVM_VM_DISASSEMBLER_LLVM_HPP
+#define CPU_LLVM_VM_DISASSEMBLER_LLVM_HPP
 
   static int pd_instruction_alignment() {
     return 1;
@@ -34,4 +34,4 @@
     return "";
   }
 
-#endif // CPU_ZERO_VM_DISASSEMBLER_ZERO_HPP
+#endif // CPU_LLVM_VM_DISASSEMBLER_LLVM_HPP

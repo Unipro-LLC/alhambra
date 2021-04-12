@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_REGISTER_ZERO_HPP
-#define CPU_ZERO_VM_REGISTER_ZERO_HPP
+#ifndef CPU_LLVM_VM_REGISTER_LLVM_HPP
+#define CPU_LLVM_VM_REGISTER_LLVM_HPP
 
 #include "asm/register.hpp"
 #include "vm_version_llvm.hpp"
@@ -40,7 +40,7 @@ inline Register as_Register(int encoding) {
   return (Register)(intptr_t) encoding;
 }
 
-// The implementation of integer registers for the zero architecture
+// The implementation of integer registers for the llvm architecture
 class RegisterImpl : public AbstractRegisterImpl {
  public:
   enum {
@@ -118,4 +118,4 @@ CONSTANT_REGISTER_DECLARATION(Register, noreg, (-1));
 #define noreg ((Register)(noreg_RegisterEnumValue))
 #endif
 
-#endif // CPU_ZERO_VM_REGISTER_ZERO_HPP
+#endif // CPU_LLVM_VM_REGISTER_LLVM_HPP

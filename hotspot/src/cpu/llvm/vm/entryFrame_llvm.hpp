@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_ENTRYFRAME_ZERO_HPP
-#define CPU_ZERO_VM_ENTRYFRAME_ZERO_HPP
+#ifndef CPU_LLVM_VM_ENTRYFRAME_LLVM_HPP
+#define CPU_LLVM_VM_ENTRYFRAME_LLVM_HPP
 
 #include "runtime/javaCalls.hpp"
 #include "stack_llvm.hpp"
@@ -70,4 +70,4 @@ class EntryFrame : public ZeroFrame {
                      int   buflen) const;
 };
 
-#endif // CPU_ZERO_VM_ENTRYFRAME_ZERO_HPP
+#endif // CPU_LLVM_VM_ENTRYFRAME_LLVM_HPP

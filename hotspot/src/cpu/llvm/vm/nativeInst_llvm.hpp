@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_NATIVEINST_ZERO_HPP
-#define CPU_ZERO_VM_NATIVEINST_ZERO_HPP
+#ifndef CPU_LLVM_VM_NATIVEINST_LLVM_HPP
+#define CPU_LLVM_VM_NATIVEINST_LLVM_HPP
 
 #include "asm/assembler.hpp"
 #include "memory/allocation.hpp"
@@ -212,4 +212,4 @@ inline NativeGeneralJump* nativeGeneralJump_at(address address) {
   return NULL;
 }
 
-#endif // CPU_ZERO_VM_NATIVEINST_ZERO_HPP
+#endif // CPU_LLVM_VM_NATIVEINST_LLVM_HPP

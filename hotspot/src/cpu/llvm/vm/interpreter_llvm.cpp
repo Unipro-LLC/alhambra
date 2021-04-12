@@ -66,7 +66,6 @@ address InterpreterGenerator::generate_math_entry(
   if (!InlineIntrinsics)
     return NULL;
 
-  Unimplemented();
   return NULL;
 }
 

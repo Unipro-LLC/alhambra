@@ -39,7 +39,6 @@ void VMRegImpl::set_regName() {
     regName[i++] = freg->name();
     freg = freg->successor();
   }
-  assert(i == ConcreteRegisterImpl::number_of_registers, "fix this");
 }
 
 bool VMRegImpl::is_Register() {

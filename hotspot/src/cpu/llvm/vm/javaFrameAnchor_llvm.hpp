@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_JAVAFRAMEANCHOR_ZERO_HPP
-#define CPU_ZERO_VM_JAVAFRAMEANCHOR_ZERO_HPP
+#ifndef CPU_LLVM_VM_JAVAFRAMEANCHOR_LLVM_HPP
+#define CPU_LLVM_VM_JAVAFRAMEANCHOR_LLVM_HPP
 
  private:
   ZeroFrame* volatile _last_Java_fp;
@@ -93,4 +93,4 @@
     return byte_offset_of(JavaFrameAnchor, _last_Java_fp);
   }
 
-#endif // CPU_ZERO_VM_JAVAFRAMEANCHOR_ZERO_HPP
+#endif // CPU_LLVM_VM_JAVAFRAMEANCHOR_LLVM_HPP

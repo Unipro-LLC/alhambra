@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_STACK_ZERO_HPP
-#define CPU_ZERO_VM_STACK_ZERO_HPP
+#ifndef CPU_LLVM_VM_STACK_LLVM_HPP
+#define CPU_LLVM_VM_STACK_LLVM_HPP
 
 #include "utilities/sizes.hpp"
 
@@ -223,4 +223,4 @@ class ZeroFrame {
                         int       buflen) const;
 };
 
-#endif // CPU_ZERO_VM_STACK_ZERO_HPP
+#endif // CPU_LLVM_VM_STACK_LLVM_HPP

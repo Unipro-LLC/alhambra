@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_INTERPRETERRT_ZERO_HPP
-#define CPU_ZERO_VM_INTERPRETERRT_ZERO_HPP
+#ifndef CPU_LLVM_VM_INTERPRETERRT_LLVM_HPP
+#define CPU_LLVM_VM_INTERPRETERRT_LLVM_HPP
 
 #include "memory/allocation.hpp"
 
@@ -131,4 +131,4 @@ class SlowSignatureHandlerGenerator : public SignatureHandlerGeneratorBase {
   }
 };
 
-#endif // CPU_ZERO_VM_INTERPRETERRT_ZERO_HPP
+#endif // CPU_LLVM_VM_INTERPRETERRT_LLVM_HPP

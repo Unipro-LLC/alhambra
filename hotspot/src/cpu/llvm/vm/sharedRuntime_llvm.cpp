@@ -61,6 +61,14 @@ int SharedRuntime::java_calling_convention(const BasicType *sig_bt,
   return 0;
 }
 
+bool SharedRuntime::is_wide_vector(int size) {
+  return size > 16;
+}
+
+void SharedRuntime::generate_uncommon_trap_blob() {
+
+  }
+
 AdapterHandlerEntry* SharedRuntime::generate_i2c2i_adapters(
                         MacroAssembler *masm,
                         int total_args_passed,
@@ -88,7 +96,6 @@ nmethod *SharedRuntime::generate_native_wrapper(MacroAssembler *masm,
                                                             sig_bt,
                                                             ret_type);
 #else
-  ShouldNotCallThis();
   return NULL;
 #endif // SHARK
 }
@@ -99,12 +106,10 @@ int Deoptimization::last_frame_adjust(int callee_parameters,
 }
 
 uint SharedRuntime::out_preserve_stack_slots() {
-  ShouldNotCallThis();
   return 0;
 }
 
 JRT_LEAF(void, zero_stub())
-  ShouldNotCallThis();
 JRT_END
 
 static RuntimeStub* generate_empty_runtime_stub(const char* name) {
@@ -119,6 +124,7 @@ static DeoptimizationBlob* generate_empty_deopt_blob() {
   return CAST_FROM_FN_PTR(DeoptimizationBlob*,zero_stub);
 }
 
+void OptoRuntime::generate_exception_blob(){}
 
 void SharedRuntime::generate_deopt_blob() {
   _deopt_blob = generate_empty_deopt_blob();
@@ -137,6 +143,5 @@ int SharedRuntime::c_calling_convention(const BasicType *sig_bt,
                                          VMRegPair *regs,
                                          VMRegPair *regs2,
                                          int total_args_passed) {
-  ShouldNotCallThis();
   return 0;
 }

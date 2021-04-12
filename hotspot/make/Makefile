@@ -899,6 +899,8 @@ jvmgzero: warn_jvmg_deprecated debugzero
 
 jvmgshark: warn_jvmg_deprecated debugshark
 
+jvmgalhambra: warn_jvmg_deprecated debugalhambra
+
 # JPRT rule to build this workspace
 include $(GAMMADIR)/make/jprt.gmk
 

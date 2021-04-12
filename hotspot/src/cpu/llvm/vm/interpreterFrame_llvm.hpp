@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_INTERPRETERFRAME_ZERO_HPP
-#define CPU_ZERO_VM_INTERPRETERFRAME_ZERO_HPP
+#ifndef CPU_LLVM_VM_INTERPRETERFRAME_LLVM_HPP
+#define CPU_LLVM_VM_INTERPRETERFRAME_LLVM_HPP
 
 #include "interpreter/bytecodeInterpreter.hpp"
 #include "oops/method.hpp"
@@ -80,4 +80,4 @@ class InterpreterFrame : public ZeroFrame {
 };
 #endif // CC_INTERP
 
-#endif // CPU_ZERO_VM_INTERPRETERFRAME_ZERO_HPP
+#endif // CPU_LLVM_VM_INTERPRETERFRAME_LLVM_HPP

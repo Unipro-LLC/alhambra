@@ -22,8 +22,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_REGISTERMAP_ZERO_HPP
-#define CPU_ZERO_VM_REGISTERMAP_ZERO_HPP
+#ifndef CPU_LLVM_VM_REGISTERMAP_LLVM_HPP
+#define CPU_LLVM_VM_REGISTERMAP_LLVM_HPP
 
   // machine-dependent implemention for register maps
   friend class frame;
@@ -41,4 +41,4 @@
   void pd_initialize() {}
   void pd_initialize_from(const RegisterMap* map) {}
 
-#endif // CPU_ZERO_VM_REGISTERMAP_ZERO_HPP
+#endif // CPU_LLVM_VM_REGISTERMAP_LLVM_HPP

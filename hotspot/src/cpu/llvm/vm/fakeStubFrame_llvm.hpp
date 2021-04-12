@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_FAKESTUBFRAME_ZERO_HPP
-#define CPU_ZERO_VM_FAKESTUBFRAME_ZERO_HPP
+#ifndef CPU_LLVM_VM_FAKESTUBFRAME_LLVM_HPP
+#define CPU_LLVM_VM_FAKESTUBFRAME_LLVM_HPP
 
 #include "stack_llvm.hpp"
 
@@ -57,4 +57,4 @@ class FakeStubFrame : public ZeroFrame {
                      int   buflen) const {}
 };
 
-#endif // CPU_ZERO_VM_FAKESTUBFRAME_ZERO_HPP
+#endif // CPU_LLVM_VM_FAKESTUBFRAME_LLVM_HPP

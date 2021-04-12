@@ -29,6 +29,9 @@
 #ifdef TARGET_ARCH_x86
 # include "c2_globals_x86.hpp"
 #endif
+#ifdef TARGET_ARCH_llvm
+# include "c2_globals_llvm.hpp"
+#endif
 #ifdef TARGET_ARCH_sparc
 # include "c2_globals_sparc.hpp"
 #endif

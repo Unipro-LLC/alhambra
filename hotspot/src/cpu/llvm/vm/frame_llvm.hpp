@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_FRAME_ZERO_HPP
-#define CPU_ZERO_VM_FRAME_ZERO_HPP
+#ifndef CPU_LLVM_VM_FRAME_LLVM_HPP
+#define CPU_LLVM_VM_FRAME_LLVM_HPP
 
 #include "runtime/synchronizer.hpp"
 #include "utilities/top.hpp"
@@ -79,4 +79,4 @@
                            char*         buf,
                            int           buflen) const;
 
-#endif // CPU_ZERO_VM_FRAME_ZERO_HPP
+#endif // CPU_LLVM_VM_FRAME_LLVM_HPP

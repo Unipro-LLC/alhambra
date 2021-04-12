@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_INTERPRETER_ZERO_HPP
-#define CPU_ZERO_VM_INTERPRETER_ZERO_HPP
+#ifndef CPU_LLVM_VM_INTERPRETER_LLVM_HPP
+#define CPU_LLVM_VM_INTERPRETER_LLVM_HPP
 
  public:
   static void invoke_method(Method* method, address entry_point, TRAPS) {
@@ -51,4 +51,4 @@
     return stackElementWords * i;
   }
 
-#endif // CPU_ZERO_VM_INTERPRETER_ZERO_HPP
+#endif // CPU_LLVM_VM_INTERPRETER_LLVM_HPP

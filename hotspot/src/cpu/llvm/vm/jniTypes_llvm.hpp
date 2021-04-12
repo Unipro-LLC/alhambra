@@ -22,8 +22,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_JNITYPES_ZERO_HPP
-#define CPU_ZERO_VM_JNITYPES_ZERO_HPP
+#ifndef CPU_LLVM_VM_JNITYPES_LLVM_HPP
+#define CPU_LLVM_VM_JNITYPES_LLVM_HPP
 
 #include "memory/allocation.hpp"
 #include "oops/oop.hpp"
@@ -114,4 +114,4 @@ public:
 
 };
 
-#endif // CPU_ZERO_VM_JNITYPES_ZERO_HPP
+#endif // CPU_LLVM_VM_JNITYPES_LLVM_HPP

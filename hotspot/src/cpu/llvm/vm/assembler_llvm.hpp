@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_ASSEMBLER_ZERO_HPP
-#define CPU_ZERO_VM_ASSEMBLER_ZERO_HPP
+#ifndef CPU_LLVM_VM_ASSEMBLER_LLVM_HPP
+#define CPU_LLVM_VM_ASSEMBLER_LLVM_HPP
 
 // In normal, CPU-specific ports of HotSpot these two classes are used
 // for generating assembly language.  We don't do any of this in zero,
@@ -37,6 +37,9 @@ class Assembler : public AbstractAssembler {
 
  public:
   void pd_patch_instruction(address branch, address target);
+
+ public:
+  static bool is_polling_page_far() NOT_LP64({return false;});
 };
 
 class MacroAssembler : public Assembler {
@@ -46,16 +49,17 @@ class MacroAssembler : public Assembler {
  public:
   void align(int modulus);
   void bang_stack_with_offset(int offset);
-  bool needs_explicit_null_check(intptr_t offset);
+  static bool needs_explicit_null_check(intptr_t offset);
   RegisterOrConstant delayed_value_impl(intptr_t* delayed_value_addr,
                                         Register tmp, int offset);
  public:
   void advance(int bytes);
   void store_oop(jobject obj);
   void store_Metadata(Metadata* obj);
+  void int3();
 };
 
 address ShouldNotCallThisStub();
 address ShouldNotCallThisEntry();
 
-#endif // CPU_ZERO_VM_ASSEMBLER_ZERO_HPP
+#endif // CPU_LLVM_VM_ASSEMBLER_LLVM_HPP

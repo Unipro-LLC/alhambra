@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_BYTECODEINTERPRETER_ZERO_HPP
-#define CPU_ZERO_VM_BYTECODEINTERPRETER_ZERO_HPP
+#ifndef CPU_LLVM_VM_BYTECODEINTERPRETER_LLVM_HPP
+#define CPU_LLVM_VM_BYTECODEINTERPRETER_LLVM_HPP
 
 // Platform specific for C++ based Interpreter
 
@@ -168,4 +168,4 @@
 #define SET_VMSLOTS_DOUBLE(value, offset) (((VMJavaVal64*)&vmslots[(offset) - 1])->d = (value))
 #define SET_VMSLOTS_LONG(value, offset)   (((VMJavaVal64*)&vmslots[(offset) - 1])->l = (value))
 
-#endif // CPU_ZERO_VM_BYTECODEINTERPRETER_ZERO_HPP
+#endif // CPU_LLVM_VM_BYTECODEINTERPRETER_LLVM_HPP

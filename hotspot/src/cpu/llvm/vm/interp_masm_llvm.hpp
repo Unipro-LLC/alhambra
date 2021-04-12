@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_INTERP_MASM_ZERO_HPP
-#define CPU_ZERO_VM_INTERP_MASM_ZERO_HPP
+#ifndef CPU_LLVM_VM_INTERP_MASM_LLVM_HPP
+#define CPU_LLVM_VM_INTERP_MASM_LLVM_HPP
 
 #include "assembler_llvm.inline.hpp"
 #include "interpreter/invocationCounter.hpp"
@@ -44,4 +44,4 @@ class InterpreterMacroAssembler : public MacroAssembler {
   }
 };
 
-#endif // CPU_ZERO_VM_INTERP_MASM_ZERO_HPP
+#endif // CPU_LLVM_VM_INTERP_MASM_LLVM_HPP

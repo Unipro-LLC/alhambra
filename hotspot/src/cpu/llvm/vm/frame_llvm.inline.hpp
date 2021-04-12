@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_FRAME_ZERO_INLINE_HPP
-#define CPU_ZERO_VM_FRAME_ZERO_INLINE_HPP
+#ifndef CPU_LLVM_VM_FRAME_LLVM_INLINE_HPP
+#define CPU_LLVM_VM_FRAME_LLVM_INLINE_HPP
 
 #include "code/codeCache.hpp"
 
@@ -174,4 +174,4 @@ inline intptr_t* frame::unextended_sp() const {
     return (intptr_t *) -1;
 }
 
-#endif // CPU_ZERO_VM_FRAME_ZERO_INLINE_HPP
+#endif // CPU_LLVM_VM_FRAME_LLVM_INLINE_HPP

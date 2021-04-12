@@ -62,9 +62,14 @@ AD_Src   = $(call altsrc-replace,$(HS_COMMON_SRC)/share/vm/adlc)
 AD_Names = ad_$(Platform_arch_model).hpp ad_$(Platform_arch_model).cpp
 AD_Files = $(AD_Names:%=$(AD_Dir)/%)
 
+ifeq ($(JVM_VARIANT_ALHAMBRA), true) 
+TYPE = LLVM
+endif
+
 # AD_Files_If_Required/COMPILER1 = ad_stuff
 AD_Files_If_Required/COMPILER2 = ad_stuff
 AD_Files_If_Required/TIERED = ad_stuff
+AD_Files_If_Required/LLVM = ad_stuff
 AD_Files_If_Required = $(AD_Files_If_Required/$(TYPE))
 
 # Wierd argument adjustment for "gnumake -j..."

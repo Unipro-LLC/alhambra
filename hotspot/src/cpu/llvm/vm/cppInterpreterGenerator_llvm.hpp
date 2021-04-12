@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_CPPINTERPRETERGENERATOR_ZERO_HPP
-#define CPU_ZERO_VM_CPPINTERPRETERGENERATOR_ZERO_HPP
+#ifndef CPU_LLVM_VM_CPPINTERPRETERGENERATOR_LLVM_HPP
+#define CPU_LLVM_VM_CPPINTERPRETERGENERATOR_LLVM_HPP
 
  protected:
   MacroAssembler* assembler() const {
@@ -44,4 +44,4 @@
         return generate_entry_impl(assembler(), entry_point);
   }
 
-#endif // CPU_ZERO_VM_CPPINTERPRETERGENERATOR_ZERO_HPP
+#endif // CPU_LLVM_VM_CPPINTERPRETERGENERATOR_LLVM_HPP

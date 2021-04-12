@@ -14,6 +14,7 @@ BOOT_JDK=
 NOCONF=false
 LTINFO_LIB=
 
+
 # parse parameters
 make_args_counter=0
 configure_args_counter=0

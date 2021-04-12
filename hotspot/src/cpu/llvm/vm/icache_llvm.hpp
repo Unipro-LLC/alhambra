@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_ICACHE_ZERO_HPP
-#define CPU_ZERO_VM_ICACHE_ZERO_HPP
+#ifndef CPU_LLVM_VM_ICACHE_LLVM_HPP
+#define CPU_LLVM_VM_ICACHE_LLVM_HPP
 
 // Interface for updating the instruction cache.  Whenever the VM
 // modifies code, part of the processor instruction cache potentially
@@ -38,4 +38,4 @@ class ICache : public AbstractICache {
   static void invalidate_range(address start, int nbytes) {}
 };
 
-#endif // CPU_ZERO_VM_ICACHE_ZERO_HPP
+#endif // CPU_LLVM_VM_ICACHE_LLVM_HPP

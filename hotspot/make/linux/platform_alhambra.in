@@ -8,10 +8,10 @@ os_arch = linux_llvm
 
 os_arch_model = linux_llvm
 
-lib_arch = llvm
+lib_arch = amd64
 
 compiler = gcc
 
 gnu_dis_arch = llvm
 
-sysdefs = -DLINUX -D_GNU_SOURCE -DCC_INTERP -DZERO -D@ZERO_ARCHDEF@ -DZERO_LIBARCH=\"@ZERO_LIBARCH@\"
+sysdefs = -DLINUX -D_GNU_SOURCE -DCC_INTERP -DLLVM -DAMD64 -DZERO_LIBARCH=\"@ZERO_LIBARCH@\"

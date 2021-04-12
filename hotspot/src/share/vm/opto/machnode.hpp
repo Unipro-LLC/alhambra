@@ -96,7 +96,7 @@ public:
     return ::as_FloatRegister(reg(ra_, node, idx));
   }
 
-#if defined(IA32) || defined(AMD64)
+#if defined(IA32) || defined(AMD64) && !(defined(LLVM))
   XMMRegister  as_XMMRegister(PhaseRegAlloc *ra_, const Node *node)   const {
     return ::as_XMMRegister(reg(ra_, node));
   }
@@ -104,6 +104,7 @@ public:
     return ::as_XMMRegister(reg(ra_, node, idx));
   }
 #endif
+
   // CondRegister reg converter
 #if defined(PPC64)
   ConditionRegister as_ConditionRegister(PhaseRegAlloc *ra_, const Node *node) const {

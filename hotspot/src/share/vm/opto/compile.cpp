@@ -1025,6 +1025,23 @@ Compile::Compile( ciEnv* ci_env,
     GraphKit kit;
     kit.gen_stub(stub_function, stub_name, is_fancy_jump, pass_tls, return_pc);
   }
+#ifndef PRODUCT
+  if (PrintIdeal) {
+    ttyLocker ttyl;  // keep the following output all in one block
+    // This output goes directly to the tty, not the compiler log.
+    // To enable tools to match it up with the compilation activity,
+    // be sure to tag this tty output with the compile ID.
+    if (xtty != NULL) {
+      xtty->head("ideal compile_id='%d'%s", compile_id(),
+                 is_osr_compilation()    ? " compile_kind='osr'" :
+                 "");
+    }
+    root()->dump(9999);
+    if (xtty != NULL) {
+      xtty->tail("ideal");
+    }
+  }
+#endif
 
   NOT_PRODUCT( verify_graph_edges(); )
   Code_Gen();

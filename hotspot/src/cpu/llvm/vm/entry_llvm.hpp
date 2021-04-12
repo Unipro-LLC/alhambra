@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_ENTRY_ZERO_HPP
-#define CPU_ZERO_VM_ENTRY_ZERO_HPP
+#ifndef CPU_LLVM_VM_ENTRY_LLVM_HPP
+#define CPU_LLVM_VM_ENTRY_LLVM_HPP
 
 #include "interpreter/cppInterpreter.hpp"
 
@@ -78,4 +78,4 @@ class ZeroEntry {
   }
 };
 
-#endif // CPU_ZERO_VM_ENTRY_ZERO_HPP
+#endif // CPU_LLVM_VM_ENTRY_LLVM_HPP

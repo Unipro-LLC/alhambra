@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_ZERO_VM_INTERPRETERGENERATOR_ZERO_HPP
-#define CPU_ZERO_VM_INTERPRETERGENERATOR_ZERO_HPP
+#ifndef CPU_LLVM_VM_INTERPRETERGENERATOR_LLVM_HPP
+#define CPU_LLVM_VM_INTERPRETERGENERATOR_LLVM_HPP
 
   // Generation of Interpreter
   //
@@ -39,4 +39,4 @@
   address generate_accessor_entry();
   address generate_Reference_get_entry();
 
-#endif // CPU_ZERO_VM_INTERPRETERGENERATOR_ZERO_HPP
+#endif // CPU_LLVM_VM_INTERPRETERGENERATOR_LLVM_HPP
