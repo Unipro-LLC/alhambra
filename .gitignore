@@ -1,2 +1,6 @@
-build
+/build
+/_test
+
 a.out
+/*.log
+

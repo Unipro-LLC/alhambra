@@ -2357,6 +2357,8 @@ void Compile::Code_Gen() {
     debug_only( cfg.verify(); )
   }
 
+  NOT_PRODUCT( if (PrintOpto) { _cfg->dump(); } )
+
   PhaseChaitin regalloc(unique(), cfg, matcher);
   _regalloc = &regalloc;
   {
