@@ -5,7 +5,7 @@ ifeq ($(DEBUG_LEVEL),slowdebug)
     BUILD_MODE = debug
 endif
 ifeq ($(DEBUG_LEVEL),fastdebug)
-    BUILD_MODE = FASTDEBUG
+	BUILD_MODE = debug
 endif
 
 $(shell [ -d "$(LLVM_BUILD_DIR)" ] || mkdir -p $(LLVM_BUILD_DIR))

@@ -43,6 +43,7 @@
 #include "runtime/vmThread.hpp"
 #include "trace/tracing.hpp"
 #include "utilities/ticks.hpp"
+#include "llvmHeaders.hpp"
 
 class Block;
 class Bundle;
@@ -1154,7 +1155,8 @@ class Compile : public Phase {
   void Finish_Warm();                            // Give up on further inlines.
   void Optimize();                               // Given a graph, optimize it
   void Code_Gen();                               // Generate code from a graph
-
+  llvm::Type* Convert_Type(BasicType btype);
+  llvm::Function* Gen_Func(llvm::Module& mod);
   // Management of the AliasType table.
   void grow_alias_types();
   AliasCacheEntry* probe_alias_cache(const TypePtr* adr_type);
@@ -1169,6 +1171,10 @@ class Compile : public Phase {
   int            intrinsic_insertion_index(ciMethod* m, bool is_virtual);  // helper
   CallGenerator* find_intrinsic(ciMethod* m, bool is_virtual);             // query fn
   void           register_intrinsic(CallGenerator* cg);                    // update fn
+
+#ifdef TARGET_ARCH_llvm
+  llvm::LLVMContext ctx;
+#endif
 
 #ifndef PRODUCT
   static juint  _intrinsic_hist_count[vmIntrinsics::ID_LIMIT];

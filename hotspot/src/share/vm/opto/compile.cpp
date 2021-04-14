@@ -83,7 +83,6 @@
 # include "adfiles/ad_ppc_64.hpp"
 #endif
 
-
 // -------------------- Compile::mach_constant_base_node -----------------------
 // Constant table base node singleton.
 MachConstantBaseNode* Compile::mach_constant_base_node() {
@@ -2311,6 +2310,46 @@ void Compile::Optimize() {
 
 //------------------------------Code_Gen---------------------------------------
 // Given a graph, generate code for it
+
+llvm::Type* Compile::Convert_Type(BasicType btype){
+  switch (btype){
+    case T_BYTE: return llvm::Type::getInt8Ty(ctx);
+    case T_SHORT: return llvm::Type::getInt16Ty(ctx);
+    case T_INT: return llvm::Type::getInt32Ty(ctx);
+    case T_LONG: return llvm::Type::getInt64Ty(ctx);
+    case T_FLOAT: return llvm::Type::getFloatTy(ctx);
+    case T_DOUBLE: return llvm::Type::getDoubleTy(ctx);
+    case T_BOOLEAN: return llvm::Type::getInt8Ty(ctx);
+    case T_CHAR: return llvm::Type::getInt32Ty(ctx);
+    case T_VOID: return llvm::Type::getVoidTy(ctx);
+    default: return llvm::PointerType::getUnqual(llvm::ArrayType::get(llvm::Type::getInt8Ty(ctx), sizeof(oopDesc)));
+  }
+}
+
+inline llvm::Function* Compile::Gen_Func(llvm::Module& mod){
+  const TypeTuple* domain = tf()->domain();
+  llvm::Type *retType = Convert_Type(tf()->return_type());
+  std::vector<llvm::Type*> paramTypes;
+
+  for (uint i = TypeFunc::Parms; i < domain->cnt(); ++i) {
+    BasicType btype = domain->field_at(i)->basic_type();
+    llvm::Type* type = Convert_Type(btype);
+    paramTypes.push_back(type);
+  }
+  
+  llvm::FunctionType *ftype = llvm::FunctionType::get(retType, paramTypes, false);
+  llvm::GlobalValue::LinkageTypes linkage = llvm::GlobalValue::ExternalWeakLinkage;
+  llvm::Function *f = llvm::Function::Create(ftype, linkage, 0, "ViewCFG_Test", &mod);
+  
+  uint n = _cfg->number_of_blocks();
+  std::string block = "B";
+  for (uint i = 0; i < n; ++i){
+    llvm::BasicBlock::Create(f->getContext(), block + std::to_string(i + 1), f);
+  }
+
+  return f;
+}
+
 void Compile::Code_Gen() {
   if (failing()) {
     return;
@@ -2358,6 +2397,10 @@ void Compile::Code_Gen() {
   }
 
   NOT_PRODUCT( if (PrintOpto) { _cfg->dump(); } )
+
+  llvm::Module mod("Test Module", ctx);
+  llvm::Function *f = Gen_Func(mod);
+  f->viewCFG();
 
   PhaseChaitin regalloc(unique(), cfg, matcher);
   _regalloc = &regalloc;
