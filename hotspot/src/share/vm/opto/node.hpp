@@ -29,6 +29,8 @@
 #include "libadt/vectset.hpp"
 #include "opto/compile.hpp"
 #include "opto/type.hpp"
+#include "llvmHeaders.hpp"
+#include "selector_llvm.hpp"
 
 // Portions of code courtesy of Clifford Click
 
@@ -255,6 +257,8 @@ public:
     if (in2 != NULL)  nn->set_req(2, in2);
     return nn;
   }
+
+  virtual llvm::Value* select(Selector* sel);
 
 private:
   // Shared setup for the above constructors.

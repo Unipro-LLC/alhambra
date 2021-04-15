@@ -562,6 +562,12 @@ Node *Node::clone() const {
   return n;                     // Return the clone
 }
 
+//-----------------------------select------------------------------------------
+llvm::Value* Node::select(Selector* sel){
+  NOT_PRODUCT( if (PrintOpto) { tty->print_cr("virtual llvm:Value* select(Selector* sel);"); } )
+  return 0;
+}
+
 //---------------------------setup_is_top--------------------------------------
 // Call this when changing the top node, to reassert the invariants
 // required by Node::is_top.  See Compile::set_cached_top_node.
