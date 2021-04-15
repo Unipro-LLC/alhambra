@@ -691,6 +691,7 @@ void* Arena::internal_malloc_4(size_t x) {
 //
 #ifndef ALLOW_OPERATOR_NEW_USAGE
 #ifndef SHARK
+#ifndef LLVM
 void* operator new(size_t size) throw() {
   assert(false, "Should not call global operator new");
   return 0;
@@ -718,6 +719,7 @@ void operator delete(void* p) {
 void operator delete [](void* p) {
   assert(false, "Should not call global delete []");
 }
+#endif // LLVM
 #endif // SHARK
 #endif // ALLOW_OPERATOR_NEW_USAGE
 
