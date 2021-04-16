@@ -1,6 +1,7 @@
 #include "llvmHeaders.hpp"
-#include "selector_llvm.hpp"
 #include "adfiles/ad_llvm.hpp"
+
+class Selector;
 
 llvm::Value* loadBNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;

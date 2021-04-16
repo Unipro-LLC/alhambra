@@ -43,7 +43,9 @@
 #include "runtime/vmThread.hpp"
 #include "trace/tracing.hpp"
 #include "utilities/ticks.hpp"
+#ifdef LLVM
 #include "llvmHeaders.hpp"
+#endif
 
 class Block;
 class Bundle;
@@ -1155,8 +1157,7 @@ class Compile : public Phase {
   void Finish_Warm();                            // Give up on further inlines.
   void Optimize();                               // Given a graph, optimize it
   void Code_Gen();                               // Generate code from a graph
-  llvm::Type* Convert_Type(BasicType btype);
-  llvm::Function* Gen_Func(llvm::Module& mod);
+
   // Management of the AliasType table.
   void grow_alias_types();
   AliasCacheEntry* probe_alias_cache(const TypePtr* adr_type);
@@ -1172,13 +1173,13 @@ class Compile : public Phase {
   CallGenerator* find_intrinsic(ciMethod* m, bool is_virtual);             // query fn
   void           register_intrinsic(CallGenerator* cg);                    // update fn
 
-#ifdef TARGET_ARCH_llvm
-  llvm::LLVMContext ctx;
-#endif
-
 #ifndef PRODUCT
   static juint  _intrinsic_hist_count[vmIntrinsics::ID_LIMIT];
   static jubyte _intrinsic_hist_flags[vmIntrinsics::ID_LIMIT];
+#endif
+
+#ifdef LLVM
+  llvm::LLVMContext ctx;
 #endif
   // Function calls made by the public function final_graph_reshaping.
   // No need to be made public as they are not called elsewhere.

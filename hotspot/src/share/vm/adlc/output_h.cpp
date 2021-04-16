@@ -2024,7 +2024,9 @@ void ArchDesc::declareClasses(FILE *fp) {
 
     fprintf(fp, "#endif\n");
 
+#ifdef LLVM
     fprintf(fp, "  virtual llvm::Value* select(Selector* sel);\n");
+#endif
     // Close definition of this XxxMachNode
     fprintf(fp,"};\n");
   };

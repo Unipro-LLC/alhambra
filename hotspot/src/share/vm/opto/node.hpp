@@ -29,8 +29,9 @@
 #include "libadt/vectset.hpp"
 #include "opto/compile.hpp"
 #include "opto/type.hpp"
+#ifdef LLVM
 #include "llvmHeaders.hpp"
-#include "selector_llvm.hpp"
+#endif
 
 // Portions of code courtesy of Clifford Click
 
@@ -133,6 +134,9 @@ class RegionNode;
 class RootNode;
 class SafePointNode;
 class SafePointScalarObjectNode;
+#ifdef LLVM
+class Selector;
+#endif
 class StartNode;
 class State;
 class StoreNode;
@@ -257,8 +261,10 @@ public:
     if (in2 != NULL)  nn->set_req(2, in2);
     return nn;
   }
-
+  
+#ifdef LLVM
   virtual llvm::Value* select(Selector* sel);
+#endif
 
 private:
   // Shared setup for the above constructors.

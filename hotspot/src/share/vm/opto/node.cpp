@@ -562,11 +562,13 @@ Node *Node::clone() const {
   return n;                     // Return the clone
 }
 
+#ifdef LLVM
 //-----------------------------select------------------------------------------
-llvm::Value* Node::select(Selector* sel){
+llvm::Value* Node::select(Selector* sel) {
   NOT_PRODUCT( if (PrintOpto) { tty->print_cr("virtual llvm:Value* select(Selector* sel);"); } )
   return 0;
 }
+#endif
 
 //---------------------------setup_is_top--------------------------------------
 // Call this when changing the top node, to reassert the invariants
