@@ -2,7 +2,7 @@
 #include "opto/block.hpp"
 
 Selector::Selector(Compile* comp, llvm::LLVMContext& ctx, llvm::Module& mod) : 
-  Phase(Phase::BlockLayout), _comp(comp), _ctx(ctx), _mod(mod),
+  Phase(Phase::BlockLayout), _comp(comp), _ctx(ctx), _builder(ctx), _mod(mod),
   _blocks(comp->cfg()->number_of_blocks(), comp->cfg()->number_of_blocks(), false),
   _cache(comp->unique(), comp->unique(), false) {
   gen_func();
@@ -51,35 +51,64 @@ void Selector::gen_func() {
 
 void Selector::create_blocks() {
   std::string b_str = "B";
-  for (uint i = 0; i < _blocks.length(); ++i) {
-    _blocks.at_put(i, llvm::BasicBlock::Create(_func->getContext(), b_str + std::to_string(i + 1), _func));
+  for (int i = 0; i < _blocks.length(); ++i) {
+    _blocks.at_put(i, llvm::BasicBlock::Create(_func->getContext(), b_str + std::to_string(i), _func));
   }
+  create_entry_block();
 }
 
 void Selector::select() {
-  for (int i = 0; i < _comp->unique(); ++i) {
+  for (int i = 0; i < _cache.length(); ++i) {
     _cache.at_put(i, new CacheEntry);
   }
-
+  
   for (uint i = 0; i < _blocks.length(); ++i) {
-    Block* block = _comp->cfg()->get_block(i);
-    select_block(block);
+    select_block(_comp->cfg()->get_block(i));
   }
 }
 
 void Selector::select_block(Block* block) {
-  for (uint j = 0; j < block->number_of_nodes(); ++j) {
-      Node* node = block->get_node(j);
+  _block = block;
+  if (_block->get_node(0) == (Node *)_comp->cfg()->get_root_node()) {
+    jump_on_start(_block->get_node(0));
+  }
+  else {
+    for (uint i = 0; i < _block->number_of_nodes(); ++i) {
+      Node* node = _block->get_node(i);
       select_node(node);
     }
+  }
 }
 
 llvm::Value* Selector::select_node(Node* node) {
-  node_idx_t idx = node->_idx;
-  CacheEntry* entry = _cache.at(idx);
+  CacheEntry* entry = _cache.at(node->_idx);
   if (!entry->hit) {
     entry->val = node->select(this);
     entry->hit = true;
   }
   return entry->val;
+}
+
+void Selector::create_entry_block() {
+  llvm::BasicBlock* entry_block = llvm::BasicBlock::Create(_func->getContext(), "B0", _func);
+  _builder.SetInsertPoint(entry_block);
+  Block* block = _comp->cfg()->get_root_block();
+  _builder.CreateBr(_blocks.at(block->_pre_order));
+}
+
+void Selector::jump_on_start(Node* node) {
+  Node* start_node;
+  for (uint i = 0; i < node->outcnt(); ++i) {
+    if (node->raw_out(i)->is_Start()) {
+      start_node = node->raw_out(i);
+      break;
+    }
+  }
+  Block* block = _comp->cfg()->get_block_for_node(start_node)->non_connector();
+  create_br(block);
+}
+
+void Selector::create_br(Block* block) {
+  _builder.SetInsertPoint(_blocks.at(_block->_pre_order));
+  _builder.CreateBr(_blocks.at(block->_pre_order));
 }
