@@ -2,7 +2,8 @@
 #include "opto/block.hpp"
 
 Selector::Selector(Compile* comp, llvm::LLVMContext& ctx, llvm::Module& mod) : 
-  Phase(Phase::BlockLayout), _comp(comp), _ctx(ctx), _builder(ctx), _mod(mod),
+  Phase(Phase::BlockLayout), _comp(comp), _ctx(ctx), _builder(ctx), 
+  _mod(mod),
   _blocks(comp->cfg()->number_of_blocks(), comp->cfg()->number_of_blocks(), false),
   _cache(comp->unique(), comp->unique(), false) {
   gen_func();

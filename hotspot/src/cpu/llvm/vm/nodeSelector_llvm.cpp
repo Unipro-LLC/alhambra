@@ -1,7 +1,26 @@
 #include "llvmHeaders.hpp"
 #include "adfiles/ad_llvm.hpp"
+#include "selector_llvm.hpp"
 
 class Selector;
+
+llvm::Value* tlsLoadPNode::select(Selector* sel){
+  llvm::Type* retType = llvm::Type::getInt8PtrTy(sel->ctx());
+  std::vector<llvm::Type*> paramTypes;
+  paramTypes.push_back(llvm::Type::getInt32Ty(sel->ctx()));
+  llvm::FunctionType *funcTy = llvm::FunctionType::get(retType, 
+                                                  paramTypes, 
+                                                  false);
+  llvm::IntegerType* intTy = llvm::Type::getIntNTy(sel->ctx(), 
+    sel->mod()->getDataLayout().getPointerSize() * 8);
+  llvm::Function *f = static_cast<llvm::Function*>(sel->builder().CreateIntToPtr(
+    llvm::ConstantInt::get(intTy, (intptr_t) os::thread_local_storage_at, false),
+    llvm::PointerType::getUnqual(funcTy)));                                                     
+  std::vector<llvm::Value *> args;
+  args.push_back(sel->builder().getInt32(ThreadLocalStorage::thread_index()));
+  llvm::CallInst* ci = sel->builder().CreateCall(f, args);                                             
+  return ci;
+}
 
 llvm::Value* loadBNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
@@ -1356,10 +1375,6 @@ llvm::Value* CreateExceptionNode::select(Selector* sel){
 }
 
 llvm::Value* RethrowExceptionNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* tlsLoadPNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 

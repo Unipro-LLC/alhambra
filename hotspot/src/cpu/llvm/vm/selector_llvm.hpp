@@ -36,8 +36,11 @@ private:
   void jump_on_start(Node* node);
   void create_br(Block* block);
 public:
-  Selector(Compile* comp, llvm::LLVMContext& ctx, llvm::Module& mod);
   llvm::Value* select_node(Node* node);
+  llvm::LLVMContext& ctx() { return _ctx; }
+  llvm::Module* mod() {return &_mod; }
+  llvm::IRBuilder<>& builder() {return _builder; } 
+  Selector(Compile* comp, llvm::LLVMContext& ctx, llvm::Module& mod);
 };
 
 
