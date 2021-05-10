@@ -251,6 +251,10 @@ struct Flag {
     KIND_SHARK              = 1 << 15,
     KIND_LP64_PRODUCT       = 1 << 16,
     KIND_COMMERCIAL         = 1 << 17,
+#ifdef LLVM
+    KIND_LLVM               = 1 << 18,
+#endif
+
 
     KIND_MASK = ~VALUE_ORIGIN_MASK
   };

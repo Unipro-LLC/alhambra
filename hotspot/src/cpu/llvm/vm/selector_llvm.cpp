@@ -1,9 +1,9 @@
 #include "selector_llvm.hpp"
 #include "opto/block.hpp"
 
-Selector::Selector(Compile* comp, llvm::LLVMContext& ctx, llvm::Module& mod) : 
+Selector::Selector(Compile* comp, llvm::LLVMContext& ctx, llvm::Module* mod, const char* name) :
   Phase(Phase::BlockLayout), _comp(comp), _ctx(ctx), _builder(ctx), 
-  _mod(mod),
+  _mod(mod), _name(name),
   _blocks(comp->cfg()->number_of_blocks(), comp->cfg()->number_of_blocks(), false),
   _cache(comp->unique(), comp->unique(), false) {
   gen_func();
@@ -47,7 +47,7 @@ void Selector::gen_func() {
   
   llvm::FunctionType *ftype = llvm::FunctionType::get(retType, paramTypes, false);
   llvm::GlobalValue::LinkageTypes linkage = llvm::GlobalValue::ExternalWeakLinkage;
-  _func = llvm::Function::Create(ftype, linkage, 0, "ViewCFG_Test", &_mod);
+  _func = llvm::Function::Create(ftype, linkage, _name, _mod);
 }
 
 void Selector::create_blocks() {

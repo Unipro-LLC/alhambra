@@ -30,7 +30,7 @@
 #include "opto/compile.hpp"
 #include "opto/type.hpp"
 #ifdef LLVM
-#include "llvmHeaders.hpp"
+#include "code_gen/llvmGlobals.hpp"
 #endif
 
 // Portions of code courtesy of Clifford Click

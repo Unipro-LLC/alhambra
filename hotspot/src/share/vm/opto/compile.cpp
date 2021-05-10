@@ -83,7 +83,7 @@
 # include "adfiles/ad_ppc_64.hpp"
 #endif
 #ifdef LLVM
-# include "selector_llvm.hpp"
+#include "code_gen/llvmCodeGen.hpp"
 #endif
 
 
@@ -690,6 +690,8 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
                   _interpreter_frame_size(0),
                   _max_node_limit(MaxNodeLimit) {
   C = this;
+  _target_name = target->name()->as_utf8();
+  _target_holder_name = target->holder()->name()->as_utf8();
 
   CompileWrapper cw(this);
 #ifndef PRODUCT
@@ -1004,6 +1006,8 @@ Compile::Compile( ciEnv* ci_env,
     _interpreter_frame_size(0),
     _max_node_limit(MaxNodeLimit) {
   C = this;
+  _target_name = _stub_name ;
+  _target_holder_name = _stub_name;
 
 #ifndef PRODUCT
   TraceTime t1(NULL, &_t_totalCompilation, TimeCompiler, false);
@@ -2363,9 +2367,9 @@ void Compile::Code_Gen() {
   NOT_PRODUCT( if (PrintOpto) { _cfg->dump(); } )
 
 #ifdef LLVM
-  llvm::Module mod("Test Module", ctx);
-  Selector(this, ctx, mod);
-#endif
+  LlvmCodeGen llvmcg;
+  llvmcg.llvm_code_gen(this, _target_name, _target_holder_name);
+#else
 
   PhaseChaitin regalloc(unique(), cfg, matcher);
   _regalloc = &regalloc;
@@ -2423,6 +2427,7 @@ void Compile::Code_Gen() {
   // He's dead, Jim.
   _cfg     = (PhaseCFG*)0xdeadbeef;
   _regalloc = (PhaseChaitin*)0xdeadbeef;
+#endif
 }
 
 

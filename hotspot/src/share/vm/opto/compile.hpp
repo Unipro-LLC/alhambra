@@ -44,7 +44,7 @@
 #include "trace/tracing.hpp"
 #include "utilities/ticks.hpp"
 #ifdef LLVM
-#include "llvmHeaders.hpp"
+#include "code_gen/llvmGlobals.hpp"
 #endif
 
 class Block;
@@ -1178,9 +1178,6 @@ class Compile : public Phase {
   static jubyte _intrinsic_hist_flags[vmIntrinsics::ID_LIMIT];
 #endif
 
-#ifdef LLVM
-  llvm::LLVMContext ctx;
-#endif
   // Function calls made by the public function final_graph_reshaping.
   // No need to be made public as they are not called elsewhere.
   void final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc);
@@ -1230,6 +1227,10 @@ class Compile : public Phase {
 
   // Auxiliary method for randomized fuzzing/stressing
   static bool randomized_select(int count);
+
+  //Variables for passing stub or method name in llvm_code_gen
+  const char* _target_name;
+  const char* _target_holder_name;
 };
 
 #endif // SHARE_VM_OPTO_COMPILE_HPP

@@ -59,6 +59,9 @@ endif
 # The adfiles directory contains ad_<arch>.[ch]pp.
 # The jvmtifiles directory contains jvmti*.[ch]pp
 Src_Dirs_V += $(GENERATED)/adfiles $(GENERATED)/jvmtifiles $(GENERATED)/tracefiles
+ifeq ($(JVM_VARIANT_ALHAMBRA), true)
+ Src_Dirs_V += $(HS_COMMON_SRC)/cpu/$(Platform_arch)/vm/code_gen
+endif
 VPATH += $(Src_Dirs_V:%=%:)
 
 # set INCLUDES for C preprocessor.
@@ -180,9 +183,7 @@ COMPILER2_PATHS += $(HS_COMMON_SRC)/share/vm/opto
 COMPILER2_PATHS += $(HS_COMMON_SRC)/share/vm/libadt
 COMPILER2_PATHS += $(GENERATED)/adfiles
 
-
-ALHAMBRA_PATHS += $(GENERATED)/adfiles
-ALHAMBRA_PATHS += $(HS_COMMON_SRC)/share/vm/opto
+ALHAMBRA_PATHS += $(HS_COMMON_SRC)/cpu/$(Platform_arch)/vm/code_gen
 
 SHARK_PATHS := $(GAMMADIR)/src/share/vm/shark
 
@@ -193,7 +194,7 @@ Src_Dirs/COMPILER2 := $(CORE_PATHS) $(COMPILER2_PATHS)
 Src_Dirs/TIERED    := $(CORE_PATHS) $(COMPILER1_PATHS) $(COMPILER2_PATHS)
 Src_Dirs/ZERO      := $(CORE_PATHS)
 Src_Dirs/SHARK     := $(CORE_PATHS) $(SHARK_PATHS)
-Src_Dirs/LLVM      := $(CORE_PATHS) $(COMPILER2_PATHS)
+Src_Dirs/LLVM      := $(CORE_PATHS) $(COMPILER2_PATHS) $(ALHAMBRA_PATHS)
 Src_Dirs := $(Src_Dirs/$(TYPE))
 
 COMPILER2_SPECIFIC_FILES := opto libadt bcEscapeAnalyzer.cpp c2_\* runtime_\*

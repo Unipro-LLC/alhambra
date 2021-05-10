@@ -1,7 +1,7 @@
 #ifndef CPU_LLVM_VM_SELECTOR_LLVM_HPP
 #define CPU_LLVM_VM_SELECTOR_LLVM_HPP
 
-#include "llvmHeaders.hpp"
+#include "code_gen/llvmGlobals.hpp"
 #include "opto/phase.hpp"
 #include "opto/node.hpp"
 #include "utilities/growableArray.hpp"
@@ -21,8 +21,9 @@ private:
   llvm::Function* _func;
   llvm::LLVMContext& _ctx;
   llvm::IRBuilder<> _builder;
-  llvm::Module& _mod;
+  llvm::Module* _mod;
   GrowableArray<llvm::BasicBlock*> _blocks;
+  const char* _name;
 
   GrowableArray<CacheEntry*> _cache;
   Block* _block;
@@ -38,9 +39,9 @@ private:
 public:
   llvm::Value* select_node(Node* node);
   llvm::LLVMContext& ctx() { return _ctx; }
-  llvm::Module* mod() {return &_mod; }
+  llvm::Module* mod() {return _mod; }
   llvm::IRBuilder<>& builder() {return _builder; } 
-  Selector(Compile* comp, llvm::LLVMContext& ctx, llvm::Module& mod);
+  Selector(Compile* comp, llvm::LLVMContext& ctx, llvm::Module* mod, const char* name);
 };
 
 
