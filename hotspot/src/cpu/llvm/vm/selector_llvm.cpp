@@ -3,9 +3,9 @@
 #include "opto/machnode.hpp"
 #include "adfiles/ad_llvm.hpp"
 
-Selector::Selector(Compile* comp, llvm::LLVMContext& ctx, llvm::Module& mod) : 
+Selector::Selector(Compile* comp, llvm::LLVMContext& ctx, llvm::Module* mod, const char* name) :
   Phase(Phase::BlockLayout), _comp(comp), _ctx(ctx), _builder(ctx), 
-  _mod(mod),
+  _mod(mod), _name(name),
   _blocks(comp->cfg()->number_of_blocks(), comp->cfg()->number_of_blocks(), false),
   _cache(comp->unique(), comp->unique(), false) {
   gen_func();
@@ -49,7 +49,7 @@ void Selector::gen_func() {
   
   llvm::FunctionType *ftype = llvm::FunctionType::get(retType, paramTypes, false);
   llvm::GlobalValue::LinkageTypes linkage = llvm::GlobalValue::ExternalWeakLinkage;
-  _func = llvm::Function::Create(ftype, linkage, 0, "ViewCFG_Test", &_mod);
+  _func = llvm::Function::Create(ftype, linkage, _name, _mod);
 }
 
 void Selector::create_blocks() {
@@ -114,6 +114,7 @@ void Selector::jump_on_start(Node* node) {
 }
 
 void Selector::create_br(Block* block) {
+<<<<<<< 3996f7ed0714b8af0f238a32c6c08ba3825cbcd9
   _builder.CreateBr(_blocks.at(block->_pre_order - 1));
 }
 

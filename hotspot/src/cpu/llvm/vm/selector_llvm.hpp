@@ -1,7 +1,7 @@
 #ifndef CPU_LLVM_VM_SELECTOR_LLVM_HPP
 #define CPU_LLVM_VM_SELECTOR_LLVM_HPP
 
-#include "llvmHeaders.hpp"
+#include "code_gen/llvmGlobals.hpp"
 #include "opto/phase.hpp"
 #include "opto/node.hpp"
 #include "utilities/growableArray.hpp"
@@ -21,8 +21,9 @@ private:
   llvm::Function* _func;
   llvm::LLVMContext& _ctx;
   llvm::IRBuilder<> _builder;
-  llvm::Module& _mod;
+  llvm::Module* _mod;
   GrowableArray<llvm::BasicBlock*> _blocks;
+  const char* _name;
 
   GrowableArray<CacheEntry*> _cache;
   Block* _block;
@@ -40,13 +41,13 @@ public:
   llvm::Value* select_oper(MachOper *oper);
   llvm::Value* get_ptr(intptr_t value, llvm::Type* type);
   llvm::LLVMContext& ctx() { return _ctx; }
-  llvm::Module* mod() { return &_mod; }
+  llvm::Module* mod() { return _mod; }
   llvm::IRBuilder<>& builder() { return _builder; }
   llvm::Function* func() { return _func; } 
   int select_address(MachNode *mem_node, llvm::Value *&base, llvm::Value *&offset);
   llvm::Value* select_condition(Node* cmp, llvm::Value* a, llvm::Value* b, bool is_and, bool flt);
   void select_if(llvm::Value *pred, Node* node);
-  Selector(Compile* comp, llvm::LLVMContext& ctx, llvm::Module& mod);
+  Selector(Compile* comp, llvm::LLVMContext& ctx, llvm::Module* mod, const char* name);
 };
 
 #endif // CPU_LLVM_VM_SELECTOR_LLVM_HPP
