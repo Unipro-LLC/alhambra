@@ -4,7 +4,7 @@
 
 class Selector;
 
-llvm::Value* tlsLoadPNode::select(Selector* sel){
+llvm::Value* tlsLoadPNode::select(Selector* sel) {
   llvm::Type* retType = llvm::Type::getInt8PtrTy(sel->ctx());
   std::vector<llvm::Type*> paramTypes;
   paramTypes.push_back(llvm::Type::getInt32Ty(sel->ctx()));
@@ -18,8 +18,17 @@ llvm::Value* tlsLoadPNode::select(Selector* sel){
     llvm::PointerType::getUnqual(funcTy)));                                                     
   std::vector<llvm::Value *> args;
   args.push_back(sel->builder().getInt32(ThreadLocalStorage::thread_index()));
-  llvm::CallInst* ci = sel->builder().CreateCall(f, args);                                             
+  llvm::Value* ci = sel->builder().CreateCall(f, args);                                             
   return ci;
+}
+
+llvm::Value* storePNode::select(Selector* sel) {
+  llvm::Value *base, *offset;
+  int op_index = sel->select_address(this, base, offset);
+  Node* node = in(op_index++);
+  llvm::Value* value = sel->select_node(node);
+  sel->builder().CreateStore(value, base);
+  return NULL;
 }
 
 llvm::Value* loadBNode::select(Selector* sel){
@@ -207,10 +216,6 @@ llvm::Value* storeTLABtopNode::select(Selector* sel){
 }
 
 llvm::Value* storeTLABendNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* storePNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 

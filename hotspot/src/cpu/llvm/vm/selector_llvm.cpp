@@ -1,5 +1,7 @@
 #include "selector_llvm.hpp"
 #include "opto/block.hpp"
+#include "opto/machnode.hpp"
+#include "adfiles/ad_llvm.hpp"
 
 Selector::Selector(Compile* comp, llvm::LLVMContext& ctx, llvm::Module& mod) : 
   Phase(Phase::BlockLayout), _comp(comp), _ctx(ctx), _builder(ctx), 
@@ -70,6 +72,7 @@ void Selector::select() {
 
 void Selector::select_block(Block* block) {
   _block = block;
+  _builder.SetInsertPoint(_blocks.at(_block->_pre_order));
   if (_block->get_node(0) == (Node *)_comp->cfg()->get_root_node()) {
     jump_on_start(_block->get_node(0));
   }
@@ -94,7 +97,7 @@ void Selector::create_entry_block() {
   llvm::BasicBlock* entry_block = llvm::BasicBlock::Create(_func->getContext(), "B0", _func);
   _builder.SetInsertPoint(entry_block);
   Block* block = _comp->cfg()->get_root_block();
-  _builder.CreateBr(_blocks.at(block->_pre_order));
+  create_br(block);
 }
 
 void Selector::jump_on_start(Node* node) {
@@ -110,6 +113,22 @@ void Selector::jump_on_start(Node* node) {
 }
 
 void Selector::create_br(Block* block) {
-  _builder.SetInsertPoint(_blocks.at(_block->_pre_order));
   _builder.CreateBr(_blocks.at(block->_pre_order));
+}
+
+int Selector::select_address(MachNode *mem_node, llvm::Value *&base, llvm::Value *&offset){
+  const MachOper* mop = mem_node->memory_operand();
+  int op_index = MemNode::Address;
+  switch (mop->opcode()){
+    case INDOFFSET: {
+      Node* node = mem_node->in(op_index++);
+      base = select_node(node);
+      offset = _builder.getIntN(
+        _mod.getDataLayout().getPointerSize() * 8, 
+        mop->constant_disp());
+      break;
+    }
+    default: ShouldNotReachHere();
+  }
+  return op_index;
 }

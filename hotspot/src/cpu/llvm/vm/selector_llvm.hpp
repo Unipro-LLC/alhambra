@@ -40,8 +40,8 @@ public:
   llvm::LLVMContext& ctx() { return _ctx; }
   llvm::Module* mod() {return &_mod; }
   llvm::IRBuilder<>& builder() {return _builder; } 
+  int select_address(MachNode *mem_node, llvm::Value *&base, llvm::Value *&offset);
   Selector(Compile* comp, llvm::LLVMContext& ctx, llvm::Module& mod);
 };
-
 
 #endif // CPU_LLVM_VM_SELECTOR_LLVM_HPP
