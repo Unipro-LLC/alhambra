@@ -26,8 +26,6 @@
 #include "llvmContext.hpp"
 
 
-typedef llvm::ArrayRef<llvm::Type*> TypeArray;
-
 LlvmContext::LlvmContext(const char* name)
      {
   // Create a module to build our functions into

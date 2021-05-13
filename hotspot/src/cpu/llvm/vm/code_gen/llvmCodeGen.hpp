@@ -13,8 +13,6 @@ class LlvmCodeGen {
  public:
   // Creation
   LlvmCodeGen();
-  // Name of this compiler
-  const char* name() const { return "llvm"; }
   // Initialization
   void initialize_module();
 
