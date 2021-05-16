@@ -26,8 +26,7 @@
 #include "llvmContext.hpp"
 
 
-LlvmContext::LlvmContext(const char* name)
-     {
+LlvmContext::LlvmContext(const char* name) {
   // Create a module to build our functions into
   _module = new llvm::Module(name, *this);
 }

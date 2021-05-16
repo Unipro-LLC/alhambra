@@ -26,9 +26,7 @@ class LlvmCodeGen {
 
  public:
   LlvmContext* context() const {
-    if (JavaThread::current()->is_Compiler_thread()) {
-      return _normal_context;
-    }
+    return _normal_context;
   }
 
  private:
@@ -45,5 +43,5 @@ class LlvmCodeGen {
 
  private:
   static const char* method_name(const char* klass, const char* method);
- };
+};
  #endif

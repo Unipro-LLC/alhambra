@@ -1229,8 +1229,10 @@ class Compile : public Phase {
   static bool randomized_select(int count);
 
   //Variables for passing stub or method name in llvm_code_gen
+#ifdef LLVM
   const char* _target_name;
   const char* _target_holder_name;
+#endif
 };
 
 #endif // SHARE_VM_OPTO_COMPILE_HPP
