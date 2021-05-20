@@ -5,7 +5,8 @@
 class Selector;
 
 llvm::Value* tlsLoadPNode::select(Selector* sel) {
-  llvm::Type* retType = llvm::Type::getInt8PtrTy(sel->ctx());
+  llvm::Type* retType = llvm::PointerType::getUnqual(
+    llvm::Type::getInt8PtrTy(sel->ctx()));
   std::vector<llvm::Type*> paramTypes;
   paramTypes.push_back(llvm::Type::getInt32Ty(sel->ctx()));
   llvm::FunctionType *funcTy = llvm::FunctionType::get(retType, 
@@ -18,7 +19,7 @@ llvm::Value* tlsLoadPNode::select(Selector* sel) {
     llvm::PointerType::getUnqual(funcTy)));                                                     
   std::vector<llvm::Value *> args;
   args.push_back(sel->builder().getInt32(ThreadLocalStorage::thread_index()));
-  llvm::Value* ci = sel->builder().CreateCall(f, args);                                             
+  llvm::Value* ci = sel->builder().CreateCall(f, args);                                          
   return ci;
 }
 
@@ -29,6 +30,45 @@ llvm::Value* storePNode::select(Selector* sel) {
   llvm::Value* value = sel->select_node(node);
   sel->builder().CreateStore(value, base);
   return NULL;
+}
+
+llvm::Value* MachProjNode::select(Selector* sel) {
+  if (in(0)->is_Start()) {
+    if (_con == TypeFunc::FramePtr) { 
+      /// TODO: return frame top
+      return llvm::Constant::getNullValue(
+        llvm::Type::getInt8PtrTy(sel->ctx()));
+    }
+    if (_con == TypeFunc::ReturnAdr) {
+      llvm::Type* retType = llvm::Type::getInt8PtrTy(sel->ctx());
+      std::vector<llvm::Type*> paramTypes;
+      paramTypes.push_back(llvm::Type::getInt32Ty(sel->ctx()));
+      llvm::FunctionType *funcTy = llvm::FunctionType::get(retType, 
+                                                  paramTypes, 
+                                                  false);
+      llvm::Function* f = static_cast<llvm::Function*>(sel->mod()->
+        getOrInsertFunction("llvm.returnaddress", funcTy).getCallee());                                            
+      std::vector<llvm::Value *> args;
+      args.push_back(sel->builder().getInt32(0));
+      llvm::CallInst* ci = sel->builder().CreateCall(f, args);
+      return ci;
+    }
+    if (_con < TypeFunc::Parms) return NULL;
+    int arg_num = _con - TypeFunc::Parms;
+    llvm::Value* arg = sel->func()->arg_begin() + arg_num;
+    if (bottom_type()->isa_oopptr() != NULL) {
+      /// TODO: mark managed ptr
+    }
+    assert(bottom_type()->isa_narrowoop() == NULL, "unexpected narrow ptr");
+    return arg;
+  }
+  if (ideal_reg() == 0 || ideal_reg() == 999) {
+    return NULL;
+  } else {
+    llvm::Value* res = sel->select_node(in(0));
+    assert(res, "We expect return value from a call");
+    return res;
+  }
 }
 
 llvm::Value* loadBNode::select(Selector* sel){

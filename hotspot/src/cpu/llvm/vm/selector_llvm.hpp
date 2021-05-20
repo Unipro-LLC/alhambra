@@ -38,8 +38,9 @@ private:
 public:
   llvm::Value* select_node(Node* node);
   llvm::LLVMContext& ctx() { return _ctx; }
-  llvm::Module* mod() {return &_mod; }
-  llvm::IRBuilder<>& builder() {return _builder; } 
+  llvm::Module* mod() { return &_mod; }
+  llvm::IRBuilder<>& builder() { return _builder; }
+  llvm::Function* func() { return _func; } 
   int select_address(MachNode *mem_node, llvm::Value *&base, llvm::Value *&offset);
   Selector(Compile* comp, llvm::LLVMContext& ctx, llvm::Module& mod);
 };
