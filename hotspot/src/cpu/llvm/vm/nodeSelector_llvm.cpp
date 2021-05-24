@@ -71,6 +71,30 @@ llvm::Value* MachProjNode::select(Selector* sel) {
   }
 }
 
+llvm::Value* CallRuntimeDirectNode::select(Selector* sel){
+  std::vector<llvm::Value*> args;
+  std::vector<llvm::Type*> paramTypes;
+  const TypeTuple* d = tf()->domain();
+  for (uint i = TypeFunc::Parms; i < d->cnt(); ++i) {
+    const Type* at = d->field_at(i);
+    if (at->base() == Type::Half) continue;
+    Node *node = in(i)->uncast();
+    llvm::Value* arg;
+    arg = sel->select_node(node);
+    args.push_back(arg);
+    paramTypes.push_back(arg->getType());
+  }
+  BasicType ret_type = tf()->return_type();
+  llvm::Type* ret = sel->convert_type(ret_type);
+  llvm::FunctionType *funcTy = llvm::FunctionType::get(ret, paramTypes, false);
+  llvm::IntegerType* intTy = llvm::Type::getIntNTy(sel->ctx(), 
+    sel->mod()->getDataLayout().getPointerSize() * 8);
+  llvm::Function *f = static_cast<llvm::Function*>(sel->builder().CreateIntToPtr(
+    llvm::ConstantInt::get(intTy, (intptr_t) entry_point(), false),
+    llvm::PointerType::getUnqual(funcTy))); 
+  return sel->builder().CreateCall(f, args);
+}
+
 llvm::Value* loadBNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
@@ -1388,10 +1412,6 @@ llvm::Value* CallStaticJavaDirectNode::select(Selector* sel){
 }
 
 llvm::Value* CallDynamicJavaDirectNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* CallRuntimeDirectNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 

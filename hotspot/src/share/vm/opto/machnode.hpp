@@ -658,7 +658,9 @@ public:
 #ifndef PRODUCT
   virtual void dump_spec(outputStream *st) const;
 #endif
+#ifdef LLVM
   virtual llvm::Value* select(Selector* sel);
+#endif
 };
 
 //------------------------------MachIfNode-------------------------------------
