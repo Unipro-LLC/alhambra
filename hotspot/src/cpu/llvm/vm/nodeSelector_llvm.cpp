@@ -95,6 +95,19 @@ llvm::Value* CallRuntimeDirectNode::select(Selector* sel){
   return sel->builder().CreateCall(f, args);
 }
 
+llvm::Value* storeImmP0Node::select(Selector* sel){
+  llvm::Value *base, *offset;
+  sel->select_address(this, base, offset);
+  llvm::Value* value = llvm::Constant::getNullValue(
+    llvm::Type::getInt8PtrTy(sel->ctx()));
+  sel->builder().CreateStore(value, base);
+  return NULL;
+}
+
+llvm::Value* loadPNode::select(Selector* sel){
+  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
+}
+
 llvm::Value* loadBNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
@@ -136,10 +149,6 @@ llvm::Value* loadTLABtopNode::select(Selector* sel){
 }
 
 llvm::Value* loadTLABendNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* loadPNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
@@ -280,10 +289,6 @@ llvm::Value* storeTLABtopNode::select(Selector* sel){
 }
 
 llvm::Value* storeTLABendNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* storeImmP0Node::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
