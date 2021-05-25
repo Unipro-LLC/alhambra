@@ -105,6 +105,17 @@ llvm::Value* storeImmP0Node::select(Selector* sel){
 }
 
 llvm::Value* loadPNode::select(Selector* sel){
+  llvm::Value *base, *offset;
+  sel->select_address(this, base, offset);
+  llvm::Value* res = sel->builder().CreateLoad(base);
+  if (bottom_type()->isa_oopptr() != NULL) {
+    /// TODO: mark managed ptr
+  }
+  return res;
+}
+
+llvm::Value* cmpP_reg_immNode::select(Selector* sel){
+  sel->func()->dump();
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
@@ -1353,10 +1364,6 @@ llvm::Value* cmpD_reg_regNode::select(Selector* sel){
 }
 
 llvm::Value* cmpP_reg_regNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* cmpP_reg_immNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
