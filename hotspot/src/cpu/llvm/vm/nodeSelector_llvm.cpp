@@ -205,7 +205,9 @@ llvm::Value* loadDNode::select(Selector* sel){
 }
 
 llvm::Value* loadConINode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
+    llvm::IntegerType* intTy = llvm::Type::getIntNTy(sel->ctx(),sel->mod()->getDataLayout().getPointerSize() * 8);
+    llvm::ConstantInt* cnst = llvm::ConstantInt::get(intTy,_opnd_array[1]->constant(), true);
+    return cnst;
 }
 
 llvm::Value* loadConI1Node::select(Selector* sel){

@@ -72,10 +72,10 @@ LlvmCodeGen::LlvmCodeGen() {
 #endif
 #ifdef NOT_PRODUCT
   execution_engine()->setVerifyModules(true);
-#endif
   if (execution_engine()) {
-    printf("LlvmCompiler successfuly created \n");
+    tty->print_cr("LlvmCompiler successfuly created \n");
   }
+#endif
 }
 
 void LlvmCodeGen::initialize_module() {

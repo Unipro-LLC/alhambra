@@ -4,6 +4,7 @@
 #include "code_gen/llvmGlobals.hpp"
 #include "opto/phase.hpp"
 #include "opto/node.hpp"
+#include "opto/machnode.hpp"
 #include "utilities/growableArray.hpp"
 
 class PhaseCFG;
@@ -22,8 +23,8 @@ private:
   llvm::LLVMContext& _ctx;
   llvm::IRBuilder<> _builder;
   llvm::Module* _mod;
-  GrowableArray<llvm::BasicBlock*> _blocks;
   const char* _name;
+  GrowableArray<llvm::BasicBlock*> _blocks;
 
   GrowableArray<CacheEntry*> _cache;
   Block* _block;
