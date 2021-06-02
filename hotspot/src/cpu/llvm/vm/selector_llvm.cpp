@@ -129,7 +129,107 @@ int Selector::select_address(MachNode *mem_node, llvm::Value *&base, llvm::Value
         mop->constant_disp());
       break;
     }
-    default: ShouldNotReachHere();
+    default: { ShouldNotReachHere(); tty->print_cr("%d", mop->opcode()); }
   }
   return op_index;
+}
+
+llvm::Value* Selector::select_oper(MachOper *oper) {
+  const Type* type = oper->type();
+  BasicType bt = type->basic_type();
+  switch (bt) {
+  case T_INT: return builder().getInt32(oper->constant());
+  case T_LONG: return builder().getInt64(oper->constantL());
+  case T_FLOAT: return llvm::ConstantFP::get(
+    llvm::Type::getFloatTy(_ctx), oper->constantF());
+  case T_DOUBLE: return llvm::ConstantFP::get(
+    llvm::Type::getDoubleTy(_ctx), oper->constantD());
+  case T_ARRAY:
+  case T_OBJECT: {
+    assert(type->isa_narrowoop() == NULL, "check");
+    return get_ptr((intptr_t)(type->is_oopptr()->const_oop()), convert_type(T_OBJECT));
+  }
+  case T_METADATA: {
+    if (type->base() == Type::KlassPtr) {
+      return get_ptr((intptr_t)(type->is_klassptr()->klass()), convert_type(T_ADDRESS));
+    } else {
+      return get_ptr((intptr_t)(type->is_metadataptr()->metadata()), convert_type(T_ADDRESS));
+    }
+  }
+  case T_NARROWOOP: return get_ptr((intptr_t)(jobject)(type->is_narrowoop()->get_con()), convert_type(T_OBJECT));
+  case T_NARROWKLASS: return get_ptr((intptr_t)((Klass*)type->is_narrowklass()->get_con()), convert_type(T_ADDRESS));
+  case T_ADDRESS: {
+    if (oper->constant() == NULL) return llvm::Constant::getNullValue(llvm::Type::getInt8PtrTy(ctx()));
+    return get_ptr((intptr_t)(oper->constant()), convert_type(T_ADDRESS));
+  }
+  case T_VOID: return NULL;
+  default:
+    tty->print_cr("BasicType %d", bt);
+    ShouldNotReachHere(); return NULL;
+  }
+}
+
+llvm::Value* Selector::get_ptr(intptr_t value, llvm::Type* type) {
+  llvm::IntegerType* intTy = llvm::Type::getIntNTy(ctx(), 
+    mod()->getDataLayout().getPointerSize() * 8);
+  return builder().CreateIntToPtr(
+    llvm::ConstantInt::get(intTy, value, false),
+    llvm::PointerType::getUnqual(type));
+}
+
+llvm::Value* Selector::select_condition(Node* cmp, llvm::Value* a, llvm::Value* b, bool is_and, bool flt) {
+
+  assert(cmp->outcnt() == 1, "check");
+
+  MachNode* m = cmp->unique_out()->as_Mach();
+  int ccode = m->_opnds[1]->ccode();
+
+  assert(!is_and || !flt, "try to and float operands");
+
+  bool invert;
+  InstCode opcode = INST_LAST;
+  if (flt) {
+    switch (ccode) {
+    case 0x0: return builder().CreateFCmpUEQ(a, b); // eq
+    case 0x1: return builder().CreateFCmpUNE(a, b); // ne
+    case 0x2: return builder().CreateFCmpULT(a, b); // lt
+    case 0x3: return builder().CreateFCmpULE(a, b); // le
+    case 0x4: return builder().CreateFCmpUGT(a, b); // gt
+    case 0x5: return builder().CreateFCmpUGE(a, b); // ge
+    default: ShouldNotReachHere();
+    }
+  } else {
+    if (is_and) {
+      llvm::Value* a_and_b = builder().CreateAnd(a, b);
+      llvm::Value* zero = llvm::ConstantInt::get(a->getType(), 0);
+      switch (ccode) {
+      case 0x0: return builder().CreateICmpEQ(a_and_b, zero); // eq
+      case 0x1: return builder().CreateICmpNE(a_and_b, zero); // ne
+      case 0x2: return builder().CreateICmpSLT(a_and_b, zero); // lt
+      case 0x3: return builder().CreateICmpSLE(a_and_b, zero); // le
+      case 0x4: return builder().CreateICmpSGT(a_and_b, zero); // gt
+      case 0x5: return builder().CreateICmpSGE(a_and_b, zero); // ge
+      default: ShouldNotReachHere();
+      }
+    } else {
+      switch (ccode) {
+      case 0x0: return builder().CreateICmpEQ(a, b); // eq
+      case 0x1: return builder().CreateICmpNE(a, b); // ne
+      case 0x2: return builder().CreateICmpSLT(a, b); // lt
+      case 0x3: return builder().CreateICmpSLE(a, b); // le
+      case 0x4: return builder().CreateICmpSGT(a, b); // gt
+      case 0x5: return builder().CreateICmpSGE(a, b); // ge
+      case 0x6: return builder().CreateICmpULT(a, b); // ult
+      case 0x7: return builder().CreateICmpULE(a, b); // ule
+      case 0x8: return builder().CreateICmpUGT(a, b); // ugt
+      case 0x9: return builder().CreateICmpUGE(a, b); // uge
+      case 0xa: opcode = INST_CMPO;  invert = false; break; // of
+      case 0xb: opcode = INST_CMPO;  invert = true;  break; // nof
+      default: ShouldNotReachHere();
+      }
+    }
+  }
+
+  int pred = 1;
+  return builder().getInt8(invert ? -pred : pred);
 }
