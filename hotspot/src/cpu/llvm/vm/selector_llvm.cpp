@@ -236,7 +236,6 @@ void Selector::select_if(llvm::Value *pred, Node* node) {
   
   MachIfNode* if_node = node->as_MachIf();
   float prob = if_node->_prob;
-
   // llvm::MDBuilder MDHelper(CGM.getLLVMContext());
   // llvm::MDNode *Weights = MDHelper.createBranchWeights(prob, 1 - prob);
   builder().CreateCondBr(pred, target_bb, fallthr_bb/*, Weights*/);

@@ -119,6 +119,27 @@ llvm::Value* jmpConUNode::select(Selector* sel){
   return NULL;
 }
 
+llvm::Value* RetNode::select(Selector* sel){
+  return sel->builder().CreateRet(sel->builder().getInt32(0));
+}
+
+llvm::Value* loadConPNode::select(Selector* sel){
+  return sel->select_oper(opnd_array(1));;
+}
+
+llvm::Value* TailCalljmpIndNode::select(Selector* sel){
+  llvm::Value* target_pc = sel->select_node(in(req() - 2));
+  llvm::Type* retType = llvm::Type::getInt8PtrTy(sel->ctx());
+  llvm::FunctionType *funcTy = llvm::FunctionType::get(retType, false);
+  llvm::Function* f = static_cast<llvm::Function*>(sel->mod()->
+    getOrInsertFunction("llvm.addressofreturnaddress", funcTy).getCallee());
+  llvm::Value* addr = sel->builder().CreateCall(f);
+  addr = sel->builder().CreatePointerCast(addr, llvm::PointerType::getUnqual(target_pc->getType()));
+  sel->builder().CreateStore(target_pc, addr);  
+  sel->builder().CreateRet(sel->builder().getInt32(0));
+  return NULL;
+}
+
 llvm::Value* loadBNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
@@ -208,10 +229,6 @@ llvm::Value* loadConUL32Node::select(Selector* sel){
 }
 
 llvm::Value* loadConL32Node::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* loadConPNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
@@ -1428,14 +1445,6 @@ llvm::Value* CallLeafDirectNode::select(Selector* sel){
 }
 
 llvm::Value* CallLeafNoFPDirectNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* RetNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* TailCalljmpIndNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
