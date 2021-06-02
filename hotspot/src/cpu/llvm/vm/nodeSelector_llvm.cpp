@@ -113,6 +113,12 @@ llvm::Value* cmpP_reg_immNode::select(Selector* sel){
   return sel->select_condition(this, a, b, false, false);
 }
 
+llvm::Value* jmpConUNode::select(Selector* sel){
+  llvm::Value* pred = sel->select_node(in(1));
+  sel->select_if(pred, this);
+  return NULL;
+}
+
 llvm::Value* loadBNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
@@ -1370,10 +1376,6 @@ llvm::Value* cmpN_reg_immNode::select(Selector* sel){
 }
 
 llvm::Value* jmpDirNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* jmpConUNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 

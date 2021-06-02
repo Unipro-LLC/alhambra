@@ -72,7 +72,7 @@ void Selector::select() {
 
 void Selector::select_block(Block* block) {
   _block = block;
-  _builder.SetInsertPoint(_blocks.at(_block->_pre_order));
+  _builder.SetInsertPoint(_blocks.at(_block->_pre_order - 1));
   if (_block->get_node(0) == (Node *)_comp->cfg()->get_root_node()) {
     jump_on_start(_block->get_node(0));
   }
@@ -114,7 +114,7 @@ void Selector::jump_on_start(Node* node) {
 }
 
 void Selector::create_br(Block* block) {
-  _builder.CreateBr(_blocks.at(block->_pre_order));
+  _builder.CreateBr(_blocks.at(block->_pre_order - 1));
 }
 
 int Selector::select_address(MachNode *mem_node, llvm::Value *&base, llvm::Value *&offset){
@@ -129,7 +129,7 @@ int Selector::select_address(MachNode *mem_node, llvm::Value *&base, llvm::Value
         mop->constant_disp());
       break;
     }
-    default: { ShouldNotReachHere(); tty->print_cr("%d", mop->opcode()); }
+    default: ShouldNotReachHere();
   }
   return op_index;
 }
@@ -178,7 +178,6 @@ llvm::Value* Selector::get_ptr(intptr_t value, llvm::Type* type) {
 }
 
 llvm::Value* Selector::select_condition(Node* cmp, llvm::Value* a, llvm::Value* b, bool is_and, bool flt) {
-
   assert(cmp->outcnt() == 1, "check");
 
   MachNode* m = cmp->unique_out()->as_Mach();
@@ -186,8 +185,6 @@ llvm::Value* Selector::select_condition(Node* cmp, llvm::Value* a, llvm::Value* 
 
   assert(!is_and || !flt, "try to and float operands");
 
-  bool invert;
-  InstCode opcode = INST_LAST;
   if (flt) {
     switch (ccode) {
     case 0x0: return builder().CreateFCmpUEQ(a, b); // eq
@@ -223,13 +220,24 @@ llvm::Value* Selector::select_condition(Node* cmp, llvm::Value* a, llvm::Value* 
       case 0x7: return builder().CreateICmpULE(a, b); // ule
       case 0x8: return builder().CreateICmpUGT(a, b); // ugt
       case 0x9: return builder().CreateICmpUGE(a, b); // uge
-      case 0xa: opcode = INST_CMPO;  invert = false; break; // of
-      case 0xb: opcode = INST_CMPO;  invert = true;  break; // nof
+      ///TODO: of & nof
       default: ShouldNotReachHere();
       }
     }
   }
+  return NULL;
+}
 
-  int pred = 1;
-  return builder().getInt8(invert ? -pred : pred);
+void Selector::select_if(llvm::Value *pred, Node* node) {
+  Block* target_block = _block->non_connector_successor(0);
+  Block* fallthr_block = _block->non_connector_successor(1);
+  llvm::BasicBlock* target_bb = _blocks.at(target_block->_pre_order - 1);
+  llvm::BasicBlock* fallthr_bb = _blocks.at(fallthr_block->_pre_order - 1);
+  
+  MachIfNode* if_node = node->as_MachIf();
+  float prob = if_node->_prob;
+
+  // llvm::MDBuilder MDHelper(CGM.getLLVMContext());
+  // llvm::MDNode *Weights = MDHelper.createBranchWeights(prob, 1 - prob);
+  builder().CreateCondBr(pred, target_bb, fallthr_bb/*, Weights*/);
 }

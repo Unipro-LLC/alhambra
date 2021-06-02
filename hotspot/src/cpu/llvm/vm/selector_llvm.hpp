@@ -17,11 +17,6 @@ struct CacheEntry {
 class Selector : public Phase {
 
 private:
-  enum InstCode {
-    INST_LAST,
-    INST_CMPO
-  };
-
   Compile* _comp;
   llvm::Function* _func;
   llvm::LLVMContext& _ctx;
@@ -50,6 +45,7 @@ public:
   llvm::Function* func() { return _func; } 
   int select_address(MachNode *mem_node, llvm::Value *&base, llvm::Value *&offset);
   llvm::Value* select_condition(Node* cmp, llvm::Value* a, llvm::Value* b, bool is_and, bool flt);
+  void select_if(llvm::Value *pred, Node* node);
   Selector(Compile* comp, llvm::LLVMContext& ctx, llvm::Module& mod);
 };
 
