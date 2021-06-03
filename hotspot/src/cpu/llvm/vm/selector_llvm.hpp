@@ -41,6 +41,7 @@ public:
   llvm::Value* select_node(Node* node);
   llvm::Value* select_oper(MachOper *oper);
   llvm::Value* get_ptr(intptr_t value, llvm::Type* type);
+  Compile* comp() { return _comp ; }
   llvm::LLVMContext& ctx() { return _ctx; }
   llvm::Module* mod() { return _mod; }
   llvm::IRBuilder<>& builder() { return _builder; }

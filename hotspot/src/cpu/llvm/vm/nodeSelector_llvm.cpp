@@ -18,6 +18,7 @@ llvm::Value* tlsLoadPNode::select(Selector* sel) {
   return ci;
 }
 
+<<<<<<< fd3f4e43283e310d5a8946385dcea78d26ae6e25
 llvm::Value* storePNode::select(Selector* sel) {
   llvm::Value *base, *offset;
   int op_index = sel->select_address(this, base, offset);
@@ -119,10 +120,6 @@ llvm::Value* jmpConUNode::select(Selector* sel){
   return NULL;
 }
 
-llvm::Value* RetNode::select(Selector* sel){
-  return sel->builder().CreateRet(sel->builder().getInt32(0));
-}
-
 llvm::Value* loadConPNode::select(Selector* sel){
   return sel->select_oper(opnd_array(1));;
 }
@@ -138,6 +135,26 @@ llvm::Value* TailCalljmpIndNode::select(Selector* sel){
   sel->builder().CreateStore(target_pc, addr);  
   sel->builder().CreateRet(sel->builder().getInt32(0));
   return NULL;
+
+llvm::Value* RetNode::select(Selector* sel){
+  bool has_value = TypeFunc::Parms < req();
+  if (has_value) {
+    Node* ret_node = in(TypeFunc::Parms);
+    assert(ret_node != NULL, "check");
+    llvm::Value* ret_value = sel->select_node(ret_node);
+    sel->builder().CreateRet(ret_value);
+  }
+  else {
+    sel->builder().CreateRetVoid();
+  }
+  return NULL;
+}
+
+llvm::Value* loadConINode::select(Selector* sel){
+    BasicType btype = sel->comp()->tf()->return_type();
+    llvm::Type* intTy = sel->convert_type(btype);
+    llvm::Constant* cnst = llvm::ConstantInt::get(intTy, _opnd_array[1]->constant());
+    return cnst;
 }
 
 llvm::Value* loadBNode::select(Selector* sel){
@@ -202,12 +219,6 @@ llvm::Value* loadFNode::select(Selector* sel){
 
 llvm::Value* loadDNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* loadConINode::select(Selector* sel){
-    llvm::IntegerType* intTy = llvm::Type::getIntNTy(sel->ctx(),sel->mod()->getDataLayout().getPointerSize() * 8);
-    llvm::ConstantInt* cnst = llvm::ConstantInt::get(intTy,_opnd_array[1]->constant(), true);
-    return cnst;
 }
 
 llvm::Value* loadConI1Node::select(Selector* sel){
