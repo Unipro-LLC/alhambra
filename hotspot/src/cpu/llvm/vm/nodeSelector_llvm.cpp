@@ -22,6 +22,24 @@ llvm::Value* tlsLoadPNode::select(Selector* sel){
   return ci;
 }
 
+llvm::Value* RetNode::select(Selector* sel){
+  bool has_value = TypeFunc::Parms < req();
+  if (has_value) {
+    Node* ret_node = in(TypeFunc::Parms);
+    assert(ret_node != NULL, "check");
+    llvm::Value* ret_value = sel->select_node(ret_node);
+    sel->builder().CreateRet(ret_value);
+  }
+  return NULL;
+}
+
+llvm::Value* loadConINode::select(Selector* sel){
+    BasicType btype = sel->comp()->tf()->return_type();
+    llvm::Type* intTy = sel->convert_type(btype);
+    llvm::Constant* cnst = llvm::ConstantInt::get(intTy, _opnd_array[1]->constant());
+    return cnst;
+}
+
 llvm::Value* loadBNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
@@ -88,12 +106,6 @@ llvm::Value* loadFNode::select(Selector* sel){
 
 llvm::Value* loadDNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* loadConINode::select(Selector* sel){
-    llvm::IntegerType* intTy = llvm::Type::getIntNTy(sel->ctx(),sel->mod()->getDataLayout().getPointerSize() * 8);
-    llvm::ConstantInt* cnst = llvm::ConstantInt::get(intTy,_opnd_array[1]->constant(), true);
-    return cnst;
 }
 
 llvm::Value* loadConI1Node::select(Selector* sel){
@@ -1360,9 +1372,6 @@ llvm::Value* CallLeafNoFPDirectNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
-llvm::Value* RetNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
 
 llvm::Value* TailCalljmpIndNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;

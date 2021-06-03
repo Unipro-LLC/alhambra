@@ -29,7 +29,6 @@ private:
   GrowableArray<CacheEntry*> _cache;
   Block* _block;
 
-  llvm::Type* convert_type(BasicType btype) const;
   void gen_func();
   void create_blocks();
   void select();
@@ -38,7 +37,9 @@ private:
   void jump_on_start(Node* node);
   void create_br(Block* block);
 public:
+  llvm::Type* convert_type(BasicType btype) const;
   llvm::Value* select_node(Node* node);
+  Compile* comp() { return _comp ; }
   llvm::LLVMContext& ctx() { return _ctx; }
   llvm::Module* mod() {return _mod; }
   llvm::IRBuilder<>& builder() {return _builder; } 
