@@ -18,7 +18,6 @@ llvm::Value* tlsLoadPNode::select(Selector* sel) {
   return ci;
 }
 
-<<<<<<< fd3f4e43283e310d5a8946385dcea78d26ae6e25
 llvm::Value* storePNode::select(Selector* sel) {
   llvm::Value *base, *offset;
   int op_index = sel->select_address(this, base, offset);
