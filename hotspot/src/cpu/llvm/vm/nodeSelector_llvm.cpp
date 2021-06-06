@@ -30,6 +30,9 @@ llvm::Value* RetNode::select(Selector* sel){
     llvm::Value* ret_value = sel->select_node(ret_node);
     sel->builder().CreateRet(ret_value);
   }
+  else {
+      sel->builder().CreateRetVoid();
+  }
   return NULL;
 }
 
