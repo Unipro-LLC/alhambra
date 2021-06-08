@@ -134,6 +134,7 @@ llvm::Value* TailCalljmpIndNode::select(Selector* sel){
   sel->builder().CreateStore(target_pc, addr);  
   sel->builder().CreateRet(sel->builder().getInt32(0));
   return NULL;
+ }
 
 llvm::Value* RetNode::select(Selector* sel){
   bool has_value = TypeFunc::Parms < req();

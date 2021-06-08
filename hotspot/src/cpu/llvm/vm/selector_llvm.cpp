@@ -125,7 +125,7 @@ int Selector::select_address(MachNode *mem_node, llvm::Value *&base, llvm::Value
       Node* node = mem_node->in(op_index++);
       base = select_node(node);
       offset = _builder.getIntN(
-        _mod.getDataLayout().getPointerSize() * 8, 
+        _mod->getDataLayout().getPointerSize() * 8,
         mop->constant_disp());
       break;
     }
