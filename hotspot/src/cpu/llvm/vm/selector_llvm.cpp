@@ -114,7 +114,6 @@ void Selector::jump_on_start(Node* node) {
 }
 
 void Selector::create_br(Block* block) {
-<<<<<<< 3996f7ed0714b8af0f238a32c6c08ba3825cbcd9
   _builder.CreateBr(_blocks.at(block->_pre_order - 1));
 }
 
