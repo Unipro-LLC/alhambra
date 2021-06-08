@@ -19,11 +19,11 @@ llvm::Value* tlsLoadPNode::select(Selector* sel) {
 }
 
 llvm::Value* storePNode::select(Selector* sel) {
-  llvm::Value *base, *offset;
-  int op_index = sel->select_address(this, base, offset);
+  int op_index;
+  llvm::Value *addr = sel->select_address(this, op_index);
   Node* node = in(op_index++);
   llvm::Value* value = sel->select_node(node);
-  sel->builder().CreateStore(value, base);
+  sel->builder().CreateStore(value, addr);
   return NULL;
 }
 
@@ -89,18 +89,16 @@ llvm::Value* CallRuntimeDirectNode::select(Selector* sel){
 }
 
 llvm::Value* storeImmP0Node::select(Selector* sel){
-  llvm::Value *base, *offset;
-  sel->select_address(this, base, offset);
+  llvm::Value* addr = sel->select_address(this);
   llvm::Value* value = llvm::Constant::getNullValue(
     llvm::Type::getInt8PtrTy(sel->ctx()));
-  sel->builder().CreateStore(value, base);
+  sel->builder().CreateStore(value, addr);
   return NULL;
 }
 
 llvm::Value* loadPNode::select(Selector* sel){
-  llvm::Value *base, *offset;
-  sel->select_address(this, base, offset);
-  llvm::Value* res = sel->builder().CreateLoad(base);
+  llvm::Value* addr = sel->select_address(this);
+  llvm::Value* res = sel->builder().CreateLoad(addr);
   if (bottom_type()->isa_oopptr() != NULL) {
     /// TODO: mark managed ptr
   }
@@ -119,8 +117,12 @@ llvm::Value* jmpConUNode::select(Selector* sel){
   return NULL;
 }
 
+llvm::Value* RetNode::select(Selector* sel){
+  return sel->builder().CreateRet(llvm::Constant::getNullValue(sel->func()->getReturnType()));
+}
+
 llvm::Value* loadConPNode::select(Selector* sel){
-  return sel->select_oper(opnd_array(1));;
+  return sel->select_oper(opnd_array(1));
 }
 
 llvm::Value* TailCalljmpIndNode::select(Selector* sel){
@@ -132,7 +134,7 @@ llvm::Value* TailCalljmpIndNode::select(Selector* sel){
   llvm::Value* addr = sel->builder().CreateCall(f);
   addr = sel->builder().CreatePointerCast(addr, llvm::PointerType::getUnqual(target_pc->getType()));
   sel->builder().CreateStore(target_pc, addr);  
-  sel->builder().CreateRet(sel->builder().getInt32(0));
+  sel->builder().CreateRet(llvm::Constant::getNullValue(sel->func()->getReturnType()));
   return NULL;
  }
 

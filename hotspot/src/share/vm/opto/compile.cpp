@@ -2370,6 +2370,10 @@ void Compile::Code_Gen() {
   LlvmCodeGen llvmcg;
   llvmcg.llvm_code_gen(this, _target_name, _target_holder_name);
 #else
+  llvm::Module mod("Test Module", ctx);
+  Selector(this, ctx, mod);
+  NOT_PRODUCT( if (PrintOptoAssembly) { mod.dump(); } )
+#endif
 
   PhaseChaitin regalloc(unique(), cfg, matcher);
   _regalloc = &regalloc;

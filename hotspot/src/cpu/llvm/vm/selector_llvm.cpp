@@ -11,8 +11,6 @@ Selector::Selector(Compile* comp, llvm::LLVMContext& ctx, llvm::Module* mod, con
   gen_func();
   create_blocks();
   select();
-  NOT_PRODUCT( _mod->dump(); )
-  NOT_PRODUCT( _func->viewCFG(); )
   for (int i = 0; i < _cache.length(); ++i) {
      delete _cache.at(i);
   }
@@ -49,16 +47,19 @@ void Selector::gen_func() {
   }
 
   llvm::FunctionType *ftype = llvm::FunctionType::get(retType, paramTypes, false);
-  llvm::GlobalValue::LinkageTypes linkage = llvm::GlobalValue::ExternalWeakLinkage;
+  llvm::GlobalValue::LinkageTypes linkage = llvm::GlobalValue::ExternalLinkage;
   _func = llvm::Function::Create(ftype, linkage, 0, _name, _mod);
 }
 
 void Selector::create_blocks() {
+  llvm::BasicBlock* entry_block = llvm::BasicBlock::Create(_func->getContext(), "B0", _func);
+  _builder.SetInsertPoint(entry_block);
   std::string b_str = "B";
   for (int i = 0; i < _blocks.length(); ++i) {
-    _blocks.at_put(i, llvm::BasicBlock::Create(_func->getContext(), b_str + std::to_string(i), _func));
+    _blocks.at_put(i, llvm::BasicBlock::Create(_func->getContext(), b_str + std::to_string(i + 1), _func));
   }
-  create_entry_block();
+  Block* block = _comp->cfg()->get_root_block();
+  create_br(block);
 }
 
 void Selector::select() {
@@ -95,13 +96,6 @@ llvm::Value* Selector::select_node(Node* node) {
 
 }
 
-void Selector::create_entry_block() {
-  llvm::BasicBlock* entry_block = llvm::BasicBlock::Create(_func->getContext(), "B0", _func);
-  _builder.SetInsertPoint(entry_block);
-  Block* block = _comp->cfg()->get_root_block();
-  create_br(block);
-}
-
 void Selector::jump_on_start(Node* node) {
   Node* start_node;
   for (uint i = 0; i < node->outcnt(); ++i) {
@@ -118,21 +112,25 @@ void Selector::create_br(Block* block) {
   _builder.CreateBr(_blocks.at(block->_pre_order - 1));
 }
 
-int Selector::select_address(MachNode *mem_node, llvm::Value *&base, llvm::Value *&offset){
+llvm::Value* Selector::select_address(MachNode *mem_node) {
+  int op_index;
+  return select_address(mem_node, op_index);
+}
+
+llvm::Value* Selector::select_address(MachNode *mem_node, int& op_index) {
   const MachOper* mop = mem_node->memory_operand();
-  int op_index = MemNode::Address;
+  op_index = MemNode::Address;
   switch (mop->opcode()){
     case INDOFFSET: {
       Node* node = mem_node->in(op_index++);
-      base = select_node(node);
-      offset = _builder.getIntN(
-        _mod->getDataLayout().getPointerSize() * 8,
-        mop->constant_disp());
-      break;
+      llvm::Value* base = select_node(node);
+      llvm::Value* offset = _builder.getIntN(
+        _mod.getDataLayout().getPointerSize() * 8, 
+        mop->constant_disp() / _mod.getDataLayout().getPointerSize());
+      return builder().CreateGEP(base, offset);
     }
     default: ShouldNotReachHere();
   }
-  return op_index;
 }
 
 llvm::Value* Selector::select_oper(MachOper *oper) {

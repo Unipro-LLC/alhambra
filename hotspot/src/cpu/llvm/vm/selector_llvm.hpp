@@ -33,7 +33,6 @@ private:
   void create_blocks();
   void select();
   void select_block(Block* block);
-  void create_entry_block();
   void jump_on_start(Node* node);
   void create_br(Block* block);
 public:
@@ -46,7 +45,8 @@ public:
   llvm::Module* mod() { return _mod; }
   llvm::IRBuilder<>& builder() { return _builder; }
   llvm::Function* func() { return _func; } 
-  int select_address(MachNode *mem_node, llvm::Value *&base, llvm::Value *&offset);
+  llvm::Value* select_address(MachNode *mem_node);
+  llvm::Value* select_address(MachNode *mem_node, int& op_index);
   llvm::Value* select_condition(Node* cmp, llvm::Value* a, llvm::Value* b, bool is_and, bool flt);
   void select_if(llvm::Value *pred, Node* node);
   Selector(Compile* comp, llvm::LLVMContext& ctx, llvm::Module* mod, const char* name);
