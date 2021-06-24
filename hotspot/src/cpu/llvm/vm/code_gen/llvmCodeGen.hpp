@@ -31,7 +31,7 @@ class LlvmCodeGen {
 
  private:
   LlvmMemoryManager*    _memory_manager;
-  llvm::ExecutionEngine* _execution_engine;
+  llvm::ExecutionEngine* _execution_engine = NULL;
 
  private:
   LlvmMemoryManager* memory_manager() const {
