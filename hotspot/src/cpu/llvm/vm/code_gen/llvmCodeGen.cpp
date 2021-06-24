@@ -71,7 +71,6 @@ LlvmCodeGen::LlvmCodeGen() {
   execution_engine()->setVerifyModules(false);
 #endif
 #ifdef NOT_PRODUCT
-  execution_engine()->setVerifyModules(true);
   if (execution_engine()) {
     tty->print_cr("LlvmCompiler successfuly created \n");
   }
@@ -81,16 +80,16 @@ LlvmCodeGen::LlvmCodeGen() {
 void LlvmCodeGen::initialize_module() {
   _normal_owner = llvm::make_unique<llvm::Module>("normal", *_normal_context);
   _normal_module = _normal_owner.get();
-  if (execution_engine() != nullptr) {
-    _normal_owner->setDataLayout(
-          execution_engine()->getTargetMachine()->createDataLayout());
+ if (execution_engine() != nullptr) {
+    _normal_owner->setDataLayout(execution_engine()->getTargetMachine()->createDataLayout());
     execution_engine()->addModule(std::move(_normal_owner));
   }
 }
 
 void LlvmCodeGen::llvm_code_gen(Compile* comp, const char* target_name, const char* target_holder_name) {
   const char* name = method_name(target_holder_name, target_name);
-  Selector(comp, *_normal_context, _normal_module, name);
+  initialize_module();
+  Selector(comp, *_normal_context, _normal_module , name);
 }
 
 const char* LlvmCodeGen::method_name(const char* klass, const char* method) {

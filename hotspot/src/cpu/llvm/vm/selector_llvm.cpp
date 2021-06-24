@@ -11,7 +11,8 @@ Selector::Selector(Compile* comp, llvm::LLVMContext& ctx, llvm::Module* mod, con
   gen_func();
   create_blocks();
   select();
-  NOT_PRODUCT( _func->viewCFG(); ) 
+  NOT_PRODUCT( _mod->dump(); )
+  NOT_PRODUCT( _func->viewCFG(); )
   for (int i = 0; i < _cache.length(); ++i) {
      delete _cache.at(i);
   }
@@ -46,10 +47,10 @@ void Selector::gen_func() {
     llvm::Type* type = convert_type(btype);
     paramTypes.push_back(type);
   }
-  
+
   llvm::FunctionType *ftype = llvm::FunctionType::get(retType, paramTypes, false);
   llvm::GlobalValue::LinkageTypes linkage = llvm::GlobalValue::ExternalWeakLinkage;
-  _func = llvm::Function::Create(ftype, linkage, _name, _mod);
+  _func = llvm::Function::Create(ftype, linkage, 0, _name, _mod);
 }
 
 void Selector::create_blocks() {
