@@ -4,18 +4,8 @@
 
 class Selector;
 
-llvm::Value* tlsLoadPNode::select(Selector* sel) {
-  llvm::Type* retType = llvm::PointerType::getUnqual(
-    llvm::Type::getInt8PtrTy(sel->ctx()));
-  std::vector<llvm::Type*> paramTypes;
-  paramTypes.push_back(llvm::Type::getInt32Ty(sel->ctx()));
-  llvm::FunctionType *funcTy = llvm::FunctionType::get(retType, paramTypes, false);
-  llvm::Function *f = static_cast<llvm::Function*>(
-    sel->get_ptr((intptr_t)os::thread_local_storage_at, funcTy));                                                     
-  std::vector<llvm::Value *> args;
-  args.push_back(sel->builder().getInt32(ThreadLocalStorage::thread_index()));
-  llvm::Value* ci = sel->builder().CreateCall(f, args);                                          
-  return ci;
+llvm::Value* tlsLoadPNode::select(Selector* sel) {                                          
+  return sel->thread();
 }
 
 llvm::Value* storePNode::select(Selector* sel) {
@@ -117,15 +107,12 @@ llvm::Value* jmpConUNode::select(Selector* sel){
   return NULL;
 }
 
-llvm::Value* RetNode::select(Selector* sel){
-  return sel->builder().CreateRet(llvm::Constant::getNullValue(sel->func()->getReturnType()));
-}
-
 llvm::Value* loadConPNode::select(Selector* sel){
   return sel->select_oper(opnd_array(1));
 }
 
 llvm::Value* TailCalljmpIndNode::select(Selector* sel){
+  sel->epilog();
   llvm::Value* target_pc = sel->select_node(in(req() - 2));
   llvm::Type* retType = llvm::Type::getInt8PtrTy(sel->ctx());
   llvm::FunctionType *funcTy = llvm::FunctionType::get(retType, false);
@@ -139,6 +126,7 @@ llvm::Value* TailCalljmpIndNode::select(Selector* sel){
  }
 
 llvm::Value* RetNode::select(Selector* sel){
+  sel->epilog();
   bool has_value = TypeFunc::Parms < req();
   if (has_value) {
     Node* ret_node = in(TypeFunc::Parms);

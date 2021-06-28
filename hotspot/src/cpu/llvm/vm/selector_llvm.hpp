@@ -23,6 +23,10 @@ private:
   llvm::LLVMContext& _ctx;
   llvm::IRBuilder<> _builder;
   llvm::Module* _mod;
+  llvm::Value* _thread;
+  llvm::Value* _SP;
+  llvm::Value* _FP;
+  llvm::Value* _last_Java_fp;
   const char* _name;
   GrowableArray<llvm::BasicBlock*> _blocks;
 
@@ -31,10 +35,13 @@ private:
 
   void gen_func();
   void create_blocks();
+  void thread_load();
+  void prolog();
   void select();
   void select_block(Block* block);
   void jump_on_start(Node* node);
   void create_br(Block* block);
+
 public:
   llvm::Type* convert_type(BasicType btype) const;
   llvm::Value* select_node(Node* node);
@@ -45,10 +52,12 @@ public:
   llvm::Module* mod() { return _mod; }
   llvm::IRBuilder<>& builder() { return _builder; }
   llvm::Function* func() { return _func; } 
+  llvm::Value* thread() { return _thread; }
   llvm::Value* select_address(MachNode *mem_node);
   llvm::Value* select_address(MachNode *mem_node, int& op_index);
   llvm::Value* select_condition(Node* cmp, llvm::Value* a, llvm::Value* b, bool is_and, bool flt);
   void select_if(llvm::Value *pred, Node* node);
+  void epilog();
   Selector(Compile* comp, llvm::LLVMContext& ctx, llvm::Module* mod, const char* name);
 };
 

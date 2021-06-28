@@ -11,9 +11,32 @@ Selector::Selector(Compile* comp, llvm::LLVMContext& ctx, llvm::Module* mod, con
   gen_func();
   create_blocks();
   select();
+
   for (int i = 0; i < _cache.length(); ++i) {
      delete _cache.at(i);
   }
+}
+
+void Selector::prolog() {
+  llvm::Type* retType = llvm::PointerType::getUnqual(llvm::Type::getInt8PtrTy(ctx()));
+  std::vector<llvm::Type*> paramTypes;
+  paramTypes.push_back(llvm::Type::getInt32Ty(ctx()));
+  llvm::FunctionType *funcTy = llvm::FunctionType::get(retType, paramTypes, false);
+  llvm::Function *f = static_cast<llvm::Function*>(
+    get_ptr((intptr_t)os::thread_local_storage_at, funcTy));                                                     
+  std::vector<llvm::Value *> args;
+  args.push_back(builder().getInt32(ThreadLocalStorage::thread_index()));                                          
+  _thread = builder().CreateCall(f, args);
+
+  uint slots = OptoReg::reg2stack(comp()->matcher()->_old_SP);
+  _SP = builder().CreateAlloca(convert_type(T_INT), slots);
+  _last_Java_fp = builder().CreateGEP(thread(), builder().getInt32(in_bytes(JavaThread::last_Java_fp_offset())));
+  llvm::Value* last_fp = builder().CreateLoad(_last_Java_fp);
+  _FP = builder().CreateGEP(_SP, builder().getInt32(4));
+  llvm::Value* fp = builder().CreatePointerCast(_FP, llvm::PointerType::getUnqual(last_fp->getType()));
+  builder().CreateStore(last_fp, fp);
+  llvm::Value* last_Java_fp = builder().CreatePointerCast(_last_Java_fp, llvm::PointerType::getUnqual(_FP->getType()));
+  builder().CreateStore(_FP, last_Java_fp);
 }
 
 llvm::Type* Selector::convert_type(BasicType type) const {
@@ -60,6 +83,7 @@ void Selector::create_blocks() {
   }
   Block* block = _comp->cfg()->get_root_block();
   create_br(block);
+  prolog();
 }
 
 void Selector::select() {
@@ -125,8 +149,8 @@ llvm::Value* Selector::select_address(MachNode *mem_node, int& op_index) {
       Node* node = mem_node->in(op_index++);
       llvm::Value* base = select_node(node);
       llvm::Value* offset = _builder.getIntN(
-        _mod.getDataLayout().getPointerSize() * 8, 
-        mop->constant_disp() / _mod.getDataLayout().getPointerSize());
+        mod()->getDataLayout().getPointerSize() * 8, 
+        mop->constant_disp() / mod()->getDataLayout().getPointerSize());
       return builder().CreateGEP(base, offset);
     }
     default: ShouldNotReachHere();
@@ -238,4 +262,10 @@ void Selector::select_if(llvm::Value *pred, Node* node) {
   // llvm::MDBuilder MDHelper(CGM.getLLVMContext());
   // llvm::MDNode *Weights = MDHelper.createBranchWeights(prob, 1 - prob);
   builder().CreateCondBr(pred, target_bb, fallthr_bb/*, Weights*/);
+}
+
+void Selector::epilog() {
+  llvm::Value* last_fp = builder().CreateLoad(_FP);
+  llvm::Value* last_Java_fp = builder().CreatePointerCast(_last_Java_fp, llvm::PointerType::getUnqual(last_fp->getType()));
+  builder().CreateStore(last_fp, last_Java_fp);
 }

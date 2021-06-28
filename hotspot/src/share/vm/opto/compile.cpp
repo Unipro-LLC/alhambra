@@ -690,8 +690,10 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
                   _interpreter_frame_size(0),
                   _max_node_limit(MaxNodeLimit) {
   C = this;
+#ifdef LLVM
   _target_name = target->name()->as_utf8();
   _target_holder_name = target->holder()->name()->as_utf8();
+#endif
 
   CompileWrapper cw(this);
 #ifndef PRODUCT
@@ -1006,8 +1008,10 @@ Compile::Compile( ciEnv* ci_env,
     _interpreter_frame_size(0),
     _max_node_limit(MaxNodeLimit) {
   C = this;
+#ifdef LLVM
   _target_name = _stub_name ;
   _target_holder_name = _stub_name;
+#endif
 
 #ifndef PRODUCT
   TraceTime t1(NULL, &_t_totalCompilation, TimeCompiler, false);
@@ -2370,10 +2374,6 @@ void Compile::Code_Gen() {
   LlvmCodeGen llvmcg;
   llvmcg.llvm_code_gen(this, _target_name, _target_holder_name);
 #else
-  llvm::Module mod("Test Module", ctx);
-  Selector(this, ctx, mod);
-  NOT_PRODUCT( if (PrintOptoAssembly) { mod.dump(); } )
-#endif
 
   PhaseChaitin regalloc(unique(), cfg, matcher);
   _regalloc = &regalloc;
