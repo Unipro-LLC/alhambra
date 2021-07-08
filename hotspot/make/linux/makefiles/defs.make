@@ -251,13 +251,19 @@ EXPORT_LIST += $(EXPORT_DOCS_DIR)/platform/jvmti/jvmti.html
 
 # client and server subdirectories have symbolic links to ../libjsig.so
 EXPORT_LIST += $(EXPORT_JRE_LIB_ARCH_DIR)/libjsig.$(LIBRARY_SUFFIX)
-ifeq ($(ENABLE_FULL_DEBUG_SYMBOLS),1)
-  ifeq ($(ZIP_DEBUGINFO_FILES),1)
-    EXPORT_LIST += $(EXPORT_JRE_LIB_ARCH_DIR)/libjsig.diz
-  else
-    EXPORT_LIST += $(EXPORT_JRE_LIB_ARCH_DIR)/libjsig.debuginfo
-  endif
+
+# TODO: during alhambra or zeroshark build libjsig.debuginfo file is not moved to /hotspot/dist/jre/lib/amd64/
+# else the check for JAVA_VARIANT is not needed
+ifneq ($(findstring true, $(JVM_VARIANT_ALHAMBRA) $(JVM_VARIANT_ZEROSHARK)),true)
+	ifeq ($(ENABLE_FULL_DEBUG_SYMBOLS),1)
+	  ifeq ($(ZIP_DEBUGINFO_FILES),1)
+		EXPORT_LIST += $(EXPORT_JRE_LIB_ARCH_DIR)/libjsig.diz
+	  else
+		EXPORT_LIST += $(EXPORT_JRE_LIB_ARCH_DIR)/libjsig.debuginfo
+	  endif
+	endif
 endif
+
 EXPORT_SERVER_DIR = $(EXPORT_JRE_LIB_ARCH_DIR)/server
 EXPORT_CLIENT_DIR = $(EXPORT_JRE_LIB_ARCH_DIR)/client
 EXPORT_MINIMAL_DIR = $(EXPORT_JRE_LIB_ARCH_DIR)/minimal
