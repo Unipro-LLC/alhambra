@@ -64,7 +64,7 @@ if [ "x$JVM_TYPE" = "xzeroshark" ] || [ "x$JVM_TYPE" = "xalhambra" ]; then
 
     export LLVM_ARCH=$TARCH
     LLVM_BUILD_DIR=$BUILD_DIR/llvm-$LLVM_ARCH
-    LLVM_CFLAGS="-I${ROOT_DIR}/llvm-project/llvm/include -I${LLVM_BUILD_DIR}/llvm_${LLVM_ARCH}/include -DNDEBUG -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O3 -fomit-frame-pointer -fvisibility-inlines-hidden -fno-exceptions -fno-rtti -fPIC -Woverloaded-virtual -Wcast-qual"
+    LLVM_CFLAGS="-I${ROOT_DIR}/llvm-project/llvm/include -I${LLVM_BUILD_DIR}/include -DNDEBUG -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O3 -fomit-frame-pointer -fvisibility-inlines-hidden -fno-exceptions -fno-rtti -fPIC -Woverloaded-virtual -Wcast-qual"
 
     LLVM_LIBS="-lLLVMExecutionEngine -lLLVMRuntimeDyld -lLLVMObject -lLLVMMCParser -lLLVMMCJIT -lLLVMCodeGen -lLLVMSelectionDAG -lLLVMScalarOpts -lLLVMTransformUtils -lLLVMAnalysis -lLLVMCore -lLLVMSupport -lLLVMCodeGen -lLLVMMC -lLLVMTarget -lLLVMTransformUtils -lLLVMBinaryFormat -lLLVMX86Desc -lLLVMX86Info -lLLVMX86CodeGen -lLLVMX86Utils -lLLVMMCDisassembler -lLLVMGlobalISel -lLLVMBinaryFormat lLLVMX86Disassembler -lLLVMX86AsmParser -lLLVMX86CodeGen -lLLVMSelectionDAG -lLLVMCodeGen -lLLVMScalarOpts -lLLVMInstCombine -lLLVMInstrumentation -lLLVMProfileData -lLLVMBitWriter -lLLVMX86Desc -lLLVMMCDisassembler -lLLVMX86Info -lLLVMX86Utils -lLLVMMCJIT -lLLVMExecutionEngine -lLLVMTarget -lLLVMAnalysis -lLLVMRuntimeDyld -lLLVMObject -lLLVMMCParser -lLLVMBitReader -lLLVMMC -lLLVMCore -lLLVMSupport -lLLVMObjectYAML -lLLVMLibDriver -lLLVMOption -lLLVMX86Disassembler -lLLVMX86AsmParser -lLLVMX86CodeGen -lLLVMGlobalISel -lLLVMSelectionDAG -lLLVMDebugInfoMSF -lLLVMX86Desc -lLLVMMCDisassembler -lLLVMX86Info -lLLVMX86Utils -lLLVMMCJIT -lLLVMLineEditor -lLLVMInterpreter -lLLVMExecutionEngine -lLLVMRuntimeDyld -lLLVMCodeGen -lLLVMTarget -lLLVMCoroutines -lLLVMipo -lLLVMInstrumentation -lLLVMVectorize -lLLVMScalarOpts -lLLVMLinker -lLLVMIRReader -lLLVMAsmParser -lLLVMInstCombine -lLLVMTransformUtils -lLLVMBitWriter -lLLVMAnalysis -lLLVMObject -lLLVMMCParser -lLLVMMC -lLLVMBitReader -lLLVMProfileData -lLLVMCore -lLLVMSupport -lLLVMDemangle -lLLVMLTO -lLLVMPasses -lLLVMObjCARCOpts -lLLVMMIRParser -lLLVMSymbolize -lLLVMDebugInfoPDB -lLLVMDebugInfoDWARF -lLLVMCoverage -lLLVMTableGen -lLLVMOrcJIT -lLLVMAsmPrinter -lLLVMX86AsmPrinter -lLLVMDebugInfoCodeView -lz ${LTINFO_LIB}"
     LLVM_LDFLAGS=""
@@ -76,7 +76,7 @@ if [ "x$JVM_TYPE" = "xzeroshark" ] || [ "x$JVM_TYPE" = "xalhambra" ]; then
 case \$1 in
   --version) echo "6.0svn" ;;
   --cxxflags) echo "$LLVM_CFLAGS" ;;
-  --ldflags) echo "-L$LLVM_BUILD_DIR/llvm_$LLVM_ARCH/lib -lpthread -ldl -lm $LLVM_LDFLAGS" ;;
+  --ldflags) echo "-L$LLVM_BUILD_DIR/lib -lpthread -ldl -lm $LLVM_LDFLAGS" ;;
   --libs) echo "$LLVM_LIBS -lLLVMExecutionEngine -lLLVMRuntimeDyld -lLLVMObject -lLLVMAsmPrinter -lLLVMMCParser -lLLVMMCJIT -lLLVMSelectionDAG -lLLVMScalarOpts -lLLVMTransformUtils -lLLVMAnalysis -lLLVMCore -lLLVMSupport -lLLVMCodeGen -lLLVMMC -lLLVMTarget" ;;
 esac
 EOF
