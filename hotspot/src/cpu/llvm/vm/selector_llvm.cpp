@@ -29,7 +29,7 @@ void Selector::prolog() {
   _thread = builder().CreateCall(f, args);
 
   uint slots = OptoReg::reg2stack(comp()->matcher()->_old_SP);
-  _SP = builder().CreateAlloca(convert_type(T_INT), slots);
+  _SP = builder().CreateAlloca(convert_type(T_INT), builder().getInt32(slots));
   _last_Java_fp = builder().CreateGEP(thread(), builder().getInt32(in_bytes(JavaThread::last_Java_fp_offset())));
   llvm::Value* last_fp = builder().CreateLoad(_last_Java_fp);
   _FP = builder().CreateGEP(_SP, builder().getInt32(4));
@@ -37,6 +37,8 @@ void Selector::prolog() {
   builder().CreateStore(last_fp, fp);
   llvm::Value* last_Java_fp = builder().CreatePointerCast(_last_Java_fp, llvm::PointerType::getUnqual(_FP->getType()));
   builder().CreateStore(_FP, last_Java_fp);
+  Block* block = _comp->cfg()->get_root_block();
+  create_br(block);
 }
 
 llvm::Type* Selector::convert_type(BasicType type) const {
@@ -81,8 +83,6 @@ void Selector::create_blocks() {
   for (int i = 0; i < _blocks.length(); ++i) {
     _blocks.at_put(i, llvm::BasicBlock::Create(_func->getContext(), b_str + std::to_string(i + 1), _func));
   }
-  Block* block = _comp->cfg()->get_root_block();
-  create_br(block);
   prolog();
 }
 

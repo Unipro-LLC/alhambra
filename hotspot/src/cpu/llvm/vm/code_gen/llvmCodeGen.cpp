@@ -58,21 +58,20 @@ LlvmCodeGen::LlvmCodeGen() {
   // Create the JIT
   std::string ErrorMsg;
 
-  llvm::EngineBuilder builder(std::move(_normal_owner));
-  builder.setMCPU(MCPU);
-  builder.setMAttrs(MAttrs);
-  builder.setMCJITMemoryManager(std::unique_ptr<llvm::SectionMemoryManager>(memory_manager()));
-  builder.setEngineKind(llvm::EngineKind::JIT);
-  builder.setErrorStr(&ErrorMsg);
-  builder.setOptLevel(llvm::CodeGenOpt::Aggressive);
-
-  _execution_engine = builder.create();
+  llvm::EngineBuilder* builder = new llvm::EngineBuilder(std::move(_normal_owner));
+  builder->setMCPU(MCPU);
+  builder->setMAttrs(MAttrs);
+  builder->setMCJITMemoryManager(std::unique_ptr<llvm::SectionMemoryManager>(memory_manager()));
+  builder->setEngineKind(llvm::EngineKind::JIT);
+  builder->setErrorStr(&ErrorMsg);
+  builder->setOptLevel(llvm::CodeGenOpt::Aggressive);
+  _execution_engine = builder->create();
 #ifdef PRODUCT
   execution_engine()->setVerifyModules(false);
 #endif
 #ifdef NOT_PRODUCT
   if (execution_engine()) {
-    tty->print_cr("LlvmCompiler successfuly created \n");
+    tty->print_cr("LlvmCompiler successfully created \n");
   }
 #endif
 }
@@ -89,7 +88,15 @@ void LlvmCodeGen::initialize_module() {
 void LlvmCodeGen::llvm_code_gen(Compile* comp, const char* target_name, const char* target_holder_name) {
   const char* name = method_name(target_holder_name, target_name);
   initialize_module();
-  Selector(comp, *_normal_context, _normal_module , name);
+  Selector sel(comp, *_normal_context, _normal_module , name);
+  llvm::Function& F = *(sel.func());
+  llvm::legacy::FunctionPassManager FPM(_normal_module);
+  FPM.add(llvm::createAtomicExpandPass());
+  FPM.run(F);
+  void* code_start = execution_engine()->getPointerToFunction(&F);
+  execution_engine()->finalizeObject();
+  MacroAssembler *masm = new MacroAssembler(comp->code_buffer());
+  memcpy(masm->code()->insts()->start(), code_start, memory_manager()->code_size());
 }
 
 const char* LlvmCodeGen::method_name(const char* klass, const char* method) {

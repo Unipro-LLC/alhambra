@@ -35,7 +35,8 @@ void* LlvmMemoryManager::getPointerToNamedFunction(const std::string &Name, bool
 }
 
 uint8_t* LlvmMemoryManager::allocateCodeSection(uintptr_t Size, unsigned Alignment, unsigned SectionID, llvm::StringRef SectionName) {
-    return llvm::SectionMemoryManager::allocateCodeSection(Size, Alignment, SectionID, SectionName);
+  _code_size = Size;
+  return llvm::SectionMemoryManager::allocateCodeSection(Size, Alignment, SectionID, SectionName);
 }
 
 uint8_t* LlvmMemoryManager::allocateDataSection(uintptr_t Size, unsigned Alignment, unsigned SectionID, llvm::StringRef SectionName, bool IsReadOnly) {
@@ -43,5 +44,5 @@ uint8_t* LlvmMemoryManager::allocateDataSection(uintptr_t Size, unsigned Alignme
 }
 
 bool LlvmMemoryManager::finalizeMemory(std::string *ErrMsg) {
-    llvm::SectionMemoryManager::finalizeMemory(ErrMsg);
+  llvm::SectionMemoryManager::finalizeMemory(ErrMsg);
 }

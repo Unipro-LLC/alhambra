@@ -54,6 +54,7 @@
 #include <llvm/IR/Type.h>
 #include "llvm/IR/LegacyPassManager.h"
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
+#include <llvm/ExecutionEngine/MCJIT.h>
 #include "llvm/ExecutionEngine/RTDyldMemoryManager.h"
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
 #include <llvm-c/Core.h>

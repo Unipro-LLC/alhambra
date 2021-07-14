@@ -979,7 +979,7 @@ Compile::Compile( ciEnv* ci_env,
     _do_escape_analysis(false),
     _eliminate_boxing(false),
     _failure_reason(NULL),
-    _code_buffer("Compile::Fill_buffer"),
+    _code_buffer("LLVM", 256 * K, 64 * K),
     _has_method_handle_invokes(false),
     _mach_constant_base_node(NULL),
     _node_bundling_limit(0),
@@ -2373,6 +2373,7 @@ void Compile::Code_Gen() {
 #ifdef LLVM
   LlvmCodeGen llvmcg;
   llvmcg.llvm_code_gen(this, _target_name, _target_holder_name);
+  _oop_map_set = new OopMapSet();
 #else
 
   PhaseChaitin regalloc(unique(), cfg, matcher);

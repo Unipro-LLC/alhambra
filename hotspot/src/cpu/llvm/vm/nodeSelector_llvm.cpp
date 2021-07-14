@@ -132,6 +132,7 @@ llvm::Value* RetNode::select(Selector* sel){
     Node* ret_node = in(TypeFunc::Parms);
     assert(ret_node != NULL, "check");
     llvm::Value* ret_value = sel->select_node(ret_node);
+    ret_value = sel->builder().CreatePointerCast(ret_value, sel->func()->getReturnType());
     sel->builder().CreateRet(ret_value);
   }
   else {
