@@ -57,6 +57,7 @@ public:
   llvm::Value* select_address(MachNode *mem_node, int& op_index);
   llvm::Value* select_condition(Node* cmp, llvm::Value* a, llvm::Value* b, bool is_and, bool flt);
   void select_if(llvm::Value *pred, Node* node);
+  void replace_return_address(llvm::Value* new_addr);
   void epilog();
   Selector(Compile* comp, llvm::LLVMContext& ctx, llvm::Module* mod, const char* name);
 };

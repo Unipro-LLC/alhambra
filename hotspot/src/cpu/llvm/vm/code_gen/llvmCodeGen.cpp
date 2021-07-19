@@ -53,12 +53,12 @@ LlvmCodeGen::LlvmCodeGen() {
   }
 
   args.push_back(0);  // terminator
-  llvm::cl::ParseCommandLineOptions(args.size() - 1, (char **) &args[0]);
+  llvm::cl::ParseCommandLineOptions(args.size() - 1, (char **) &args[0], "", &llvm::errs());
 
   // Create the JIT
   std::string ErrorMsg;
 
-  llvm::EngineBuilder* builder = new llvm::EngineBuilder(std::move(_normal_owner));
+  builder = new llvm::EngineBuilder(std::move(_normal_owner));
   builder->setMCPU(MCPU);
   builder->setMAttrs(MAttrs);
   builder->setMCJITMemoryManager(std::unique_ptr<llvm::SectionMemoryManager>(memory_manager()));
@@ -68,11 +68,6 @@ LlvmCodeGen::LlvmCodeGen() {
   _execution_engine = builder->create();
 #ifdef PRODUCT
   execution_engine()->setVerifyModules(false);
-#endif
-#ifdef NOT_PRODUCT
-  if (execution_engine()) {
-    tty->print_cr("LlvmCompiler successfully created \n");
-  }
 #endif
 }
 
@@ -91,12 +86,21 @@ void LlvmCodeGen::llvm_code_gen(Compile* comp, const char* target_name, const ch
   Selector sel(comp, *_normal_context, _normal_module , name);
   llvm::Function& F = *(sel.func());
   llvm::legacy::FunctionPassManager FPM(_normal_module);
-  FPM.add(llvm::createAtomicExpandPass());
   FPM.run(F);
-  void* code_start = execution_engine()->getPointerToFunction(&F);
+  void *ptr = execution_engine()->getPointerToFunction(&F);
   execution_engine()->finalizeObject();
-  MacroAssembler *masm = new MacroAssembler(comp->code_buffer());
-  memcpy(masm->code()->insts()->start(), code_start, memory_manager()->code_size());
+  CodeBuffer* cb = comp->code_buffer();
+  cb->initialize(256 * K, 64 * K);
+  cb->initialize_oop_recorder(comp->env()->oop_recorder());
+  MacroAssembler *masm = new MacroAssembler(cb);
+  uintptr_t code_size = memory_manager()->code_size();
+  void* code_start = masm->code()->insts()->start();
+  memcpy(code_start, ptr, code_size);
+  F.deleteBody();
+  masm->code_section()->set_end((address)(code_start + code_size));
+  if (JvmtiExport::should_post_dynamic_code_generated()) {
+    JvmtiExport::post_dynamic_code_generated(name, code_start, code_start + code_size);
+  }
 }
 
 const char* LlvmCodeGen::method_name(const char* klass, const char* method) {

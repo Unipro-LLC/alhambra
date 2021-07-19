@@ -264,6 +264,16 @@ void Selector::select_if(llvm::Value *pred, Node* node) {
   builder().CreateCondBr(pred, target_bb, fallthr_bb/*, Weights*/);
 }
 
+void Selector::replace_return_address(llvm::Value* new_addr) {
+  llvm::Type* retType = llvm::Type::getInt8PtrTy(ctx());
+  llvm::FunctionType *funcTy = llvm::FunctionType::get(retType, false);
+  llvm::Function* f = static_cast<llvm::Function*>(mod()->
+    getOrInsertFunction("llvm.addressofreturnaddress", funcTy).getCallee());
+  llvm::Value* addr = builder().CreateCall(f);
+  addr = builder().CreatePointerCast(addr, llvm::PointerType::getUnqual(new_addr->getType()));
+  builder().CreateStore(new_addr, addr);
+}
+
 void Selector::epilog() {
   llvm::Value* last_fp = builder().CreateLoad(_FP);
   llvm::Value* last_Java_fp = builder().CreatePointerCast(_last_Java_fp, llvm::PointerType::getUnqual(last_fp->getType()));

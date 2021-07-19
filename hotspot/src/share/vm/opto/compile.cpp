@@ -923,7 +923,16 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
     }
     TracePhase t2("install_code", &_t_registerMethod, TimeCompiler);
 #endif
-
+#ifdef LLVM
+    _code_offsets.set_value(CodeOffsets::Entry, 0);
+    _code_offsets.set_value(CodeOffsets::Verified_Entry, 0);
+    _code_offsets.set_value(CodeOffsets::Frame_Complete, 0);
+    _code_offsets.set_value(CodeOffsets::OSR_Entry, 0);
+    _code_offsets.set_value(CodeOffsets::Exceptions, 0);
+    _code_offsets.set_value(CodeOffsets::Deopt, 0);
+    if (has_method_handle_invokes()) { _code_offsets.set_value(CodeOffsets::DeoptMH, 0); }
+    _code_offsets.set_value(CodeOffsets::UnwindHandler, 0);
+#else
     if (is_osr_compilation()) {
       _code_offsets.set_value(CodeOffsets::Verified_Entry, 0);
       _code_offsets.set_value(CodeOffsets::OSR_Entry, _first_block_size);
@@ -931,6 +940,7 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
       _code_offsets.set_value(CodeOffsets::Verified_Entry, _first_block_size);
       _code_offsets.set_value(CodeOffsets::OSR_Entry, 0);
     }
+#endif    
 
     env()->register_method(_method, _entry_bci,
                            &_code_offsets,
@@ -979,7 +989,7 @@ Compile::Compile( ciEnv* ci_env,
     _do_escape_analysis(false),
     _eliminate_boxing(false),
     _failure_reason(NULL),
-    _code_buffer("LLVM", 256 * K, 64 * K),
+    _code_buffer("Compile::Fill_buffer"),
     _has_method_handle_invokes(false),
     _mach_constant_base_node(NULL),
     _node_bundling_limit(0),

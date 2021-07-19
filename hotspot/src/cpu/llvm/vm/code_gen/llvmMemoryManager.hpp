@@ -42,7 +42,7 @@ class LlvmMemoryManager : public llvm::SectionMemoryManager {
   uintptr_t _code_size;
 
  public:
-  uintptr_t code_size() { return _code_size; }
+  uintptr_t code_size() const { return _code_size; }
   void set_entry_for_function(const llvm::Function* function,
                               LlvmEntry*           entry) {
     _entry_map[function] = entry;

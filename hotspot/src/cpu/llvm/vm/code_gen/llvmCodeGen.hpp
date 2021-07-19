@@ -13,6 +13,10 @@ class LlvmCodeGen {
  public:
   // Creation
   LlvmCodeGen();
+  ~LlvmCodeGen() {
+    if (_execution_engine) { delete _execution_engine; }  
+    if (builder)  { delete builder; }
+  }
   // Initialization
   void initialize_module();
 
@@ -23,6 +27,7 @@ class LlvmCodeGen {
   LlvmContext* _normal_context;
   std::unique_ptr<llvm::Module> _normal_owner;
   llvm::Module* _normal_module;
+  llvm::EngineBuilder* builder;
 
  public:
   LlvmContext* context() const {
