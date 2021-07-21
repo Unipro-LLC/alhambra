@@ -115,7 +115,7 @@ llvm::Value* loadConPNode::select(Selector* sel) {
 
 llvm::Value* TailCalljmpIndNode::select(Selector* sel) {
   sel->epilog();
-  llvm::Value* target_pc = sel->select_node(in(req() - 2));
+  llvm::Value* target_pc = sel->select_node(in(TypeFunc::Parms));
   sel->replace_return_address(target_pc);
   ///TODO: there should be jump instead of return, as the return address should be preserved on stack
   llvm::Type* retType = sel->func()->getReturnType();
@@ -153,9 +153,9 @@ llvm::Value* loadConINode::select(Selector* sel) {
 
 llvm::Value* tailjmpIndNode::select(Selector* sel) {
   sel->epilog();
-  llvm::Value* target_pc = sel->select_node(in(req() - 2));
+  llvm::Value* target_pc = sel->select_node(in(TypeFunc::Parms));
   sel->replace_return_address(target_pc);
-  llvm::Value* x_oop = sel->select_node(in(req() - 1));
+  llvm::Value* x_oop = sel->select_node(in(TypeFunc::Parms + 1));
   llvm::Type* retType = sel->func()->getReturnType();
   if (retType->isVoidTy()) {
     sel->builder().CreateRetVoid();
