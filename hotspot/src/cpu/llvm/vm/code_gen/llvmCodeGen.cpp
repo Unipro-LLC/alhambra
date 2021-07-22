@@ -23,7 +23,6 @@ LlvmCodeGen::LlvmCodeGen() {
   // Create contexts which we'll use
   _normal_context = new LlvmContext("normal");
   initialize_module();
-  _memory_manager = new LlvmMemoryManager();
 
   // Finetune LLVM for the current host CPU.
   llvm::StringMap<bool> Features;
@@ -61,23 +60,14 @@ LlvmCodeGen::LlvmCodeGen() {
   builder = new llvm::EngineBuilder(std::move(_normal_owner));
   builder->setMCPU(MCPU);
   builder->setMAttrs(MAttrs);
-  builder->setMCJITMemoryManager(std::unique_ptr<llvm::SectionMemoryManager>(memory_manager()));
   builder->setEngineKind(llvm::EngineKind::JIT);
   builder->setErrorStr(&ErrorMsg);
   builder->setOptLevel(llvm::CodeGenOpt::Aggressive);
-  _execution_engine = builder->create();
-#ifdef PRODUCT
-  execution_engine()->setVerifyModules(false);
-#endif
 }
 
 void LlvmCodeGen::initialize_module() {
   _normal_owner = llvm::make_unique<llvm::Module>("normal", *_normal_context);
   _normal_module = _normal_owner.get();
- if (execution_engine() != nullptr) {
-    _normal_owner->setDataLayout(execution_engine()->getTargetMachine()->createDataLayout());
-    execution_engine()->addModule(std::move(_normal_owner));
-  }
 }
 
 void LlvmCodeGen::llvm_code_gen(Compile* comp, const char* target_name, const char* target_holder_name) {
@@ -85,17 +75,37 @@ void LlvmCodeGen::llvm_code_gen(Compile* comp, const char* target_name, const ch
   initialize_module();
   Selector sel(comp, *_normal_context, _normal_module , name);
   llvm::Function& F = *(sel.func());
-  llvm::legacy::FunctionPassManager FPM(_normal_module);
-  FPM.run(F);
-  void *ptr = execution_engine()->getPointerToFunction(&F);
-  execution_engine()->finalizeObject();
+  llvm::TargetMachine* TM = builder->selectTarget();
+  _normal_owner->setDataLayout(TM->createDataLayout());
   CodeBuffer* cb = comp->code_buffer();
   cb->initialize(256 * K, 64 * K);
   cb->initialize_oop_recorder(comp->env()->oop_recorder());
   MacroAssembler *masm = new MacroAssembler(cb);
-  uintptr_t code_size = memory_manager()->code_size();
   void* code_start = masm->code()->insts()->start();
-  memcpy(code_start, ptr, code_size);
+  llvm::MCContext* Ctx = nullptr;
+  llvm::SmallVector<char, 4096> ObjBufferSV;
+  llvm::raw_svector_ostream ObjStream(ObjBufferSV);
+  cantFail(_normal_module->materializeAll());
+  llvm::legacy::FunctionPassManager FPM(_normal_module);
+  FPM.run(F);
+  llvm::legacy::PassManager PM;
+  TM->addPassesToEmitMC(PM, Ctx, ObjStream, false);
+  PM.run(*_normal_module);
+  std::unique_ptr<llvm::MemoryBuffer> ObjectToLoad(
+    new llvm::SmallVectorMemoryBuffer(std::move(ObjBufferSV)));
+  llvm::Expected<std::unique_ptr<llvm::object::ObjectFile>> LoadedObject =
+    llvm::object::ObjectFile::createObjectFile(ObjectToLoad->getMemBufferRef());
+  assert(LoadedObject, "object is not loaded");
+  llvm::object::ObjectFile& obj = *LoadedObject.get();
+  uintptr_t code_size, offset;
+  for (const llvm::object::SectionRef &S : obj.sections()) {
+    if (S.isText()) {
+      code_size = S.getSize();
+      offset = static_cast<const llvm::object::ELFSectionRef&>(S).getOffset();
+      break;
+    }
+  }
+  memcpy(code_start, ObjectToLoad->getBufferStart() + offset, code_size);
   F.deleteBody();
   masm->code_section()->set_end((address)(code_start + code_size));
   if (JvmtiExport::should_post_dynamic_code_generated()) {

@@ -2,7 +2,6 @@
 #define SHARE_VM_LLVM_LLVMCODEGEN_HPP
 
 #include "compiler/compileBroker.hpp"
-#include "llvmMemoryManager.hpp"
 #include "llvmGlobals.hpp"
 #include "llvm/Support/TargetSelect.h"
 
@@ -13,8 +12,7 @@ class LlvmCodeGen {
  public:
   // Creation
   LlvmCodeGen();
-  ~LlvmCodeGen() {
-    if (_execution_engine) { delete _execution_engine; }  
+  ~LlvmCodeGen() { 
     if (builder)  { delete builder; }
   }
   // Initialization
@@ -32,18 +30,6 @@ class LlvmCodeGen {
  public:
   LlvmContext* context() const {
     return _normal_context;
-  }
-
- private:
-  LlvmMemoryManager*    _memory_manager;
-  llvm::ExecutionEngine* _execution_engine = NULL;
-
- private:
-  LlvmMemoryManager* memory_manager() const {
-    return _memory_manager;
-  }
-  llvm::ExecutionEngine* execution_engine() const {
-    return _execution_engine;
   }
 
  private:

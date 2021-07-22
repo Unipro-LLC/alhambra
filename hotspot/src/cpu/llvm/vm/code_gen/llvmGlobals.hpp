@@ -70,6 +70,8 @@
 
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/GVN.h"
+#include "llvm/Support/SmallVectorMemoryBuffer.h"
+#include "llvm/Object/ELFObjectFile.h"
 
 #include <map>
 
