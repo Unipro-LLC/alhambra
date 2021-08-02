@@ -64,6 +64,10 @@
 #include "gc_implementation/g1/g1CollectedHeap.inline.hpp"
 #include "gc_implementation/parallelScavenge/parallelScavengeHeap.hpp"
 #endif // INCLUDE_ALL_GCS
+#ifdef LLVM
+# include "code_gen/llvmGlobals.hpp"
+# include "code_gen/llvm_globals.hpp"
+#endif
 
 // Note: This is a special bug reporting site for the JVM
 #define DEFAULT_VENDOR_URL_BUG "http://bugreport.java.com/bugreport/crash.jsp"
@@ -4076,7 +4080,43 @@ jint Arguments::parse(const JavaVMInitArgs* args) {
   }
   no_shared_spaces("CDS Disabled");
 #endif // INCLUDE_CDS
+#ifdef LLVM
+// Initialize the native target
+  llvm::InitializeNativeTarget();
+  // MCJIT require a native AsmPrinter
+  llvm::InitializeNativeTargetAsmPrinter();
 
+  // Finetune LLVM for the current host CPU.
+  llvm::StringMap<bool> Features;
+  bool gotCpuFeatures = llvm::sys::getHostCPUFeatures(Features);
+  std::string cpu("-mcpu=" + std::string(llvm::sys::getHostCPUName()));
+  std::vector<const char*> cl_args;
+  cl_args.push_back(""); // program name
+  cl_args.push_back(cpu.c_str());
+
+  std::string mattr("-mattr=");
+  if(gotCpuFeatures){
+    for(llvm::StringMap<bool>::iterator I = Features.begin(),
+      E = Features.end(); I != E; ++I){
+      if(I->second){
+        std::string attr(I->first());
+        mattr+="+"+attr+",";
+      }
+    }
+  cl_args.push_back(mattr.c_str());
+  }
+  if (llvmFastSelect) {
+    cl_args.push_back("-fast-isel=true");
+  }
+
+  if (llvmPrintLLVM) {
+    cl_args.push_back("-print-after-all");
+  }
+
+  cl_args.push_back(0);  // terminator
+  llvm::cl::ParseCommandLineOptions(cl_args.size() - 1, (char **) &cl_args[0], "");
+
+#endif
   return JNI_OK;
 }
 

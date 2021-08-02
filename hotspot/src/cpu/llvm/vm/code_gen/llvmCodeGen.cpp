@@ -15,45 +15,8 @@ namespace {
 
 
 LlvmCodeGen::LlvmCodeGen() {
-  // Initialize the native target
-  llvm::InitializeNativeTarget();
-  // MCJIT require a native AsmPrinter
-  llvm::InitializeNativeTargetAsmPrinter();
-
-  // Create contexts which we'll use
   _normal_context = new LlvmContext("normal");
   initialize_module();
-
-  // Finetune LLVM for the current host CPU.
-  llvm::StringMap<bool> Features;
-  bool gotCpuFeatures = llvm::sys::getHostCPUFeatures(Features);
-  std::string cpu("-mcpu=" + std::string(llvm::sys::getHostCPUName()));
-  std::vector<const char*> args;
-  args.push_back(""); // program name
-  args.push_back(cpu.c_str());
-
-  std::string mattr("-mattr=");
-  if(gotCpuFeatures){
-    for(llvm::StringMap<bool>::iterator I = Features.begin(),
-      E = Features.end(); I != E; ++I){
-      if(I->second){
-        std::string attr(I->first());
-        mattr+="+"+attr+",";
-      }
-    }
-  args.push_back(mattr.c_str());
-  }
-  if (llvmFastSelect) {
-    args.push_back("-fast-isel=true");
-  }
-
-  if (llvmPrintLLVM) {
-    args.push_back("-print-after-all");
-  }
-
-  args.push_back(0);  // terminator
-  llvm::cl::ParseCommandLineOptions(args.size() - 1, (char **) &args[0], "", &llvm::errs());
-
   // Create the JIT
   std::string ErrorMsg;
 
