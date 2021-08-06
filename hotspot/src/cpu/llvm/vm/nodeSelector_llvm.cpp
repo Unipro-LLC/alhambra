@@ -1,6 +1,7 @@
 #include "code_gen/llvmGlobals.hpp"
 #include "adfiles/ad_llvm.hpp"
 #include "selector_llvm.hpp"
+#include "opto/cfgnode.hpp"
 
 class Selector;
 
@@ -11,30 +12,21 @@ llvm::Value* tlsLoadPNode::select(Selector* sel) {
 llvm::Value* storePNode::select(Selector* sel) {
   int op_index;
   llvm::Value *addr = sel->select_address(this, op_index);
-  Node* node = in(op_index++);
-  llvm::Value* value = sel->select_node(node);
-  sel->builder().CreateStore(value, addr);
+  llvm::Value* value = sel->select_node(in(op_index++));
+  sel->store(value, addr);
   return NULL;
 }
 
 llvm::Value* MachProjNode::select(Selector* sel) {
   if (in(0)->is_Start()) {
-    if (_con == TypeFunc::FramePtr) { 
-      /// TODO: return frame top
-      return llvm::Constant::getNullValue(
-        llvm::Type::getInt8PtrTy(sel->ctx()));
+    if (_con == TypeFunc::FramePtr) {
+      return sel->FP();
     }
     if (_con == TypeFunc::ReturnAdr) {
       llvm::Type* retType = llvm::Type::getInt8PtrTy(sel->ctx());
-      std::vector<llvm::Type*> paramTypes;
-      paramTypes.push_back(llvm::Type::getInt32Ty(sel->ctx()));
-      llvm::FunctionType *funcTy = llvm::FunctionType::get(retType, paramTypes, false);
-      llvm::Function* f = static_cast<llvm::Function*>(sel->mod()->
-        getOrInsertFunction("llvm.returnaddress", funcTy).getCallee());                                            
-      std::vector<llvm::Value *> args;
-      args.push_back(sel->builder().getInt32(0));
-      llvm::CallInst* ci = sel->builder().CreateCall(f, args);
-      return ci;
+      std::vector<llvm::Type*> paramTypes { llvm::Type::getInt32Ty(sel->ctx()) };
+      std::vector<llvm::Value*> args { sel->builder().getInt32(0) };
+      return sel->call_intrinsic("llvm.returnaddress", retType, paramTypes, args);
     }
     if (_con < TypeFunc::Parms) {
       return NULL;
@@ -57,33 +49,26 @@ llvm::Value* MachProjNode::select(Selector* sel) {
 }
 
 llvm::Value* CallRuntimeDirectNode::select(Selector* sel) {
+  const TypeTuple* d = tf()->domain();
   std::vector<llvm::Value*> args;
   std::vector<llvm::Type*> paramTypes;
-  const TypeTuple* d = tf()->domain();
   for (uint i = TypeFunc::Parms; i < d->cnt(); ++i) {
     const Type* at = d->field_at(i);
     if (at->base() == Type::Half) continue;
-    Node *node = in(i)->uncast();
-    llvm::Value* arg;
-    arg = sel->select_node(node);
+    llvm::Value* arg = sel->select_node(in(i));
     args.push_back(arg);
     paramTypes.push_back(arg->getType());
   }
-  BasicType ret_type = tf()->return_type();
-  llvm::Type* ret = sel->convert_type(ret_type);
-  llvm::FunctionType *funcTy = llvm::FunctionType::get(ret, paramTypes, false);
-  llvm::IntegerType* intTy = llvm::Type::getIntNTy(sel->ctx(), 
-    sel->mod()->getDataLayout().getPointerSize() * 8);
-  return sel->builder().CreateCall(funcTy,sel->builder().CreateIntToPtr(
-    llvm::ConstantInt::get(intTy, (intptr_t) entry_point(), false),
-    llvm::PointerType::getUnqual(funcTy)), args);
+  sel->callconv_adjust(paramTypes, args);
+  llvm::Type* retType = sel->convert_type(tf()->return_type());
+  return sel->call_external(entry_point(), retType, paramTypes, args);
 }
 
 llvm::Value* storeImmP0Node::select(Selector* sel) {
   llvm::Value* addr = sel->select_address(this);
   llvm::Value* value = llvm::Constant::getNullValue(
     llvm::Type::getInt8PtrTy(sel->ctx()));
-  sel->builder().CreateStore(value, addr);
+  sel->store(value, addr);
   return NULL;
 }
 
@@ -99,6 +84,7 @@ llvm::Value* loadPNode::select(Selector* sel) {
 llvm::Value* cmpP_reg_immNode::select(Selector* sel) {
   llvm::Value* a = sel->select_node(in(1));
   llvm::Value* b = sel->select_oper(opnd_array(2));
+  a = sel->builder().CreatePointerCast(a, b->getType());
   return sel->select_condition(this, a, b, false, false);
 }
 
@@ -109,6 +95,7 @@ llvm::Value* jmpConUNode::select(Selector* sel) {
 }
 
 llvm::Value* loadConPNode::select(Selector* sel) {
+  ///TODO: handle managed pointer
   return sel->select_oper(opnd_array(1));
 }
 
@@ -134,7 +121,7 @@ llvm::Value* RetNode::select(Selector* sel) {
     Node* ret_node = in(TypeFunc::Parms);
     assert(ret_node != NULL, "check");
     llvm::Value* ret_value = sel->select_node(ret_node);
-    ret_value = sel->builder().CreatePointerCast(ret_value, sel->func()->getReturnType());
+    ret_value = sel->builder().CreatePointerCast(ret_value, retType);
     sel->builder().CreateRet(ret_value);
   }
   else {
@@ -144,27 +131,174 @@ llvm::Value* RetNode::select(Selector* sel) {
 }
 
 llvm::Value* loadConINode::select(Selector* sel) {
-    BasicType btype = sel->comp()->tf()->return_type();
-    llvm::Type* intTy = sel->convert_type(btype);
-    llvm::Constant* cnst = llvm::ConstantInt::get(intTy, _opnd_array[1]->constant());
-    return cnst;
+  return sel->select_oper(opnd_array(1));
 }
 
 llvm::Value* tailjmpIndNode::select(Selector* sel) {
   sel->epilog();
   llvm::Value* target_pc = sel->select_node(in(TypeFunc::Parms));
   sel->replace_return_address(target_pc);
-  llvm::Value* x_oop = sel->select_node(in(TypeFunc::Parms + 1));
   llvm::Type* retType = sel->func()->getReturnType();
   if (retType->isVoidTy()) {
     sel->builder().CreateRetVoid();
   }
   else {
-    if (retType != x_oop->getType()) { 
-      x_oop = sel->builder().CreatePointerCast(x_oop, retType); 
-    }
+    llvm::Value* x_oop = sel->select_node(in(TypeFunc::Parms + 1));
+    x_oop = sel->builder().CreatePointerCast(x_oop, retType); 
     sel->builder().CreateRet(x_oop);
   }
+  return NULL;
+}
+
+llvm::Value* loadTLABtopNode::select(Selector* sel) {
+  return sel->builder().CreateLoad(sel->tlab_top());
+}
+
+llvm::Value* loadTLABendNode::select(Selector* sel) {
+  llvm::Value* addr = sel->gep(sel->thread(), in_bytes(JavaThread::tlab_end_offset()));
+  return sel->builder().CreateLoad(addr);
+}
+
+llvm::Value* addP_rReg_immNode::select(Selector* sel) {
+  ///TODO: handle managed pointer
+  return sel->gep(sel->select_node(in(2)), sel->select_oper(opnd_array(2)));
+}
+
+
+llvm::Value* cmpP_reg_regNode::select(Selector* sel) {
+  llvm::Value* a = sel->select_node(in(1));
+  llvm::Value* b = sel->select_node(in(2));
+  a = sel->builder().CreatePointerCast(a, b->getType());
+  return sel->select_condition(this, a, b, false, false);
+}
+
+llvm::Value* storeTLABtopNode::select(Selector* sel) {
+  sel->store(sel->select_node(in(MemNode::ValueIn)), sel->tlab_top());
+  return NULL;
+}
+
+llvm::Value* prefetchAllocNTANode::select(Selector* sel) {
+  llvm::Type* intTy = sel->convert_type(T_INT);
+  llvm::Type* ptrTy = llvm::Type::getInt8PtrTy(sel->ctx());
+  std::vector<llvm::Type*> paramTypes {
+    ptrTy, intTy, intTy, intTy };
+  llvm::Value* addr = sel->select_address(this);
+  addr = sel->builder().CreatePointerCast(addr, ptrTy);
+  std::vector<llvm::Value*> args {
+    addr, sel->builder().getInt32(0),
+    sel->builder().getInt32(0), sel->builder().getInt32(1) };
+  sel->call_intrinsic("llvm.prefetch", sel->convert_type(T_VOID), paramTypes, args);
+  return NULL;
+}
+
+llvm::Value* loadConNKlassNode::select(Selector* sel) {
+  assert(opnd_array(1)->type()->basic_type() == T_NARROWKLASS,"type check");
+  return sel->select_oper(opnd_array(1));
+}
+
+llvm::Value* decodeKlass_not_nullNode::select(Selector* sel) {
+  llvm::Value* narrow_klass = sel->select_node(in(1));
+  if (!Universe::narrow_klass_shift() && !Universe::narrow_klass_base()) { return narrow_klass; }
+  llvm::Type* ptrTy = narrow_klass->getType();
+  narrow_klass = sel->builder().CreatePtrToInt(narrow_klass, llvm::Type::getIntNTy(sel->ctx(), sel->pointer_size()));
+  if (Universe::narrow_klass_shift() != 0) {
+    llvm::Value* shift = llvm::ConstantInt::get(narrow_klass->getType(), Universe::narrow_klass_shift());
+    narrow_klass = sel->builder().CreateShl(narrow_klass, shift);
+  }
+  if (Universe::narrow_klass_base() != NULL) {
+    llvm::Value* base = sel->get_ptr(Universe::narrow_klass_base(), llvm::Type::getInt8PtrTy(sel->ctx()));
+    narrow_klass = sel->gep(base, narrow_klass);
+  }
+  return sel->builder().CreateIntToPtr(narrow_klass, llvm::PointerType::getUnqual(sel->convert_type(T_ADDRESS)));
+}
+
+llvm::Value* storeNKlassNode::select(Selector* sel) {
+  int op_index;
+  llvm::Value* addr = sel->select_address(this, op_index);
+  llvm::Value* value = sel->select_node(in(op_index++));
+  sel->store(value, addr);
+  return NULL;
+}
+
+llvm::Value* storeImmI0Node::select(Selector* sel) {
+  llvm::Value* addr = sel->select_address(this);
+  sel->store(llvm::Constant::getNullValue(sel->convert_type(T_INT)), addr);
+  return NULL;
+}
+
+llvm::Value* jmpDirNode::select(Selector* sel) {
+  Block* target = sel->block()->non_connector_successor(0);
+  sel->builder().CreateBr(sel->basic_block(target));
+  return NULL;
+}
+
+llvm::Value* CallStaticJavaDirectNode::select(Selector* sel) {
+  const TypeTuple* d = tf()->domain();
+  std::vector<llvm::Value*> args;
+  std::vector<llvm::Type*> paramTypes;
+  for (uint i = TypeFunc::Parms; i < d->cnt(); ++i) {
+    const Type* at = d->field_at(i);
+    if (at->base() == Type::Half) continue;
+    llvm::Value* arg = sel->select_node(in(i));
+    args.push_back(arg);
+    paramTypes.push_back(arg->getType());
+  }
+  sel->callconv_adjust(paramTypes, args);
+  BasicType ret_type = tf()->return_type();
+  assert(ret_type != T_NARROWOOP, "unexpected behavior check");
+  llvm::Type* retType = sel->convert_type(ret_type);
+  llvm::Value* ret = sel->call_external(entry_point(), retType, paramTypes, args);
+  Block* target = sel->block()->non_connector_successor(0);
+  sel->builder().CreateBr(sel->basic_block(target));
+  return ret;
+}
+
+llvm::Value* membar_storestoreNode::select(Selector* sel) {
+  // this barrier is used for cpu self-visibility of store ordering
+  return NULL;
+}
+
+llvm::Value* checkCastPPNode::select(Selector* sel) {
+  return sel->select_node(in(1));
+  ///TODO: handle managed pointer
+}
+
+llvm::Value* PhiNode::select(Selector* sel) {
+  assert(sel->comp()->cfg()->get_block_for_node(region())->non_connector() == sel->block(), "sanity check");
+  BasicType bt = type()->basic_type();
+  bool is_narrow_oop = type()->isa_narrowoop() != NULL;
+  assert(UseCompressedOops || !is_narrow_oop, "sanity check");
+  if (bt == T_ILLEGAL) return NULL;
+  llvm::Type* data_type = sel->convert_type(bt);
+  llvm::PHINode* phi = sel->builder().CreatePHI(data_type, sel->block()->num_preds());
+  sel->map_phi_nodes(this, phi);
+  ///TODO: mark pointers
+  return phi;
+}
+
+llvm::Value* CreateExceptionNode::select(Selector* sel) {
+  return sel->builder().getIntN(sel->pointer_size(), 0);
+  ///TODO: mark managed ptr
+}
+
+llvm::Value* RethrowExceptionNode::select(Selector* sel) {
+  // llvm::Value* ex = sel->select_node(in(TypeFunc::Parms));
+  // llvm::Value* addr = sel->builder().CreateGEP(sel->thread(), sel->builder().getInt32(in_bytes(Thread::pending_exception_offset())));
+  // sel->store(ex, addr);
+  sel->epilog();
+  llvm::Type* retType = sel->func()->getReturnType();
+  if (!retType->isVoidTy()) {
+    sel->builder().CreateRet(llvm::Constant::getNullValue(retType));
+  }
+  else {
+    sel->builder().CreateRetVoid();
+  }
+  return NULL;
+}
+
+llvm::Value* storeImmL0Node::select(Selector* sel) {
+  llvm::Value* addr = sel->select_address(this);
+  sel->store(llvm::Constant::getNullValue(sel->convert_type(T_LONG)), addr);
   return NULL;
 }
 
@@ -201,14 +335,6 @@ llvm::Value* loadLNode::select(Selector* sel){
 }
 
 llvm::Value* loadRangeNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* loadTLABtopNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* loadTLABendNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
@@ -260,10 +386,6 @@ llvm::Value* loadConNNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
-llvm::Value* loadConNKlassNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
 llvm::Value* loadConP0Node::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
@@ -308,10 +430,6 @@ llvm::Value* prefetchAllocNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
-llvm::Value* prefetchAllocNTANode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
 llvm::Value* prefetchAllocT0Node::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
@@ -336,10 +454,6 @@ llvm::Value* storeLNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
-llvm::Value* storeTLABtopNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
 llvm::Value* storeTLABendNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
@@ -348,19 +462,7 @@ llvm::Value* storeNNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
-llvm::Value* storeNKlassNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
 llvm::Value* storeImmN0Node::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* storeImmI0Node::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* storeImmL0Node::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
@@ -448,10 +550,6 @@ llvm::Value* unnecessary_membar_volatileNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
-llvm::Value* membar_storestoreNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
 llvm::Value* castX2PNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
@@ -485,10 +583,6 @@ llvm::Value* decodeHeapOop_not_nullNode::select(Selector* sel){
 }
 
 llvm::Value* encodeKlass_not_nullNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* decodeKlass_not_nullNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
@@ -569,14 +663,6 @@ llvm::Value* subL_rReg_L1Node::select(Selector* sel){
 }
 
 llvm::Value* addP_rRegNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* addP_rReg_immNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* checkCastPPNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
@@ -1404,19 +1490,11 @@ llvm::Value* cmpD_reg_regNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
-llvm::Value* cmpP_reg_regNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
 llvm::Value* cmpN_reg_regNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
 llvm::Value* cmpN_reg_immNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* jmpDirNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
@@ -1456,10 +1534,6 @@ llvm::Value* safePoint_poll_farNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
-llvm::Value* CallStaticJavaDirectNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
 llvm::Value* CallDynamicJavaDirectNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
@@ -1469,14 +1543,6 @@ llvm::Value* CallLeafDirectNode::select(Selector* sel){
 }
 
 llvm::Value* CallLeafNoFPDirectNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* CreateExceptionNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* RethrowExceptionNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 

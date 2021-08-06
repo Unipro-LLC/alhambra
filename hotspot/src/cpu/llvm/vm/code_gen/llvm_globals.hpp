@@ -33,6 +33,9 @@
             "Use fast-isel option for llvm")                                    \
     develop(bool, llvmPrintLLVM, false,                                        \
             "Print the LLVM IR after all passes")                               \
+    notproduct(bool, PrintLLVMIR, false,                                      \
+          "Print LLVM IR")                                                  \
+                                                                            \
 
 LLVM_FLAGS(DECLARE_DEVELOPER_FLAG, DECLARE_PD_DEVELOPER_FLAG, DECLARE_PRODUCT_FLAG, DECLARE_PD_PRODUCT_FLAG, DECLARE_DIAGNOSTIC_FLAG, DECLARE_NOTPRODUCT_FLAG)
 

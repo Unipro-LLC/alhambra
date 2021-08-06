@@ -3909,6 +3909,10 @@ RuntimeStub* SharedRuntime::generate_resolve_blob(address destination, const cha
   int start = __ offset();
 
   map = RegisterSaver::save_live_registers(masm, 0, &frame_size_in_words);
+  
+  __ movptr(c_rarg0, ThreadLocalStorage::thread_index());
+  __ call(RuntimeAddress((address)os::thread_local_storage_at));
+  __ mov(r15_thread, rax);
 
   int frame_complete = __ offset();
 

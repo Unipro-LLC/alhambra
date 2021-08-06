@@ -10,29 +10,17 @@ class LlvmContext;
 
 class LlvmCodeGen {
  public:
-  // Creation
   LlvmCodeGen();
-  ~LlvmCodeGen() { 
-    if (builder)  { delete builder; }
-  }
-  // Initialization
-  void initialize_module();
-
- public:
   void llvm_code_gen(Compile* comp, const char* target_name,  const char* target_holder_name);
 
  private:
-  LlvmContext* _normal_context;
+  llvm::LLVMContext _normal_context;
   std::unique_ptr<llvm::Module> _normal_owner;
   llvm::Module* _normal_module;
-  llvm::EngineBuilder* builder;
+  llvm::EngineBuilder builder;
 
- public:
-  LlvmContext* context() const {
-    return _normal_context;
-  }
-
- private:
   static const char* method_name(const char* klass, const char* method);
+  void run_passes(llvm::SmallVectorImpl<char>& ObjBufferSV, llvm::Function& F);
+  address write_to_codebuffer(Compile* comp, const void* src, uintptr_t code_size);
 };
  #endif

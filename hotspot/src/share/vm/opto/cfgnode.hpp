@@ -220,6 +220,9 @@ public:
 #else //ASSERT
   void verify_adr_type(bool recursive = false) const {}
 #endif //ASSERT
+#ifdef LLVM
+  virtual llvm::Value* select(Selector* sel);
+#endif
 };
 
 //------------------------------GotoNode---------------------------------------
