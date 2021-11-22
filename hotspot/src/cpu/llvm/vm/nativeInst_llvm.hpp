@@ -110,6 +110,9 @@ inline NativeCall* nativeCall_at(address address);
 // The NativeCall is an abstraction for accessing/manipulating native call imm32/rel32off
 // instructions (used to manipulate inline caches, primitive & dll calls, etc.).
 
+#define RET_OFF (ubyte_at(0) == instruction_code ? return_address_offset : return_address_offset_2)
+#define INST_SIZE (ubyte_at(0) == instruction_code ? instruction_size : instruction_size_2)
+
 class NativeCall: public NativeInstruction {
  public:
   enum Intel_specific_constants {
@@ -119,26 +122,43 @@ class NativeCall: public NativeInstruction {
     displacement_offset         =    1,
     return_address_offset       =    5
   };
+  enum LLVM_specific_constants {
+    instruction_code_2            = 0xFF,
+    instruction_size_2            = 2,
+    return_address_offset_2       = 2,
+  };
 
   enum { cache_line_size = BytesPerWord };  // conservative estimate!
 
   address instruction_address() const       { return addr_at(instruction_offset); }
-  address next_instruction_address() const  { return addr_at(return_address_offset); }
+  address next_instruction_address() const  { return addr_at(RET_OFF); }
   int   displacement() const                { return (jint) int_at(displacement_offset); }
-  address displacement_address() const      { return addr_at(displacement_offset); }
-  address return_address() const            { return addr_at(return_address_offset); }
+  address displacement_address() const      { 
+    return ubyte_at(0) == instruction_code ? addr_at(displacement_offset)
+    : addr_at(displacement_offset) - ((uintptr_t)addr_at(displacement_offset) & 0b11) ; 
+  }
+  address return_address() const            { return addr_at(RET_OFF); }
   address destination() const;
   void  set_destination(address dest)       {
+    if (ubyte_at(0) == instruction_code_2) {
+      return;
+    }
 #ifdef AMD64
     assert((labs((intptr_t) dest - (intptr_t) return_address())  &
             0xFFFFFFFF00000000) == 0,
            "must be 32bit offset");
 #endif // AMD64
+    if (ubyte_at(0) == instruction_code_2) {
+      return;
+    }
     set_int_at(displacement_offset, dest - return_address());
   }
   void  set_destination_mt_safe(address dest);
-
-  void  verify_alignment() { assert((intptr_t)addr_at(displacement_offset) % BytesPerInt == 0, "must be aligned"); }
+  void  verify_alignment() {
+    if (ubyte_at(0) == instruction_code) {
+      assert((intptr_t)addr_at(displacement_offset) % BytesPerInt == 0, "must be aligned");
+    }
+  }
   void  verify();
   void  print();
 
@@ -174,7 +194,10 @@ inline NativeCall* nativeCall_at(address address) {
 }
 
 inline NativeCall* nativeCall_before(address return_address) {
-  NativeCall* call = (NativeCall*)(return_address - NativeCall::return_address_offset);
+  u_char opcode = *(u_char*) (return_address - NativeCall::return_address_offset);
+  int offset = opcode == NativeCall::instruction_code ?
+    NativeCall::return_address_offset : NativeCall::return_address_offset_2;
+  NativeCall* call = (NativeCall*)(return_address - offset);
 #ifdef ASSERT
   call->verify();
 #endif
@@ -531,7 +554,9 @@ class NativeTstRegMem: public NativeInstruction {
 };
 
 inline bool NativeInstruction::is_illegal()      { return (short)int_at(0) == (short)NativeIllegalInstruction::instruction_code; }
-inline bool NativeInstruction::is_call()         { return ubyte_at(0) == NativeCall::instruction_code; }
+
+inline bool NativeInstruction::is_call()         { return ubyte_at(0) == NativeCall::instruction_code || ubyte_at(0) == NativeCall::instruction_code_2; }
+
 inline bool NativeInstruction::is_return()       { return ubyte_at(0) == NativeReturn::instruction_code ||
                                                           ubyte_at(0) == NativeReturnX::instruction_code; }
 inline bool NativeInstruction::is_jump()         { return ubyte_at(0) == NativeJump::instruction_code ||

@@ -626,6 +626,9 @@ public:
   virtual const char *Name() const { return "NullCheck"; }
   virtual void format( PhaseRegAlloc *, outputStream *st ) const;
 #endif
+#ifdef LLVM
+  virtual llvm::Value* select(Selector* sel);
+#endif
 };
 
 //------------------------------MachProjNode----------------------------------

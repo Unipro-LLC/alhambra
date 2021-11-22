@@ -71,6 +71,9 @@ class RegisterSaver {
   // units because compiler frame slots are jints.
 #define DEF_XMM_OFFS(regnum) xmm ## regnum ## _off = xmm_off + (regnum)*16/BytesPerInt, xmm ## regnum ## H_off
   enum layout {
+#ifdef LLVMM
+    rsi_off = 2,
+#endif
     fpu_state_off = frame::arg_reg_save_area_bytes/BytesPerInt, // fxsave save area
     xmm_off       = fpu_state_off + 160/BytesPerInt,            // offset in fxsave save area
     DEF_XMM_OFFS(0),
@@ -100,7 +103,12 @@ class RegisterSaver {
     r9_off,  r9H_off,
     r8_off,  r8H_off,
     rdi_off, rdiH_off,
-    rsi_off, rsiH_off,
+#ifdef LLVMM
+    rsi_off2,
+#else
+    rsi_off,
+#endif
+    rsiH_off,
     ignore_off, ignoreH_off,  // extra copy of rbp
     rsp_off, rspH_off,
     rbx_off, rbxH_off,
@@ -126,6 +134,7 @@ class RegisterSaver {
   // Used by deoptimization when it is managing result register
   // values on its own
 
+  static int rsi_offset_in_bytes(void)    { return BytesPerInt * rsi_off; }
   static int rax_offset_in_bytes(void)    { return BytesPerInt * rax_off; }
   static int rdx_offset_in_bytes(void)    { return BytesPerInt * rdx_off; }
   static int rbx_offset_in_bytes(void)    { return BytesPerInt * rbx_off; }
@@ -136,6 +145,13 @@ class RegisterSaver {
   // all the other values have already been extracted.
   static void restore_result_registers(MacroAssembler* masm);
 };
+
+address SharedRuntime::CallDest::_rax;
+
+void SharedRuntime::CallDest::set_rax(oop* oop_adr) {
+  int offset = (RegisterSaver::rax_offset_in_bytes() - RegisterSaver::rsi_offset_in_bytes()) >> 3;
+  _rax = (address)*(oop_adr + offset);
+}
 
 OopMap* RegisterSaver::save_live_registers(MacroAssembler* masm, int additional_frame_words, int* total_frame_words, bool save_vectors) {
   int vect_words = 0;

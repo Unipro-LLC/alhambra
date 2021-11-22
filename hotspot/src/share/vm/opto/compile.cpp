@@ -2382,8 +2382,11 @@ void Compile::Code_Gen() {
 
 #ifdef LLVM
   LlvmCodeGen llvmcg;
-  llvmcg.llvm_code_gen(this, _target_name, _target_holder_name);
   _oop_map_set = new OopMapSet();
+  llvmcg.llvm_code_gen(this, _target_name, _target_holder_name);
+  if (has_method()) {
+    _frame_slots = llvmcg.frame_size() >> LogBytesPerInt;
+  }
 #else
 
   PhaseChaitin regalloc(unique(), cfg, matcher);

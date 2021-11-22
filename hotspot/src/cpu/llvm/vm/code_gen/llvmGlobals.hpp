@@ -70,10 +70,14 @@
 
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/GVN.h"
-#include "llvm/Support/SmallVectorMemoryBuffer.h"
-#include "llvm/Object/ELFObjectFile.h"
 
-#include <map>
+#include "llvm/Object/StackMapParser.h"
+
+using StackMapParser = llvm::StackMapParser<llvm::support::endianness::native>;
+using RecordAccessor = StackMapParser::RecordAccessor;
+using LocationAccessor = StackMapParser::LocationAccessor;
+using ConstantAccessor = StackMapParser::ConstantAccessor;
+using LocationKind = StackMapParser::LocationKind;
 
 #ifdef assert
   #undef assert
@@ -111,5 +115,18 @@ do {                                                                         \
   #define DEBUG
   #undef LLVM_DEBUG
 #endif
+
+#define FIELD_WITH_GETTER(type, field, getter) \
+private: \
+  type field; \
+public: \
+  type getter() { return field; }\
+
+#define FIELD_WITH_REF_GETTER(type, field, getter) \
+private: \
+  type field; \
+public: \
+  type& getter() { return field; }\
+
 
 #endif // SHARE_VM_LLVM_LLVMHEADERS_HPP

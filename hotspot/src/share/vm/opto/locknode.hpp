@@ -81,6 +81,9 @@ public:
   virtual void format( PhaseRegAlloc *, outputStream *st ) const;
   virtual void dump_spec(outputStream *st) const { st->print("  Lock %d",_slot); }
 #endif
+#ifdef LLVM
+  virtual llvm::Value* select(Selector*);
+#endif
 };
 
 //------------------------------FastLockNode-----------------------------------
