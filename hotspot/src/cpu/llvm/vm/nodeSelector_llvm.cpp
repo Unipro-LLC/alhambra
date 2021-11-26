@@ -74,10 +74,9 @@ llvm::Value* CallRuntimeDirectNode::select(Selector* sel) {
   llvm::FunctionType *funcTy = llvm::FunctionType::get(ret, paramTypes, false);
   llvm::IntegerType* intTy = llvm::Type::getIntNTy(sel->ctx(), 
     sel->mod()->getDataLayout().getPointerSize() * 8);
-  llvm::Function *f = static_cast<llvm::Function*>(sel->builder().CreateIntToPtr(
+  return sel->builder().CreateCall(funcTy,sel->builder().CreateIntToPtr(
     llvm::ConstantInt::get(intTy, (intptr_t) entry_point(), false),
-    llvm::PointerType::getUnqual(funcTy))); 
-  return sel->builder().CreateCall(f, args);
+    llvm::PointerType::getUnqual(funcTy)), args);
 }
 
 llvm::Value* storeImmP0Node::select(Selector* sel) {

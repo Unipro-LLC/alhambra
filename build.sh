@@ -66,7 +66,7 @@ if [ "x$JVM_TYPE" = "xzeroshark" ] || [ "x$JVM_TYPE" = "xalhambra" ]; then
     LLVM_BUILD_DIR=$BUILD_DIR/llvm-$LLVM_ARCH
     LLVM_CFLAGS="-I${ROOT_DIR}/llvm-project/llvm/include -I${LLVM_BUILD_DIR}/include -DNDEBUG -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O3 -fomit-frame-pointer -fvisibility-inlines-hidden -fno-exceptions -fno-rtti -fPIC -Woverloaded-virtual -Wcast-qual"
 
-    LLVM_LIBS="-lLLVMExecutionEngine -lLLVMRuntimeDyld -lLLVMObject -lLLVMMCParser -lLLVMMCJIT -lLLVMCodeGen -lLLVMSelectionDAG -lLLVMScalarOpts -lLLVMTransformUtils -lLLVMAnalysis -lLLVMCore -lLLVMSupport -lLLVMCodeGen -lLLVMMC -lLLVMTarget -lLLVMTransformUtils -lLLVMBinaryFormat -lLLVMX86Desc -lLLVMX86Info -lLLVMX86CodeGen -lLLVMX86Utils -lLLVMMCDisassembler -lLLVMGlobalISel -lLLVMBinaryFormat lLLVMX86Disassembler -lLLVMX86AsmParser -lLLVMX86CodeGen -lLLVMSelectionDAG -lLLVMCodeGen -lLLVMScalarOpts -lLLVMInstCombine -lLLVMInstrumentation -lLLVMProfileData -lLLVMBitWriter -lLLVMX86Desc -lLLVMMCDisassembler -lLLVMX86Info -lLLVMX86Utils -lLLVMMCJIT -lLLVMExecutionEngine -lLLVMTarget -lLLVMAnalysis -lLLVMRuntimeDyld -lLLVMObject -lLLVMMCParser -lLLVMBitReader -lLLVMMC -lLLVMCore -lLLVMSupport -lLLVMObjectYAML -lLLVMLibDriver -lLLVMOption -lLLVMX86Disassembler -lLLVMX86AsmParser -lLLVMX86CodeGen -lLLVMGlobalISel -lLLVMSelectionDAG -lLLVMDebugInfoMSF -lLLVMX86Desc -lLLVMMCDisassembler -lLLVMX86Info -lLLVMX86Utils -lLLVMMCJIT -lLLVMLineEditor -lLLVMInterpreter -lLLVMExecutionEngine -lLLVMRuntimeDyld -lLLVMCodeGen -lLLVMTarget -lLLVMCoroutines -lLLVMipo -lLLVMInstrumentation -lLLVMVectorize -lLLVMScalarOpts -lLLVMLinker -lLLVMIRReader -lLLVMAsmParser -lLLVMInstCombine -lLLVMTransformUtils -lLLVMBitWriter -lLLVMAnalysis -lLLVMObject -lLLVMMCParser -lLLVMMC -lLLVMBitReader -lLLVMProfileData -lLLVMCore -lLLVMSupport -lLLVMDemangle -lLLVMLTO -lLLVMPasses -lLLVMObjCARCOpts -lLLVMMIRParser -lLLVMSymbolize -lLLVMDebugInfoPDB -lLLVMDebugInfoDWARF -lLLVMCoverage -lLLVMTableGen -lLLVMOrcJIT -lLLVMAsmPrinter -lLLVMX86AsmPrinter -lLLVMDebugInfoCodeView -lz ${LTINFO_LIB}"
+    LLVM_LIBS="-lLLVMWindowsManifest -lLLVMXRay -lLLVMLibDriver -lLLVMDlltoolDriver -lLLVMCoverage -lLLVMLineEditor  -lLLVMX86Disassembler -lLLVMX86AsmParser -lLLVMX86CodeGen -lLLVMX86Desc -lLLVMX86Info -lLLVMOrcJIT -lLLVMMCJIT -lLLVMJITLink -lLLVMOrcTargetProcess -lLLVMOrcShared -lLLVMInterpreter -lLLVMExecutionEngine -lLLVMRuntimeDyld -lLLVMSymbolize -lLLVMDebugInfoPDB -lLLVMDebugInfoGSYM -lLLVMOption -lLLVMObjectYAML -lLLVMMCA -lLLVMMCDisassembler -lLLVMLTO -lLLVMPasses -lLLVMCFGuard -lLLVMCoroutines -lLLVMObjCARCOpts -lLLVMHelloNew -lLLVMipo -lLLVMVectorize -lLLVMLinker -lLLVMInstrumentation -lLLVMFrontendOpenMP -lLLVMFrontendOpenACC -lLLVMExtensions -lLLVMDWARFLinker -lLLVMGlobalISel -lLLVMMIRParser -lLLVMAsmPrinter -lLLVMDebugInfoDWARF -lLLVMSelectionDAG -lLLVMCodeGen -lLLVMIRReader -lLLVMAsmParser -lLLVMInterfaceStub -lLLVMFileCheck -lLLVMFuzzMutate -lLLVMTarget -lLLVMScalarOpts -lLLVMInstCombine -lLLVMAggressiveInstCombine -lLLVMTransformUtils -lLLVMBitWriter -lLLVMAnalysis -lLLVMProfileData -lLLVMObject -lLLVMTextAPI -lLLVMMCParser -lLLVMMC -lLLVMDebugInfoCodeView -lLLVMDebugInfoMSF -lLLVMBitReader -lLLVMCore -lLLVMRemarks -lLLVMBitstreamReader -lLLVMBinaryFormat -lLLVMTableGen -lLLVMSupport -lLLVMDemangle";
     LLVM_LDFLAGS=""
 
     mkdir -p $LLVM_BUILD_DIR/bin
@@ -74,10 +74,10 @@ if [ "x$JVM_TYPE" = "xzeroshark" ] || [ "x$JVM_TYPE" = "xalhambra" ]; then
     cat > $LLVM_BUILD_DIR/bin/llvm-config << EOF
 #!/bin/bash
 case \$1 in
-  --version) echo "6.0svn" ;;
+  --version) echo "12.0.1-alhambra" ;;
   --cxxflags) echo "$LLVM_CFLAGS" ;;
   --ldflags) echo "-L$LLVM_BUILD_DIR/lib -lpthread -ldl -lm $LLVM_LDFLAGS" ;;
-  --libs) echo "$LLVM_LIBS -lLLVMExecutionEngine -lLLVMRuntimeDyld -lLLVMObject -lLLVMAsmPrinter -lLLVMMCParser -lLLVMMCJIT -lLLVMSelectionDAG -lLLVMScalarOpts -lLLVMTransformUtils -lLLVMAnalysis -lLLVMCore -lLLVMSupport -lLLVMCodeGen -lLLVMMC -lLLVMTarget" ;;
+  --libs) echo "$LLVM_LIBS -lLLVMExecutionEngine -lLLVMRuntimeDyld -lLLVMObject -lLLVMAsmPrinter -lLLVMMCParser -lLLVMMCJIT -lLLVMSelectionDAG -lLLVMScalarOpts -lLLVMTransformUtils -lLLVMAnalysis -lLLVMCore -lLLVMSupport -lLLVMCodeGen -lLLVMMC -lLLVMTarget -ltinfo -lz";
 esac
 EOF
 

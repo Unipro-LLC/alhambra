@@ -21,12 +21,10 @@ void Selector::prolog() {
   llvm::Type* retType = llvm::PointerType::getUnqual(llvm::Type::getInt8PtrTy(ctx()));
   std::vector<llvm::Type*> paramTypes;
   paramTypes.push_back(llvm::Type::getInt32Ty(ctx()));
-  llvm::FunctionType *funcTy = llvm::FunctionType::get(retType, paramTypes, false);
-  llvm::Function *f = static_cast<llvm::Function*>(
-    get_ptr((intptr_t)os::thread_local_storage_at, funcTy));                                                     
+  llvm::FunctionType *funcTy = llvm::FunctionType::get(retType, paramTypes, false);                                                   
   std::vector<llvm::Value *> args;
   args.push_back(builder().getInt32(ThreadLocalStorage::thread_index()));                                          
-  _thread = builder().CreateCall(f, args);
+  _thread = builder().CreateCall(funcTy, get_ptr((intptr_t)os::thread_local_storage_at, funcTy), args);
 
   uint slots = OptoReg::reg2stack(comp()->matcher()->_old_SP);
   _SP = builder().CreateAlloca(convert_type(T_INT), builder().getInt32(slots));
@@ -267,9 +265,8 @@ void Selector::select_if(llvm::Value *pred, Node* node) {
 void Selector::replace_return_address(llvm::Value* new_addr) {
   llvm::Type* retType = llvm::Type::getInt8PtrTy(ctx());
   llvm::FunctionType *funcTy = llvm::FunctionType::get(retType, false);
-  llvm::Function* f = static_cast<llvm::Function*>(mod()->
-    getOrInsertFunction("llvm.addressofreturnaddress", funcTy).getCallee());
-  llvm::Value* addr = builder().CreateCall(f);
+  llvm::Value* addr = builder().CreateCall(mod()->
+    getOrInsertFunction("llvm.addressofreturnaddress.p0i8", funcTy));
   addr = builder().CreatePointerCast(addr, llvm::PointerType::getUnqual(new_addr->getType()));
   builder().CreateStore(new_addr, addr);
 }

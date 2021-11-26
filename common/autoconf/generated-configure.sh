@@ -29745,7 +29745,7 @@ fi
         CXXSTD_CXXFLAG="-std=c++11"
       fi
       if test "x$JVM_VARIANT_ALHAMBRA" = xtrue; then
-        CXXSTD_CXXFLAG="-std=c++11"
+        CXXSTD_CXXFLAG="-std=c++14"
       fi
 
 

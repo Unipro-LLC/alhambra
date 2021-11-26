@@ -2,6 +2,7 @@
 #include "llvmContext.hpp"
 #include "llvm_globals.hpp"
 #include "selector_llvm.hpp"
+#include <memory>
 
 
 namespace {
@@ -29,7 +30,7 @@ LlvmCodeGen::LlvmCodeGen() {
 }
 
 void LlvmCodeGen::initialize_module() {
-  _normal_owner = llvm::make_unique<llvm::Module>("normal", *_normal_context);
+  _normal_owner = std::make_unique<llvm::Module>("normal", *_normal_context);
   _normal_module = _normal_owner.get();
 }
 
