@@ -45,7 +45,7 @@ void NativeInstruction::wrote(int offset) {
 void NativeCall::verify() {
   // Make sure code pattern is actually a call imm32 instruction.
   int inst = ubyte_at(0);
-  if (inst != instruction_code && inst != instruction_code_2) {
+  if (inst != instruction_code) {
     tty->print_cr("Addr: " INTPTR_FORMAT " Code: 0x%x", instruction_address(),
                                                         inst);
     fatal("not a call disp32");
@@ -58,10 +58,7 @@ address NativeCall::destination() const {
   // places where this can be called but not automatically verifiable by
   // checking which locks are held.  The solution is true atomic patching
   // on x86, nyi.
-  if (ubyte_at(0) == instruction_code) {
-    return return_address() + displacement();
-  }
-  return SharedRuntime::CallDest::rax();
+  return return_address() + displacement();
 }
 
 void NativeCall::print() {

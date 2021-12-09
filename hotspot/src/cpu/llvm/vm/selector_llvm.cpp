@@ -1,18 +1,21 @@
-#include "opto/cfgnode.hpp"
-#include "opto/rootnode.hpp"
-#include "adfiles/ad_llvm.hpp"
-#include "code_gen/node_bw_iterator.hpp"
-#include "code_gen/scopeDescriptor.hpp"
-
 #include "selector_llvm.hpp"
 
-Selector::Selector(Compile* comp, llvm::LLVMContext& ctx, llvm::Module* mod, const char* name) :
+#include "opto/cfgnode.hpp"
+#include "opto/rootnode.hpp"
+#include "opto/addnode.hpp"
+#include "opto/locknode.hpp"
+
+#include "code_gen/llvmCodeGen.hpp"
+#include "adfiles/ad_llvm.hpp"
+
+Selector::Selector(LlvmCodeGen* code_gen, const char* name) :
   Phase(Phase::BlockLayout), 
-  C(comp), _ctx(ctx), _builder(ctx), _mod(mod), 
-  _blocks(comp->cfg()->number_of_blocks()), _relocator(this), _scope_descriptor(this),
-  _pointer_size(mod->getDataLayout().getPointerSize() * 8),
-  _monitors_num(count_monitors()), _max_stack(count_max_stack()), _name(name),
-  _is_fast_compression(Universe::narrow_oop_base() == NULL && Universe::narrow_oop_shift() == 0) {
+  _cg(code_gen), _ctx(code_gen->ctx()), _mod(code_gen->mod()), _builder(ctx()),
+  _blocks(C->cfg()->number_of_blocks()),
+  _pointer_size(mod()->getDataLayout().getPointerSize() * 8), _name(name),
+  _is_fast_compression(Universe::narrow_oop_base() == NULL && Universe::narrow_oop_shift() == 0) {}
+
+void Selector::run() {
   create_func();
   prolog();
   select();
@@ -20,45 +23,55 @@ Selector::Selector(Compile* comp, llvm::LLVMContext& ctx, llvm::Module* mod, con
 }
 
 void Selector::prolog() {
-  llvm::Type* retType = llvm::PointerType::getUnqual(llvm::Type::getInt8PtrTy(ctx()));
-  std::vector<llvm::Type*> paramTypes { type(T_INT) };
-  std::vector<llvm::Value*> args { builder().getInt32(ThreadLocalStorage::thread_index()) };                                                                                            
-  _thread = call_external((void*)os::thread_local_storage_at, retType, args);
-  _thread = builder().CreatePointerCast(_thread, type(T_ADDRESS));
-  uint slots = OptoReg::reg2stack(C->matcher()->_old_SP);
-  llvm::AllocaInst* alloc = builder().CreateAlloca(type(T_BYTE), builder().getInt32(slots * BytesPerInt + max_stack() * wordSize + monitors_num() * monitor_size()));
-  _SP = builder().CreatePointerCast(alloc, type(T_ADDRESS));
-  uint64_t alloc_size = (*alloc->getAllocationSizeInBits(mod()->getDataLayout()) >> 3);
-  _frame_size = alloc_size;
-  _last_Java_fp = gep(thread(), in_bytes(JavaThread::last_Java_fp_offset()));
-  _FP = call_intrinsic("llvm.frameaddress.p0i8", llvm::Type::getInt8PtrTy(ctx()), { builder().getInt32(0) });
-  store(_FP, _last_Java_fp);
+  LlvmStack& stack = cg()->stack();
+  llvm::Value* FP = builder().CreateIntrinsic(llvm::Intrinsic::frameaddress, { type(T_ADDRESS) }, { null(T_INT) });
+  stack.set_FP(FP);
+
+  _thread = call_C((void*)os::thread_local_storage_at, type(T_ADDRESS), { builder().getInt32(ThreadLocalStorage::thread_index()) });
+
+  size_t alloc_size = cg()->stack().calc_alloc();
+  builder().CreateAlloca(type(T_BYTE), builder().getInt32(alloc_size));
+
+  _landing_pad_ty = cg()->has_exceptions() ? llvm::StructType::create({ type(T_ADDRESS), type(T_INT) }) : nullptr;
 
   Block* block = C->cfg()->get_root_block();
   builder().CreateBr(basic_block(block));
 }
 
-llvm::Value* Selector::tlab_top() {
-  if (!_tlab_top) {
-    llvm::Value* tto = builder().getInt32(in_bytes(JavaThread::tlab_top_offset()));
-    _tlab_top = gep(thread(), tto);
+void Selector::select() {
+  scope_info().reserve(cg()->nof_Java_calls());
+  for (size_t i = 0; i < C->unique(); ++i) {
+    _cache.push_back(std::make_unique<CacheEntry>());
   }
-  return _tlab_top;
+
+  _block = C->cfg()->get_root_block();
+  builder().SetInsertPoint(basic_block());
+  builder().CreateBr(basic_block(block()->non_connector_successor(0)));
+
+  for (size_t i = 1; i < _blocks.length(); ++i) {
+    _block = C->cfg()->get_block(i);
+    builder().SetInsertPoint(basic_block());
+    bool block_addr_set = false;
+    for (size_t j = 1; j < block()->number_of_nodes(); ++j) { // skip 0th node: Start or Region
+      Node* node = block()->get_node(j);
+      if (cg()->has_exceptions() && !block_addr_set && !node->is_Phi()) {
+        llvm::Value* id = builder().getInt64(DebugInfo::id(DebugInfo::BlockStart, block()->_pre_order - 1));
+        builder().CreateIntrinsic(llvm::Intrinsic::experimental_stackmap, {}, { id, null(T_INT) });
+        block_addr_set = true;
+      }
+      select_node(node);
+    }
+  }
+}
+
+llvm::Value* Selector::tlab_top() {
+  llvm::Value* tto = builder().getInt32(in_bytes(JavaThread::tlab_top_offset()));
+  return gep(thread(), tto);
 }
 
 llvm::Value* Selector::tlab_end() {
-  if (!_tlab_end) {
-    llvm::Value* teo = builder().getInt32(in_bytes(JavaThread::tlab_end_offset()));
-    _tlab_end = gep(thread(), teo);
-  }
-  return _tlab_end;
-}
-
-llvm::Value* Selector::null() {
-  if (!_null) {
-    _null = builder().getInt32(0);
-  }
-  return _null;
+  llvm::Value* teo = builder().getInt32(in_bytes(JavaThread::tlab_end_offset()));
+  return gep(thread(), teo);
 }
 
 llvm::Value* Selector::gep(llvm::Value* base, int offset) {
@@ -75,7 +88,8 @@ llvm::Value* Selector::gep(llvm::Value* base, llvm::Value* offset) {
 llvm::Type* Selector::type(BasicType ty) const {
   switch (ty) {
     case T_BYTE: return llvm::Type::getInt8Ty(_ctx);
-    case T_SHORT: return llvm::Type::getInt16Ty(_ctx);
+    case T_SHORT:
+    case T_CHAR: return llvm::Type::getInt16Ty(_ctx);
     case T_INT: 
     case T_NARROWOOP:
     case T_NARROWKLASS: return llvm::Type::getInt32Ty(_ctx);
@@ -83,11 +97,10 @@ llvm::Type* Selector::type(BasicType ty) const {
     case T_FLOAT: return llvm::Type::getFloatTy(_ctx);
     case T_DOUBLE: return llvm::Type::getDoubleTy(_ctx);
     case T_BOOLEAN: return llvm::Type::getInt1Ty(_ctx);
-    case T_CHAR: return llvm::Type::getInt32Ty(_ctx);
     case T_VOID: return llvm::Type::getVoidTy(_ctx);
     case T_OBJECT:
     case T_METADATA:
-    case T_ADDRESS: return llvm::PointerType::getUnqual(llvm::Type::getInt8PtrTy(_ctx));
+    case T_ADDRESS: return llvm::Type::getInt8PtrTy(_ctx);
     default: 
       assert(false, "unable to convert type");
       Unimplemented();
@@ -95,36 +108,56 @@ llvm::Type* Selector::type(BasicType ty) const {
 }
 
 void Selector::create_func() {
-  llvm::Type *retType = type(C->tf()->return_type());
+  llvm::Type* retType = type(C->tf()->return_type());
   const TypeTuple* domain = C->tf()->domain();
   std::vector<llvm::Type*> paramTypes;
 
   unsigned nf_cnt = 0;
+  bool nf_pos_full = false;
+  _nf_pos.reserve(NF_REGS);
   for (uint i = TypeFunc::Parms; i < domain->cnt(); ++i) {
     BasicType btype = domain->field_at(i)->basic_type();
     if (btype != T_VOID) {
-      if (btype != T_FLOAT && btype != T_DOUBLE && nf_cnt < NF_REGS) {
+      if (!nf_pos_full && btype != T_FLOAT && btype != T_DOUBLE) {
         nf_cnt++;
         _nf_pos.push_back(i);
       }
       llvm::Type* ty = type(btype);
-      if (nf_cnt == NF_REGS) {
+      if (nf_cnt == NF_REGS && !nf_pos_full) {
+        nf_pos_full = true;
         paramTypes.insert(paramTypes.begin(), ty);
-        nf_cnt++;
       } else {
         paramTypes.push_back(ty);
       }
     }
   }
-  if (nf_cnt != 0 && nf_cnt < 6) {
+  if (nf_cnt != 0 && !nf_pos_full) {
     paramTypes.insert(paramTypes.begin(), type(T_LONG));
   }
 
   llvm::FunctionType *ftype = llvm::FunctionType::get(retType, paramTypes, false);
   llvm::GlobalValue::LinkageTypes linkage = llvm::GlobalValue::ExternalLinkage;
   _func = llvm::Function::Create(ftype, linkage, 0, _name, _mod);
+  func()->addFnAttr("frame-pointer", "all");
   func()->setGC("statepoint-example");
+  if (cg()->has_exceptions()) {
+    llvm::FunctionCallee pf = mod()->getOrInsertFunction("__gxx_personality_v0", llvm::FunctionType::get(type(T_INT), true));
+    func()->setPersonalityFn(llvm::cast<llvm::Constant>(pf.getCallee()));
+  }
+
   create_blocks();
+}
+
+std::vector<llvm::Value*> Selector::call_args(MachCallNode* node) {
+  const TypeTuple* d = node->tf()->domain();
+  std::vector<llvm::Value*> args;
+  for (uint i = TypeFunc::Parms; i < d->cnt(); ++i) {
+    const Type* at = d->field_at(i);
+    if (at->base() == Type::Half) continue;
+    llvm::Value* arg = select_node(node->in(i));
+    args.push_back(arg);
+  }
+  return args;
 }
 
 void Selector::callconv_adjust(std::vector<llvm::Value*>& args) {
@@ -145,22 +178,20 @@ void Selector::callconv_adjust(std::vector<llvm::Value*>& args) {
 }
 
 int Selector::param_to_arg(int param_num) {
-  int arg_num = (_nf_pos.size() > 0 && _nf_pos.size() < NF_REGS) ? 1 : 0;
   auto it = std::find(_nf_pos.begin(), _nf_pos.end(), param_num);
   if (it != _nf_pos.end()) {
-    if (_nf_pos.size() == NF_REGS && it + 1 == _nf_pos.end()) {
-       arg_num = *_nf_pos.begin(); 
-    }
-    else arg_num += *it;
-  } else {
-    const TypeTuple* domain = C->tf()->domain();
-    for (uint i = TypeFunc::Parms; i < param_num; ++i) {
-      const Type* at = domain->field_at(i);
-      if (at->base() == Type::Half) continue;
-      arg_num++;
-    }
+    return (1 + std::distance(_nf_pos.begin(), it)) % NF_REGS;
   }
-  return arg_num - TypeFunc::Parms;
+  const TypeTuple* domain = C->tf()->domain();
+  if (domain->cnt() == TypeFunc::Parms)
+    return 0;
+  int arg_num = (_nf_pos.size() > 0 && _nf_pos.size() < NF_REGS) ? 1 : 0;
+  for (uint i = TypeFunc::Parms; i < param_num; ++i) {
+    const Type* at = domain->field_at(i);
+    if (at->base() == Type::Half) continue;
+    arg_num++;
+  }
+  return arg_num;
 }
 
 void Selector::create_blocks() {
@@ -172,25 +203,6 @@ void Selector::create_blocks() {
   }
 }
 
-void Selector::select() {
-  for (size_t i = 0; i < C->unique(); ++i) {
-    _cache.push_back(std::make_unique<CacheEntry>());
-  }
-  select_root_block();
-  for (size_t i = 1; i < _blocks.length(); ++i) {
-    select_block(C->cfg()->get_block(i));
-  }
-}
-
-void Selector::select_block(Block* block) {
-  _block = block;
-  builder().SetInsertPoint(basic_block(_block));
-    for (uint i = 0; i < _block->number_of_nodes(); ++i) {
-      Node* node = _block->get_node(i);
-      select_node(node);
-    }
-  }
-
 llvm::Value* Selector::select_node(Node* node) {
   CacheEntry* entry = _cache[node->_idx].get();
   if (!entry->hit) {
@@ -201,38 +213,19 @@ llvm::Value* Selector::select_node(Node* node) {
 
 }
 
-void Selector::select_root_block() {
-  RootNode* node = C->cfg()->get_root_node();
-  Node* start_node;
-  for (uint i = 0; i < node->outcnt(); ++i) {
-    if (node->raw_out(i)->is_Start()) {
-      start_node = node->raw_out(i);
-      break;
-    }
-  }
-  Block* block = C->cfg()->get_block_for_node(start_node)->non_connector();
-  builder().SetInsertPoint(basic_block(C->cfg()->get_root_block()));
-  builder().CreateBr(basic_block(block));
-}
-
 llvm::Value* Selector::select_address(MachNode *mem_node) {
-  int op_index;
-  return select_address(mem_node, op_index);
-}
-
-llvm::Value* Selector::select_address(MachNode *mem_node, int& op_index) {
   const MachOper* mop = mem_node->memory_operand();
-  op_index = MemNode::Address;
+  int op_index = MemNode::Address;
   llvm::Value *base, *offset;
   switch (mop->opcode()) {
     case INDIRECT: {
       Node* addr_node = mem_node->in(op_index++);
       assert(addr_node != NULL, "check");
       uint addr_rule = addr_node->is_Mach() ? addr_node->as_Mach()->rule() : _last_Mach_Node;
-      if (addr_node->is_Mach() && (addr_node->as_Mach()->ideal_Opcode() == Op_AddP)) {
+      if (cg()->cmp_ideal_Opcode(addr_node, Op_AddP)) {
         MachNode* mach_addr = addr_node->as_Mach();
         Node* base_node = mach_addr->in(2);
-        if (base_node->is_Mach() && base_node->as_Mach()->ideal_Opcode() == Op_ConP) {
+        if (cg()->cmp_ideal_Opcode(base_node, Op_ConP)) {
           offset = select_oper(base_node->as_Mach()->_opnds[1]);
           base = mach_addr->rule() == addP_rReg_rule
               ? select_node(mach_addr->in(3))
@@ -243,11 +236,14 @@ llvm::Value* Selector::select_address(MachNode *mem_node, int& op_index) {
               ? select_node(mach_addr->in(3))
               : select_oper(mach_addr->_opnds[2]);
         }
-      } else if (addr_node->is_Mach() && (addr_node->as_Mach()->ideal_Opcode() == Op_ConP)) {
+      } else if (cg()->cmp_ideal_Opcode(addr_node, Op_ConP)) {
         return select_oper(addr_node->as_Mach()->_opnds[1]);
         base = llvm::Constant::getNullValue(llvm::PointerType::getUnqual(offset->getType()));
       } else {
         return select_node(addr_node); 
+      }
+      if (base->getType()->isIntegerTy() && offset->getType()->isPointerTy()) {
+        std::swap(base, offset);
       }
       return gep(base, offset);
     }
@@ -260,16 +256,6 @@ llvm::Value* Selector::select_address(MachNode *mem_node, int& op_index) {
   }
 }
 
-llvm::Value* Selector::select_const(Node* n) {
-  BasicType bt = n->as_Type()->type()->basic_type();
-  switch (bt) {
-    case T_ADDRESS: 
-    case T_OBJECT: return get_ptr(n->get_ptr(), type(T_ADDRESS));
-    case T_VOID: return null();
-    default: ShouldNotReachHere();
-  }
-}
-
 llvm::Value* Selector::select_oper(MachOper *oper) {
   const Type* ty = oper->type();
   BasicType bt = ty->basic_type();
@@ -277,31 +263,42 @@ llvm::Value* Selector::select_oper(MachOper *oper) {
   case T_INT: return builder().getInt32(oper->constant());
   case T_LONG: return builder().getInt64(oper->constantL());
   case T_FLOAT: return llvm::ConstantFP::get(
-    llvm::Type::getFloatTy(_ctx), oper->constantF());
+    llvm::Type::getFloatTy(ctx()), llvm::APFloat(oper->constantF()));
   case T_DOUBLE: return llvm::ConstantFP::get(
-    llvm::Type::getDoubleTy(_ctx), oper->constantD());
+    llvm::Type::getDoubleTy(ctx()), llvm::APFloat(oper->constantD()));
   case T_ARRAY:
   case T_OBJECT: {
     assert(ty->isa_narrowoop() == NULL, "check");
-    return get_ptr(*(oop*)ty->is_oopptr()->const_oop()->constant_encoding(), type(T_OBJECT));
+    llvm::Value* const_oop = get_ptr(*(oop*)ty->is_oopptr()->const_oop()->constant_encoding(), T_OBJECT);
+    mark_mptr(const_oop);
+    return const_oop;
   }
   case T_METADATA: {
     if (ty->base() == Type::KlassPtr) {
       assert(ty->is_klassptr()->klass()->is_loaded(), "klass not loaded");
-      return get_ptr(ty->is_klassptr()->klass()->constant_encoding(), type(T_METADATA));
+      return get_ptr(ty->is_klassptr()->klass()->constant_encoding(), T_METADATA);
     } else {
-      return get_ptr(ty->is_metadataptr()->metadata(), type(T_METADATA));
+      return get_ptr(ty->is_metadataptr()->metadata(), T_METADATA);
     }
   }
-  case T_NARROWOOP: return llvm::ConstantInt::get(type(T_NARROWOOP), ty->is_narrowoop()->get_con());
+  case T_NARROWOOP: {
+    uint64_t con = ty->is_narrowoop()->get_con();
+    if (con != 0) {
+      con = *(uint64_t*)con;
+      con >>= Universe::narrow_oop_shift();
+    }
+    llvm::Value* narrow_oop = llvm::ConstantInt::get(type(T_NARROWOOP), con);
+    mark_nptr(narrow_oop);
+    return narrow_oop;
+  }
   case T_NARROWKLASS: {
-    uintptr_t narrow_klass = ty->is_narrowklass()->get_con();
+    uint64_t narrow_klass = ty->is_narrowklass()->get_con();
     narrow_klass >>= Universe::narrow_klass_shift();
     return llvm::ConstantInt::get(type(T_NARROWKLASS), narrow_klass);
   }
   case T_ADDRESS: {
     if (oper->constant() == NULL) return llvm::Constant::getNullValue(type(T_ADDRESS));
-    return get_ptr(oper->constant(), type(T_ADDRESS));
+    return get_ptr(oper->constant(), T_ADDRESS);
   }
   case T_VOID: return NULL;
   default:
@@ -310,26 +307,21 @@ llvm::Value* Selector::select_oper(MachOper *oper) {
   }
 }
 
-llvm::Value* Selector::select_node_or_const(Node* node) {
-  if (node->is_Mach()) {
-    int opcode = node->as_Mach()->ideal_Opcode();
-    if (Op_Con <= opcode && opcode <= Op_ConP) {
-      return select_oper(node->as_Mach()->_opnds[1]);
-    }
-  }
-  if (node->flags() & Node::Flag_is_Con) {
-    return select_const(node);
-  }
-  return select_node(node);
-}
-
 llvm::Value* Selector::get_ptr(const void* ptr, llvm::Type* ty) {
-  return get_ptr((intptr_t)ptr, ty);
+  return get_ptr((uint64_t)ptr, ty);
 }
 
-llvm::Value* Selector::get_ptr(intptr_t ptr, llvm::Type* ty) {
-  llvm::IntegerType* intTy = llvm::Type::getIntNTy(ctx(), pointer_size());
+llvm::Value* Selector::get_ptr(const void* ptr, BasicType ty) {
+  return get_ptr(ptr, type(ty));
+}
+
+llvm::Value* Selector::get_ptr(uint64_t ptr, llvm::Type* ty) {
+  llvm::IntegerType* intTy = builder().getIntNTy(pointer_size());
   return builder().CreateIntToPtr(llvm::ConstantInt::get(intTy, ptr), ty);
+}
+
+llvm::Value* Selector::get_ptr(uint64_t ptr, BasicType ty) {
+  return get_ptr(ptr, type(ty));
 }
 
 llvm::Value* Selector::select_condition(Node* cmp, llvm::Value* a, llvm::Value* b, bool is_and, bool flt) {
@@ -404,8 +396,16 @@ void Selector::select_if(llvm::Value *pred, Node* node) {
 }
 
 void Selector::replace_return_address(llvm::Value* new_addr) {
-  llvm::Value* addr = call_intrinsic("llvm.addressofreturnaddress.p0i8", llvm::Type::getInt8PtrTy(ctx()));
+  llvm::Value* addr = builder().CreateIntrinsic(llvm::Intrinsic::addressofreturnaddress, { type(T_ADDRESS) }, {});
   store(new_addr, addr);
+}
+
+void Selector::mark_inblock() {
+  if (cg()->has_exceptions()) {
+    uint64_t i = DebugInfo::id(DebugInfo::Inblock);
+    llvm::Value* id = builder().getInt64(i);
+    builder().CreateIntrinsic(llvm::Intrinsic::experimental_stackmap, {}, { id, null(T_INT) });
+  }
 }
 
 std::vector<llvm::Type*> Selector::types(const std::vector<llvm::Value*>& v) const {
@@ -417,66 +417,94 @@ std::vector<llvm::Type*> Selector::types(const std::vector<llvm::Value*>& v) con
   return ret;
 }
 
-llvm::CallInst* Selector::call_intrinsic(const char* name, llvm::Type* retType) {
-  std::vector<llvm::Value*> args;
-  return call_intrinsic(name, retType, args);
-}
-
-llvm::CallInst* Selector::call_intrinsic(const char* name, llvm::Type* retType, const std::vector<llvm::Value *>& args) {
-  std::vector<llvm::Type*> paramTypes = types(args);
-  llvm::FunctionType* funcTy = llvm::FunctionType::get(retType, paramTypes, false);
-  llvm::Function* f = llvm::cast<llvm::Function>(mod()->getOrInsertFunction(name, funcTy).getCallee());
+llvm::CallInst* Selector::call_C(const void* func, llvm::Type* retType, const std::vector<llvm::Value*>& args) {
+  llvm::FunctionCallee f = callee(func, retType, args);
   return builder().CreateCall(f, args);
 }
 
-llvm::CallInst* Selector::call_external(const void* func, llvm::Type* retType) {
-  std::vector<llvm::Value*> args;
-  return call_external(func, retType, args);
-}
-
-llvm::CallInst* Selector::call_external(const void* func, llvm::Type* retType, const std::vector<llvm::Value*>& args) {
+llvm::FunctionCallee Selector::callee(const void* func, llvm::Type* retType, const std::vector<llvm::Value*>& args) {
   std::vector<llvm::Type*> paramTypes = types(args);
   llvm::FunctionType* funcTy = llvm::FunctionType::get(retType, paramTypes, false);
   llvm::Value* ptr = get_ptr(func, llvm::PointerType::getUnqual(funcTy));
-  llvm::FunctionCallee f(funcTy, ptr);
-  return builder().CreateCall(f, args);
+  return llvm::FunctionCallee(funcTy, ptr);
 }
 
-llvm::Value* Selector::create_statepoint(MachCallNode* node, llvm::FunctionType* funcTy, const std::vector<llvm::Value*>& args) {
-  MachSafePointNode* sfn = static_cast<MachSafePointNode*>(node);
-  DebugInfo& di = debug_info()[sfn] = scope_descriptor()->init_debug_info(sfn);
-  _sfns.push_back(sfn);
+llvm::CallInst* Selector::call_Java(MachCallJavaNode* node, llvm::Type* retType, const std::vector<llvm::Value*>& args) {
+  scope_info().emplace_back();
+  ScopeInfo& si = scope_info().back();
+  si.cn = node;
+  cg()->scope_descriptor().fill_scope_info(&si);
 
-  const void *func = node->entry_point();
-  std::vector<llvm::Value*> sp_args { 
-  builder().getInt64(di.sfn_id), builder().getInt32(0),
-  get_ptr(func, llvm::PointerType::getUnqual(funcTy)), 
-  builder().getInt32(args.size()), builder().getInt32(0) };
-  sp_args.insert(sp_args.end(), args.begin(), args.end());
-  sp_args.push_back(builder().getInt64(0));
-  sp_args.push_back(builder().getInt64(0));
+  llvm::FunctionCallee f = callee(node->entry_point(), retType, args);
+  llvm::Value* callee = f.getCallee();
+  std::vector<llvm::Value*> deopt = cg()->scope_descriptor().statepoint_scope(si);
+  llvm::Optional<llvm::ArrayRef<llvm::Value*>> deopt_args(deopt);
 
-  llvm::Intrinsic::ID id = llvm::Function::lookupIntrinsicID("llvm.experimental.gc.statepoint");
-  std::string name = llvm::Intrinsic::getName(id, { llvm::PointerType::getUnqual(funcTy) });
+  Node* block_end = block()->end();
+  CatchNode* catch_node = block_end->isa_Catch();
+  uint32_t patch_bytes = DebugInfo::patch_bytes(node->is_MachCallDynamicJava() ? DebugInfo::DynamicCall : DebugInfo::StaticCall);
+  Block* next_block = nullptr;
 
-  std::vector<llvm::Type*> paramTypes = types(sp_args);
-  paramTypes.resize(5);
-  funcTy = llvm::FunctionType::get(llvm::Type::getTokenTy(ctx()), paramTypes, true);
-  llvm::Function* f = llvm::cast<llvm::Function>(mod()->getOrInsertFunction(name.c_str(), funcTy).getCallee());
-  llvm::Value* token = builder().CreateCall(f, sp_args, scope_descriptor()->statepoint_scope(sfn));
-  return token;
-}
+  if (catch_node) {
+    uint num_succs = block()->_num_succs;
+    std::vector<Block*> handler_blocks;
+    handler_blocks.reserve(num_succs);
+    for (size_t i = 0; i < num_succs; ++i) {
+      CatchProjNode* cp = catch_node->raw_out(i)->as_CatchProj();
+      Block* b = C->cfg()->get_block_for_node(cp->raw_out(0));
+      if (cp->_con == CatchProjNode::fall_through_index) {
+        next_block = b;
+      } else {
+        handler_blocks.push_back(b);
+      }
+    }
 
-llvm::CallInst* Selector::call(MachCallNode* node, llvm::Type* retType, std::vector<llvm::Value*>& args) {
-  std::vector<llvm::Type*> paramTypes = types(args);
-  llvm::FunctionType* funcTy = llvm::FunctionType::get(retType, paramTypes, false);
-  llvm::Value* token = create_statepoint(node, funcTy, args);
-  if (retType->isVoidTy()) return NULL;
-
-  llvm::Intrinsic::ID id = llvm::Function::lookupIntrinsicID("llvm.experimental.gc.result");
-  std::string name = llvm::Intrinsic::getName(id, { retType });
-  return call_intrinsic(name.c_str(), retType, { token });
+    llvm::CallInst* ret = nullptr;
+    if (next_block) {
+      assert(num_succs == 2, "unexpected num_succs");
+      llvm::BasicBlock* next_bb = basic_block(next_block);
+      llvm::BasicBlock* handler_bb = basic_block(handler_blocks[0]);
+      builder().SetInsertPoint(handler_bb);
+      llvm::LandingPadInst* lp = builder().CreateLandingPad(landing_pad_ty(), 0);
+      lp->setCleanup(true);
+      builder().SetInsertPoint(basic_block());
+      if (retType->isVoidTy()) {
+        builder().CreateGCStatepointInvoke(si.stackmap_id, patch_bytes, callee, next_bb, handler_bb, args, deopt_args, {});
+      } else {
+        llvm::BasicBlock* result_bb = llvm::BasicBlock::Create(ctx(), basic_block()->getName() + "_result", func());
+        llvm::Instruction* statepoint = builder().CreateGCStatepointInvoke(si.stackmap_id, patch_bytes, callee, result_bb, handler_bb, args, deopt_args, {});
+        builder().SetInsertPoint(result_bb);
+        // no need to mark the inblock with stackmap as it doesn't do anything
+        ret = builder().CreateGCResult(statepoint, retType);
+        builder().CreateBr(next_bb);
+      }
+    } else {
+      llvm::Instruction* statepoint = builder().CreateGCStatepointCall(si.stackmap_id, patch_bytes, callee, args, deopt_args, {});
+      // a faux comparison to attach blocks to the CFG
+      llvm::BasicBlock* right_bb = basic_block(handler_blocks[1]);
+      for (auto it = handler_blocks.rbegin() + 1; it != handler_blocks.rend() - 1; ++it) {
+        right_bb = llvm::BasicBlock::Create(ctx(), basic_block()->getName() + "_handler" + std::to_string(std::distance(handler_blocks.rbegin(), it - 1)), func());
+        builder().SetInsertPoint(right_bb);
+        mark_inblock();
+        llvm::Value* pred = builder().CreateICmpEQ(thread(), null(thread()->getType()));
+        builder().CreateCondBr(pred, basic_block(*it), basic_block(*(it - 1)));
+      }  
+      builder().SetInsertPoint(basic_block());
+      llvm::Value* pred = builder().CreateICmpEQ(thread(), null(thread()->getType()));
+      builder().CreateCondBr(pred, basic_block(handler_blocks[0]), right_bb);
+    }
+    _handler_table.emplace(block(), std::move(handler_blocks));
+    return ret;
+  } else {
+    llvm::Instruction* statepoint = builder().CreateGCStatepointCall(si.stackmap_id, patch_bytes, callee, args, deopt_args, {});
+    next_block = block()->non_connector_successor(0);
+    llvm::BasicBlock* next_bb = basic_block(next_block);
+    if (!block_end->is_MachReturn() && !block_end->is_MachGoto()) { // ShouldNotReachHere and jmpDir
+      builder().CreateBr(next_bb);
+    }
+    return retType->isVoidTy() ? NULL : builder().CreateGCResult(statepoint, retType);
   }
+}
 
 llvm::Value* Selector::load(llvm::Value* addr, BasicType ty) {
   return load(addr, type(ty));
@@ -509,9 +537,10 @@ llvm::AtomicCmpXchgInst* Selector::cmpxchg(llvm::Value* addr, llvm::Value* cmp, 
 }
 
 void Selector::mark_mptr(llvm::Value* oop) {
-  OopInfo& oop_info = _oop_info[oop];
-  assert(!oop_info.isNarrowPtr(), "check");
-  oop_info.markManagedPtr(); 
+  _oop_info.insert(std::make_pair(oop, std::make_unique<OopInfo>()));
+  OopInfo* oop_info_ = oop_info(oop);
+  assert(!oop_info_->isNarrowPtr(), "check");
+  oop_info_->markManagedPtr(); 
 }
 
 void Selector::mark_nptr(llvm::Value* oop) {
@@ -520,23 +549,127 @@ void Selector::mark_nptr(llvm::Value* oop) {
     mark_mptr(oop);
   }
   else {
-    OopInfo& oop_info = _oop_info[oop];
-    assert(!oop_info.isManagedPtr(), "check");
-    oop_info.markNarrowPtr();
+    _oop_info.insert(std::make_pair(oop, std::make_unique<OopInfo>()));
+    OopInfo* oop_info_ = oop_info(oop);
+    assert(!oop_info_->isManagedPtr(), "check");
+    oop_info_->markNarrowPtr();
   }
+}
+
+void Selector::mark_dptr(llvm::Value* ptr, llvm::Value* base) {
+  _oop_info.insert(std::make_pair(ptr, std::make_unique<OopInfo>()));
+  OopInfo *base_info = oop_info(base), *ptr_info = oop_info(ptr);
+  assert(base_info != NULL, "use ManagedPtr instead");
+  assert(base_info->isManagedPtr(), "check");
+  ptr_info->markDerivedPtr();
+}
+
+Node* Selector::find_derived_base(Node* derived) {
+  // See if already computed; if so return it
+  Node* base;
+  if(base = derived_base(derived))
+    return base;
+
+  // See if this happens to be a base.
+  // NOTE: we use TypePtr instead of TypeOopPtr because we can have
+  // pointers derived from NULL!  These are always along paths that
+  // can't happen at run-time but the optimizer cannot deduce it so
+  // we have to handle it gracefully.
+  assert(!derived->bottom_type()->isa_narrowoop() ||
+          derived->bottom_type()->make_ptr()->is_ptr()->_offset == 0, "sanity");
+  const TypePtr *tj = derived->bottom_type()->isa_ptr();
+  // If its an OOP with a non-zero offset, then it is derived.
+  if( tj == NULL || tj->_offset == 0 ) {
+
+    _derived_base.insert(std::make_pair(derived, derived));
+    return derived;
+  }
+
+  // Derived is NULL+offset?  Base is NULL!
+  if( derived->is_Con() ) {
+    base = C->matcher()->mach_null();
+    assert(base != NULL, "verify");
+    _derived_base.insert(std::make_pair(derived, base));
+    return base;
+  }
+
+  // Check for AddP-related opcodes
+  if( !derived->is_Phi() ) {
+    assert(derived->as_Mach()->ideal_Opcode() == Op_AddP, err_msg("but is: %s", derived->Name()));
+    base = derived->in(AddPNode::Base);
+    _derived_base.insert(std::make_pair(derived, base));
+    return base;
+  }
+
+  // Recursively find bases for Phis.
+  // First check to see if we can avoid a base Phi here.
+  base = find_derived_base(derived->in(1));
+  uint i = 2;
+  for (; i < derived->req(); i++)
+    if ( base != find_derived_base(derived->in(i)))
+      break;
+  // Went to the end without finding any different bases?
+  if( i == derived->req() ) {   // No need for a base Phi here
+    _derived_base.insert(std::make_pair(derived, base));
+    return base;
+  }
+
+  // Now we see we need a base-Phi here to merge the bases
+  const Type *t = base->bottom_type();
+  base = new (C) PhiNode( derived->in(0), t );
+  for( i = 1; i < derived->req(); i++ ) {
+    base->init_req(i, find_derived_base(derived->in(i)));
+    t = t->meet(base->in(i)->bottom_type());
+  }
+  base->as_Phi()->set_type(t);
+
+  // Search the current block for an existing base-Phi
+  Block *b = C->cfg()->get_block_for_node(derived);
+  for( i = 1; i <= b->end_idx(); i++ ) {// Search for matching Phi
+    Node *phi = b->get_node(i);
+    if( !phi->is_Phi() ) {      // Found end of Phis with no match?
+      b->insert_node(base, i); // Must insert created Phi here as base
+      C->cfg()->map_node_to_block(base, b);
+      break;
+    }
+    // See if Phi matches.
+    uint j;
+    for( j = 1; j < base->req(); j++ )
+      if( phi->in(j) != base->in(j) &&
+          !(phi->in(j)->is_Con() && base->in(j)->is_Con()) ) // allow different NULLs
+        break;
+    if( j == base->req() ) {    // All inputs match?
+      base = phi;               // Then use existing 'phi' and drop 'base'
+      break;
+    }
+  }
+
+  // Cache info for later passes
+  _derived_base.insert(std::make_pair(derived, base));
+  return base;
+}
+
+llvm::Value* Selector::loadKlass_not_null(llvm::Value* obj) {
+  llvm::Value* klass_offset = builder().getInt64(oopDesc::klass_offset_in_bytes());
+  llvm::Value* addr = gep(obj, klass_offset);
+  if (UseCompressedClassPointers) {
+    llvm::Value* narrow_klass = load(addr, T_NARROWKLASS);
+    return decodeKlass_not_null(narrow_klass);
+  }
+  return load(addr, T_METADATA);
 }
 
 llvm::Value* Selector::decodeKlass_not_null(llvm::Value* narrow_klass) {
   if (!Universe::narrow_klass_shift() && !Universe::narrow_klass_base()) {
      return narrow_klass; 
   }
-  narrow_klass = builder().CreateIntCast(narrow_klass, llvm::Type::getIntNTy(ctx(), pointer_size()), false);
+  narrow_klass = builder().CreateZExt(narrow_klass, builder().getIntNTy(pointer_size()));
   if (Universe::narrow_klass_shift() != 0) {
     llvm::Value* shift = llvm::ConstantInt::get(narrow_klass->getType(), Universe::narrow_klass_shift());
     narrow_klass = builder().CreateShl(narrow_klass, shift);
   }
   if (Universe::narrow_klass_base() != NULL) {
-    llvm::Value* base = get_ptr(Universe::narrow_klass_base(), type(T_METADATA));
+    llvm::Value* base = get_ptr(Universe::narrow_klass_base(), T_METADATA);
     narrow_klass = gep(base, narrow_klass);
   }
   return builder().CreateIntToPtr(narrow_klass, type(T_METADATA));
@@ -550,20 +683,19 @@ llvm::Value* Selector::decode_heap_oop(llvm::Value* narrow_oop, bool not_null) {
   // verify heap base
 #endif
 
-  OopInfo& narrow_oop_info = oop_info(narrow_oop);
+  OopInfo* narrow_oop_info = oop_info(narrow_oop);
   if (is_fast_compression()) {
     // 32-bit oops
-    assert(narrow_oop_info.isManagedPtr(), "check managed oops flag");
+    assert(narrow_oop_info->isManagedPtr(), "check managed oops flag");
     return narrow_oop;
   } else {
-    assert(narrow_oop_info.isNarrowPtr(), "check narrow oops flag");
-    // assert(narrow_oop_info.data_type == OopInfo::DATA_U32, "check narrow oop size");
+    assert(narrow_oop_info->isNarrowPtr(), "check narrow oops flag");
     llvm::Value* oop;
 
     assert(Universe::narrow_oop_shift() != 0, "unsupported compression mode");
-    narrow_oop = builder().CreateIntCast(narrow_oop, llvm::Type::getIntNTy(ctx(), pointer_size()), false);
+    narrow_oop = builder().CreateZExt(narrow_oop, builder().getIntNTy(pointer_size()));
     llvm::Value* narrow_oop_shift_ = llvm::ConstantInt::get(narrow_oop->getType(), Universe::narrow_oop_shift());
-    llvm::Value* narrow_oop_base_ = get_ptr(Universe::narrow_klass_base(), type(T_OBJECT));
+    llvm::Value* narrow_oop_base_ = get_ptr(Universe::narrow_klass_base(), T_OBJECT);
     if (Universe::narrow_oop_base() == NULL) {
       // Zero-based compressed oops
       oop = builder().CreateShl(narrow_oop, narrow_oop_shift_);
@@ -574,9 +706,12 @@ llvm::Value* Selector::decode_heap_oop(llvm::Value* narrow_oop, bool not_null) {
         oop = builder().CreateShl(narrow_oop, narrow_oop_shift_);
         oop = gep(narrow_oop_base_, oop);
       } else {
-        llvm::Value* pred = builder().CreateICmpEQ(narrow_oop, llvm::ConstantInt::getNullValue(narrow_oop->getType()));
+        llvm::Value* narrow_zero = llvm::ConstantInt::getNullValue(narrow_oop->getType());
+        llvm::Value* zero = llvm::ConstantInt::getNullValue(oop->getType());
+        llvm::Value* pred = builder().CreateICmpEQ(narrow_oop, narrow_zero);
         oop = builder().CreateShl(narrow_oop, narrow_oop_shift_);
         oop = gep(narrow_oop_base_, oop);
+        oop = builder().CreateSelect(pred, zero, oop);
       }
     }
 
@@ -584,6 +719,44 @@ llvm::Value* Selector::decode_heap_oop(llvm::Value* narrow_oop, bool not_null) {
 
     mark_mptr(oop);
     return oop;
+  }
+}
+
+llvm::Value* Selector::encode_heap_oop(llvm::Value *oop, bool not_null) {
+  #ifdef ASSERT
+    if (VerifyOops) {
+      // verify oops
+    }
+    if (Universe::narrow_oop_base() != NULL) {
+      // also check something
+    }
+  #endif
+  OopInfo* info = oop_info(oop);
+  assert(info->isManagedPtr(), "check oop is marked as managed ptr");
+
+  if (is_fast_compression()) {
+    // 32-bit oops
+    return oop;
+  } else {
+    llvm::Value* narrow_oop = builder().CreatePtrToInt(oop, builder().getIntNTy(pointer_size()));
+    assert(Universe::narrow_oop_shift() != 0, "unsupported compression mode");
+    llvm::Value* narrow_oop_shift_ = llvm::ConstantInt::get(narrow_oop->getType(), Universe::narrow_oop_shift());
+    llvm::Value* narrow_oop_base_ = builder().getIntN(pointer_size(), (uint64_t)Universe::narrow_klass_base());
+    if (Universe::narrow_oop_base() != NULL) {
+      // Heap-based compressed oops
+      if (not_null) {
+        narrow_oop = builder().CreateSub(narrow_oop, narrow_oop_base_);
+      } else {
+        llvm::Value* zero = llvm::ConstantInt::getNullValue(narrow_oop->getType());
+        llvm::Value* pred = builder().CreateICmpEQ(narrow_oop, zero);
+        narrow_oop = builder().CreateSub(narrow_oop, narrow_oop_base_);
+        narrow_oop = builder().CreateSelect(pred, zero, narrow_oop);
+      }
+    }
+    narrow_oop = builder().CreateAShr(narrow_oop, narrow_oop_shift_);
+    narrow_oop = builder().CreateTrunc(narrow_oop, type(T_NARROWOOP));
+    mark_nptr(narrow_oop);
+    return narrow_oop;
   }
 }
 
@@ -627,62 +800,4 @@ void Selector::complete_phi_node(Block *case_block, Node* case_val, llvm::PHINod
     llvm::cast<llvm::Instruction>(phi_case)->insertBefore(bb->getTerminator());
   }
   phi_inst->addIncoming(phi_case, case_bb);
-}
-
-unsigned Selector::count_monitors() const {
-  ResourceMark rm;
-  VectorSet   visited(C->node_arena());
-  Node_List   stack;
-  Node* n = NULL;
-  Node_BW_Iterator iter(C->root(), visited, stack, *(C->cfg()));
-
-  unsigned num = 0;
-  while (n = iter.next()) {
-    if (n->is_MachSafePoint() == false) continue;
-    MachSafePointNode* sf = (MachSafePointNode*)n;
-    JVMState* jvms = sf->jvms();
-    if (jvms == NULL) continue;
-    num = MAX(num, jvms->monitor_depth());
-  }
-  return num;
-}
-
-unsigned Selector::count_max_stack() const {
-  ResourceMark rm;
-  VectorSet   visited(C->node_arena());
-  Node_List   stack;
-  Node* n = NULL;
-  Node_BW_Iterator iter(C->root(), visited, stack, *(C->cfg()));
-
-  int num = 0;
-  while (n = iter.next()) {
-    if (n->is_MachCallJava() == false) continue;
-    MachCallJavaNode* jcall = (MachCallJavaNode*)n;
-    if (jcall->_method == NULL) continue;
-    int param_cnt = jcall->tf()->domain()->cnt() - TypeFunc::Parms;
-    num = MAX(num, param_cnt);
-  }
-  return num;
-}
-
-int32_t Selector::mon_offset(int32_t index) {
-  int32_t offset_monitor = 0;
-  assert(index >= 0 && index < monitors_num(), "invalid monitor index");
-  return offset_monitor + (-1 - index) * monitor_size();
-}
-
-int32_t Selector::mon_obj_offset(int32_t index) {
-  int32_t object_offset = BasicObjectLock::obj_offset_in_bytes();
-  return mon_offset(index) + object_offset;
-}
-
-int32_t Selector::mon_header_offset(int32_t index) {
-  int32_t lock_offset = BasicObjectLock::lock_offset_in_bytes();
-  int32_t header_offset = BasicLock::displaced_header_offset_in_bytes();
-  return mon_offset(index) + lock_offset + header_offset;
-}
-
-void Selector::epilog() {
-  llvm::Value* last_fp = load(FP(), type(T_ADDRESS));
-  store(last_fp, _last_Java_fp);
 }

@@ -65,7 +65,7 @@
 #include "gc_implementation/parallelScavenge/parallelScavengeHeap.hpp"
 #endif // INCLUDE_ALL_GCS
 #ifdef LLVM
-# include "code_gen/llvmGlobals.hpp"
+# include "code_gen/llvmHeaders.hpp"
 # include "code_gen/llvm_globals.hpp"
 #endif
 
@@ -4086,6 +4086,13 @@ jint Arguments::parse(const JavaVMInitArgs* args) {
   // MCJIT require a native AsmPrinter
   llvm::InitializeNativeTargetAsmPrinter();
 
+  llvm::cl::opt<std::string>
+  MCPU("mcpu");
+
+  llvm::cl::list<std::string>
+  MAttrs("mattr",
+         llvm::cl::CommaSeparated);
+  
   // Finetune LLVM for the current host CPU.
   llvm::StringMap<bool> Features;
   bool gotCpuFeatures = llvm::sys::getHostCPUFeatures(Features);
@@ -4095,7 +4102,7 @@ jint Arguments::parse(const JavaVMInitArgs* args) {
   cl_args.push_back(cpu.c_str());
 
   std::string mattr("-mattr=");
-  if(gotCpuFeatures){
+  if(gotCpuFeatures) {
     for(llvm::StringMap<bool>::iterator I = Features.begin(),
       E = Features.end(); I != E; ++I){
       if(I->second){
@@ -4112,7 +4119,8 @@ jint Arguments::parse(const JavaVMInitArgs* args) {
   if (llvmPrintLLVM) {
     cl_args.push_back("-print-after-all");
   }
-
+  cl_args.push_back("-enable-implicit-null-checks");
+  // cl_args.push_back("-stack-alignment=16");
   cl_args.push_back(0);  // terminator
   llvm::cl::ParseCommandLineOptions(cl_args.size() - 1, (char **) &cl_args[0], "");
 

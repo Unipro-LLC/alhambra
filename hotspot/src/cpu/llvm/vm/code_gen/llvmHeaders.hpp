@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef SHARE_VM_LLVM_LLVMHEADERS_HPP
-#define SHARE_VM_LLVM_LLVMHEADERS_HPP
+#ifndef CPU_LLVM_VM_CODE_GEN_LLVMHEADERS_HPP
+#define CPU_LLVM_VM_CODE_GEN_LLVMHEADERS_HPP
 
 #ifdef assert
   #undef assert
@@ -116,17 +116,4 @@ do {                                                                         \
   #undef LLVM_DEBUG
 #endif
 
-#define FIELD_WITH_GETTER(type, field, getter) \
-private: \
-  type field; \
-public: \
-  type getter() { return field; }\
-
-#define FIELD_WITH_REF_GETTER(type, field, getter) \
-private: \
-  type field; \
-public: \
-  type& getter() { return field; }\
-
-
-#endif // SHARE_VM_LLVM_LLVMHEADERS_HPP
+#endif // CPU_LLVM_VM_CODE_GEN_LLVMHEADERS_HPP

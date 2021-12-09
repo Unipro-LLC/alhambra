@@ -1095,9 +1095,6 @@ oop frame::retrieve_receiver(RegisterMap* reg_map) {
   }
   oop r = *oop_adr;
   assert(Universe::heap()->is_in_or_null(r), err_msg("bad receiver: " INTPTR_FORMAT " (" INTX_FORMAT ")", (void *) r, (void *) r));
-#ifdef LLVM
-  SharedRuntime::CallDest::set_rax(oop_adr);
-#endif
   return r;
 }
 

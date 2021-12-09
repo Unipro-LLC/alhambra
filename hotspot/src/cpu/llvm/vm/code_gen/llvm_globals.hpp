@@ -23,20 +23,19 @@
  *
  */
 
-#ifndef SHARE_VM_LLVM_LLVM_GLOBALS_HPP
-#define SHARE_VM_LLVM_LLVM_GLOBALS_HPP
+#ifndef CPU_LLVM_VM_CODE_GEN_LLVM_GLOBALS_HPP
+#define CPU_LLVM_VM_CODE_GEN_LLVM_GLOBALS_HPP
 
 #include "runtime/globals.hpp"
 
 #define LLVM_FLAGS(develop, develop_pd, product, product_pd, diagnostic, notproduct) \
-    product(bool, llvmFastSelect, true,                                        \
-            "Use fast-isel option for llvm")                                    \
-    develop(bool, llvmPrintLLVM, false,                                        \
-            "Print the LLVM IR after all passes")                               \
-    notproduct(bool, PrintLLVMIR, false,                                      \
-          "Print LLVM IR")                                                  \
-                                                                            \
+    product(bool, llvmFastSelect, true,                                              \
+            "Use fast-isel option for llvm")                                         \
+    develop(bool, llvmPrintLLVM, false,                                              \
+            "Print the LLVM IR after all passes")                                    \
+    notproduct(bool, PrintLlvmIR, false,                                             \
+          "Print LLVM IR")                                                           \
 
 LLVM_FLAGS(DECLARE_DEVELOPER_FLAG, DECLARE_PD_DEVELOPER_FLAG, DECLARE_PRODUCT_FLAG, DECLARE_PD_PRODUCT_FLAG, DECLARE_DIAGNOSTIC_FLAG, DECLARE_NOTPRODUCT_FLAG)
 
-#endif // SHARE_VM_LLVM_LLVM_GLOBALS_HPP
+#endif // CPU_LLVM_VM_CODE_GEN_LLVM_GLOBALS_HPP

@@ -103,12 +103,7 @@ class RegisterSaver {
     r9_off,  r9H_off,
     r8_off,  r8H_off,
     rdi_off, rdiH_off,
-#ifdef LLVMM
-    rsi_off2,
-#else
-    rsi_off,
-#endif
-    rsiH_off,
+    rsi_off, rsiH_off,
     ignore_off, ignoreH_off,  // extra copy of rbp
     rsp_off, rspH_off,
     rbx_off, rbxH_off,
@@ -134,7 +129,6 @@ class RegisterSaver {
   // Used by deoptimization when it is managing result register
   // values on its own
 
-  static int rsi_offset_in_bytes(void)    { return BytesPerInt * rsi_off; }
   static int rax_offset_in_bytes(void)    { return BytesPerInt * rax_off; }
   static int rdx_offset_in_bytes(void)    { return BytesPerInt * rdx_off; }
   static int rbx_offset_in_bytes(void)    { return BytesPerInt * rbx_off; }
@@ -145,13 +139,6 @@ class RegisterSaver {
   // all the other values have already been extracted.
   static void restore_result_registers(MacroAssembler* masm);
 };
-
-address SharedRuntime::CallDest::_rax;
-
-void SharedRuntime::CallDest::set_rax(oop* oop_adr) {
-  int offset = (RegisterSaver::rax_offset_in_bytes() - RegisterSaver::rsi_offset_in_bytes()) >> 3;
-  _rax = (address)*(oop_adr + offset);
-}
 
 OopMap* RegisterSaver::save_live_registers(MacroAssembler* masm, int additional_frame_words, int* total_frame_words, bool save_vectors) {
   int vect_words = 0;
@@ -2061,6 +2048,8 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
                                        oop_handle_offset, oop_maps, in_regs, in_sig_bt);
   }
 
+  __ register_fix();
+
   //
   // We immediately shuffle the arguments so that any vm call we have to
   // make from here on out (sync slow path, jvmti, etc.) we will have
@@ -2342,7 +2331,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
 
 
   // Finally just about ready to make the JNI call
-
 
   // get JNIEnv* which is first argument to native
   if (!is_critical_native) {
@@ -3658,6 +3646,7 @@ void SharedRuntime::generate_uncommon_trap_blob() {
   // runtime expects it.
   __ movl(c_rarg1, j_rarg0);
 
+  __ register_fix();
   __ set_last_Java_frame(noreg, noreg, NULL);
 
   // Call C code.  Need thread but NOT official VM entry
@@ -3926,9 +3915,7 @@ RuntimeStub* SharedRuntime::generate_resolve_blob(address destination, const cha
 
   map = RegisterSaver::save_live_registers(masm, 0, &frame_size_in_words);
   
-  __ movptr(c_rarg0, ThreadLocalStorage::thread_index());
-  __ call(RuntimeAddress((address)os::thread_local_storage_at));
-  __ mov(r15_thread, rax);
+  __ register_fix();
 
   int frame_complete = __ offset();
 
@@ -4356,8 +4343,14 @@ void OptoRuntime::generate_exception_blob() {
   __ movptr(Address(r15_thread, JavaThread::exception_handler_pc_offset()), (int)NULL_WORD);
   __ movptr(Address(r15_thread, JavaThread::exception_pc_offset()), (int)NULL_WORD);
 #endif
+
+  // We cannot do it now yet because we need to load exception oop later in the exception handler
+  // Even though we'll clear in the handler, postponing doing it may result in problems with GC
+  /// TODO: find a solution to this problem 
+/*
   // Clear the exception oop so GC no longer processes it as a root.
   __ movptr(Address(r15_thread, JavaThread::exception_oop_offset()), (int)NULL_WORD);
+*/
 
   // rax: exception oop
   // r8:  exception handler

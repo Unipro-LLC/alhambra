@@ -356,6 +356,7 @@ class StubGenerator: public StubCodeGenerator {
     // verify that threads correspond
     {
       Label L, S;
+      __ register_fix();
       __ cmpptr(r15_thread, thread);
       __ jcc(Assembler::notEqual, S);
       __ get_thread(rbx);

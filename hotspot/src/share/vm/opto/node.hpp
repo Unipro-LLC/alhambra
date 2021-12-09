@@ -29,9 +29,6 @@
 #include "libadt/vectset.hpp"
 #include "opto/compile.hpp"
 #include "opto/type.hpp"
-#ifdef LLVM
-#include "code_gen/llvmGlobals.hpp"
-#endif
 
 // Portions of code courtesy of Clifford Click
 
@@ -136,6 +133,9 @@ class SafePointNode;
 class SafePointScalarObjectNode;
 #ifdef LLVM
 class Selector;
+namespace llvm {
+class Value;
+}
 #endif
 class StartNode;
 class State;

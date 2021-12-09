@@ -83,7 +83,8 @@
 # include "adfiles/ad_ppc_64.hpp"
 #endif
 #ifdef LLVM
-#include "code_gen/llvmCodeGen.hpp"
+#include "code_gen/method_llvm.hpp"
+#include <string>
 #endif
 
 
@@ -654,7 +655,12 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
                   _do_escape_analysis(do_escape_analysis),
                   _eliminate_boxing(eliminate_boxing),
                   _failure_reason(NULL),
+#ifdef LLVM
+                  _target_name(LlvmMethod::method_name(method()->name()->as_utf8(), method()->holder()->name()->as_utf8())),
+                  _code_buffer(_target_name),
+#else
                   _code_buffer("Compile::Fill_buffer"),
+#endif
                   _orig_pc_slot(0),
                   _orig_pc_slot_offset_in_bytes(0),
                   _has_method_handle_invokes(false),
@@ -690,10 +696,6 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
                   _interpreter_frame_size(0),
                   _max_node_limit(MaxNodeLimit) {
   C = this;
-#ifdef LLVM
-  _target_name = target->name()->as_utf8();
-  _target_holder_name = target->holder()->name()->as_utf8();
-#endif
 
   CompileWrapper cw(this);
 #ifndef PRODUCT
@@ -923,24 +925,16 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
     }
     TracePhase t2("install_code", &_t_registerMethod, TimeCompiler);
 #endif
-#ifdef LLVM
-    _code_offsets.set_value(CodeOffsets::Entry, 0);
-    _code_offsets.set_value(CodeOffsets::Verified_Entry, 0);
-    _code_offsets.set_value(CodeOffsets::Frame_Complete, 0);
-    _code_offsets.set_value(CodeOffsets::OSR_Entry, 0);
-    _code_offsets.set_value(CodeOffsets::Exceptions, 0);
-    _code_offsets.set_value(CodeOffsets::Deopt, 0);
-    if (has_method_handle_invokes()) { _code_offsets.set_value(CodeOffsets::DeoptMH, 0); }
-    _code_offsets.set_value(CodeOffsets::UnwindHandler, 0);
-#else
+
+#ifndef LLVM
     if (is_osr_compilation()) {
       _code_offsets.set_value(CodeOffsets::Verified_Entry, 0);
       _code_offsets.set_value(CodeOffsets::OSR_Entry, _first_block_size);
     } else {
       _code_offsets.set_value(CodeOffsets::Verified_Entry, _first_block_size);
       _code_offsets.set_value(CodeOffsets::OSR_Entry, 0);
-    }
-#endif    
+    }   
+#endif
 
     env()->register_method(_method, _entry_bci,
                            &_code_offsets,
@@ -989,7 +983,12 @@ Compile::Compile( ciEnv* ci_env,
     _do_escape_analysis(false),
     _eliminate_boxing(false),
     _failure_reason(NULL),
+#ifdef LLVM
+    _target_name(LlvmMethod::method_name(stub_name, stub_name)),
+    _code_buffer(_target_name),
+#else
     _code_buffer("Compile::Fill_buffer"),
+#endif
     _has_method_handle_invokes(false),
     _mach_constant_base_node(NULL),
     _node_bundling_limit(0),
@@ -1018,10 +1017,6 @@ Compile::Compile( ciEnv* ci_env,
     _interpreter_frame_size(0),
     _max_node_limit(MaxNodeLimit) {
   C = this;
-#ifdef LLVM
-  _target_name = _stub_name ;
-  _target_holder_name = _stub_name;
-#endif
 
 #ifndef PRODUCT
   TraceTime t1(NULL, &_t_totalCompilation, TimeCompiler, false);
@@ -2381,14 +2376,21 @@ void Compile::Code_Gen() {
   NOT_PRODUCT( if (PrintOpto) { _cfg->dump(); } )
 
 #ifdef LLVM
-  LlvmCodeGen llvmcg;
   _oop_map_set = new OopMapSet();
-  llvmcg.llvm_code_gen(this, _target_name, _target_holder_name);
+  LlvmMethod llvm_method(this, _target_name);
   if (has_method()) {
-    _frame_slots = llvmcg.frame_size() >> LogBytesPerInt;
+    _frame_slots = llvm_method.frame_size() >> LogBytesPerInt;
   }
+  _code_offsets.set_value(CodeOffsets::Entry, 0);
+  _code_offsets.set_value(CodeOffsets::Verified_Entry, llvm_method.vep_offset());
+  _code_offsets.set_value(CodeOffsets::Frame_Complete, 0);
+  _code_offsets.set_value(CodeOffsets::OSR_Entry, 0);
+  _code_offsets.set_value(CodeOffsets::Exceptions, llvm_method.exc_offset());
+  _code_offsets.set_value(CodeOffsets::Deopt, llvm_method.deopt_offset());
+  if (has_method_handle_invokes()) { _code_offsets.set_value(CodeOffsets::DeoptMH, 0); }
+  _code_offsets.set_value(CodeOffsets::UnwindHandler, 0);
+  _orig_pc_slot_offset_in_bytes = llvm_method.orig_pc_offset();
 #else
-
   PhaseChaitin regalloc(unique(), cfg, matcher);
   _regalloc = &regalloc;
   {

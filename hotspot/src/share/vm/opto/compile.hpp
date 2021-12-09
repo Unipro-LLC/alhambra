@@ -43,9 +43,6 @@
 #include "runtime/vmThread.hpp"
 #include "trace/tracing.hpp"
 #include "utilities/ticks.hpp"
-#ifdef LLVM
-#include "code_gen/llvmGlobals.hpp"
-#endif
 
 class Block;
 class Bundle;
@@ -497,6 +494,10 @@ class Compile : public Phase {
   uint                  _node_bundling_limit;
   Bundle*               _node_bundling_base;    // Information for instruction bundling
 
+#ifdef LLVM
+  // name for CodeBuffer and llvm::Function
+  const char* _target_name;
+#endif
   // Instruction bits passed off to the VM
   int                   _method_size;           // Size of nmethod code segment in bytes
   CodeBuffer            _code_buffer;           // Where the code is assembled
@@ -1228,11 +1229,6 @@ class Compile : public Phase {
   // Auxiliary method for randomized fuzzing/stressing
   static bool randomized_select(int count);
 
-  //Variables for passing stub or method name in llvm_code_gen
-#ifdef LLVM
-  const char* _target_name;
-  const char* _target_holder_name;
-#endif
 };
 
 #endif // SHARE_VM_OPTO_COMPILE_HPP

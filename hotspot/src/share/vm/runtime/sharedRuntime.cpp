@@ -1299,6 +1299,7 @@ methodHandle SharedRuntime::resolve_sub_helper(JavaThread *thread,
                "should not call unloaded nmethod");
       }
 #endif
+
       if (is_virtual) {
         nmethod* nm = callee_nm;
         if (nm == NULL) CodeCache::find_blob(caller_frame.pc());

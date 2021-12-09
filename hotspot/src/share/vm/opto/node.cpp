@@ -565,7 +565,6 @@ Node *Node::clone() const {
 #ifdef LLVM
 //-----------------------------select------------------------------------------
 llvm::Value* Node::select(Selector* sel) {
-  NOT_PRODUCT( if (PrintOpto) { tty->print_cr("virtual llvm:Value* select(Selector* sel);"); } )
   return 0;
 }
 #endif

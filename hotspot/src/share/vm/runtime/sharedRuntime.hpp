@@ -586,16 +586,6 @@ class SharedRuntime: AllStatic {
   static void print_statistics();
   static void print_ic_miss_histogram();
 
-#ifdef LLVM
-  class CallDest {
-  private:
-    static address _rax;
-  public:
-    static address rax() { return _rax; }
-    static void set_rax(oop* oop_adr);
-  };
-#endif
-
 #endif // PRODUCT
 };
 

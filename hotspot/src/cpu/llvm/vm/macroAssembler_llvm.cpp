@@ -761,6 +761,43 @@ void MacroAssembler::reset_last_Java_frame(bool clear_fp) {
   movptr(Address(r15_thread, JavaThread::last_Java_pc_offset()), NULL_WORD);
 }
 
+void MacroAssembler::register_fix() {
+  movptr(r12_heapbase, 0);
+  push(rax);
+  push(c_rarg0);
+  push(c_rarg1);
+  push(c_rarg2);
+  push(c_rarg3);
+  push(c_rarg4);
+  movptr(c_rarg0, ThreadLocalStorage::thread_index());
+  call(RuntimeAddress((address)os::thread_local_storage_at));
+  mov(r15_thread, rax);
+  pop(c_rarg4);
+  pop(c_rarg3);
+  pop(c_rarg2);
+  pop(c_rarg1);
+  pop(c_rarg0);
+  pop(rax);
+}
+
+void MacroAssembler::generate_unverified_entry() {
+  const Register receiver = j_rarg0;
+  const Register ic_reg = rax;
+
+  Label hit;
+
+  load_klass(rscratch1, receiver);
+  cmpq(ic_reg, rscratch1);
+  jcc(Assembler::equal, hit);
+
+  jump(RuntimeAddress(SharedRuntime::get_ic_miss_stub()));
+
+  // Verified entry point must be aligned
+  align(8);
+
+  bind(hit);
+}
+
 void MacroAssembler::set_last_Java_frame(Register last_java_sp,
                                          Register last_java_fp,
                                          address  last_java_pc) {
@@ -3766,6 +3803,7 @@ void MacroAssembler::os_breakpoint() {
 
 void MacroAssembler::pop_CPU_state() {
   pop_FPU_state();
+  movptr(Address(rsp, 0), r15_thread);
   pop_IU_state();
 }
 

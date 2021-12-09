@@ -168,7 +168,7 @@ address TemplateInterpreterGenerator::generate_continuation_for(TosState state) 
 
 address TemplateInterpreterGenerator::generate_return_entry_for(TosState state, int step, size_t index_size) {
   address entry = __ pc();
-
+  __ register_fix();
   // Restore stack bottom in case i2c adjusted stack
   __ movptr(rsp, Address(rbp, frame::interpreter_frame_last_sp_offset * wordSize));
   // and NULL it as marker that esp is now tos until next java call
@@ -1421,6 +1421,7 @@ address InterpreterGenerator::generate_normal_entry(bool synchronized) {
                                    ConstMethod::size_of_parameters_offset());
   const Address size_of_locals(rdx, ConstMethod::size_of_locals_offset());
 
+  __ register_fix();
 
   // get parameter size (always needed)
   __ movptr(rdx, constMethod);
