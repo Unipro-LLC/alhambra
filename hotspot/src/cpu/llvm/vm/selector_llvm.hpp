@@ -10,7 +10,6 @@
 #include "utilities/growableArray.hpp"
 
 #include "code_gen/llvmHeaders.hpp"
-#include "code_gen/scopeInfo_llvm.hpp"
 #include "code_gen/oopInfo.hpp"
 
 class PhaseCFG;
@@ -35,7 +34,6 @@ private:
   llvm::Type* _landing_pad_ty;
   GrowableArray<llvm::BasicBlock*> _blocks;
   std::vector<std::pair<PhiNode*, llvm::PHINode*>> _phiNodeMap;
-  std::vector<ScopeInfo> _scope_info;
   std::unordered_map<llvm::Value*, std::unique_ptr<OopInfo>> _oop_info;
   std::unordered_map<Node*, Node*> _derived_base;
   llvm::SmallVector<std::unique_ptr<CacheEntry>, 256> _cache;
@@ -68,7 +66,6 @@ public:
   llvm::BasicBlock* basic_block(Block* block) { return _blocks.at(block->_pre_order - 1); }
   llvm::Value* thread() const { return _thread; }
   unsigned pointer_size() const { return _pointer_size; }
-  std::vector<ScopeInfo>& scope_info() { return _scope_info; }
   std::unordered_map<Block*, std::vector<Block*>>& handler_table() { return _handler_table; }
   llvm::Type* landing_pad_ty() { return _landing_pad_ty; }
 
@@ -110,7 +107,7 @@ public:
   int param_to_arg(int param_num);
   llvm::FunctionCallee callee(const void* func, llvm::Type* retType, const std::vector<llvm::Value*>& args = {});
   llvm::CallInst* call_C(const void* func, llvm::Type* retType, const std::vector<llvm::Value*>& args = {});
-  llvm::CallInst* call_Java(MachCallJavaNode* node, llvm::Type* retType, const std::vector<llvm::Value*>& args);
+  llvm::CallInst* call(MachCallNode* node, llvm::Type* retType, const std::vector<llvm::Value*>& args);
 
   llvm::Value* loadKlass_not_null(llvm::Value* obj);
   llvm::Value* decodeKlass_not_null(llvm::Value* narrow_klass);

@@ -50,7 +50,7 @@ llvm::Value* MachProjNode::select(Selector* sel) {
 
 llvm::Value* CallRuntimeDirectNode::select(Selector* sel) {
   llvm::Type* retType = sel->type(tf()->return_type());
-  return sel->call_C(entry_point(), retType, sel->call_args(this));
+  return sel->call(this, retType, sel->call_args(this));
 }
 
 llvm::Value* CallLeafDirectNode::select(Selector* sel) {
@@ -253,7 +253,7 @@ llvm::Value* CallStaticJavaDirectNode::select(Selector* sel) {
   BasicType ret_type = tf()->return_type();
   assert(ret_type != T_NARROWOOP, "unexpected behavior check");
   llvm::Type* retType = sel->type(ret_type);
-  llvm::Value* ret = sel->call_Java(this, retType, args);
+  llvm::Value* ret = sel->call(this, retType, args);
 
   if (ret_type == T_OBJECT || ret_type == T_ARRAY) {
     sel->mark_mptr(ret);
@@ -267,7 +267,7 @@ llvm::Value* CallDynamicJavaDirectNode::select(Selector* sel) {
   BasicType ret_type = tf()->return_type();
   assert(ret_type != T_NARROWOOP, "unexpected behavior check");
   llvm::Type* retType = sel->type(ret_type);
-  llvm::Value* ret = sel->call_Java(this, retType, args);
+  llvm::Value* ret = sel->call(this, retType, args);
 
   if (ret_type == T_OBJECT || ret_type == T_ARRAY) {
     sel->mark_mptr(ret);
@@ -1349,6 +1349,15 @@ llvm::Value* string_equalsNode::select(Selector *sel) {
 }
 
 llvm::Value* safePoint_pollNode::select(Selector *sel) {
+  ScopeDescriptor& sd = sel->cg()->scope_descriptor();
+  ScopeInfo& si = sd.register_scope(this);
+  size_t patch_bytes = DebugInfo::patch_bytes(DebugInfo::SafePoint);
+  // call with be replaced with a nop
+  llvm::FunctionCallee f = sel->callee(nullptr, sel->type(T_VOID), {});
+  std::vector<llvm::Value*> deopt = sd.stackmap_scope(si);
+  llvm::ArrayRef<llvm::Value*> args;
+  llvm::Optional<llvm::ArrayRef<llvm::Value*>> deopt_args(deopt);
+  llvm::Instruction* statepoint = sel->builder().CreateGCStatepointCall(si.stackmap_id, patch_bytes, f.getCallee(), args, deopt_args, {});
   llvm::Value* addr = sel->get_ptr(os::get_polling_page(), T_ADDRESS);
   sel->builder().CreateLoad(addr, true);
   return NULL;

@@ -656,7 +656,7 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
                   _eliminate_boxing(eliminate_boxing),
                   _failure_reason(NULL),
 #ifdef LLVM
-                  _target_name(LlvmMethod::method_name(method()->name()->as_utf8(), method()->holder()->name()->as_utf8())),
+                  _target_name(LlvmMethod::method_name(method()->holder()->name()->as_utf8(), method()->name()->as_utf8())),
                   _code_buffer(_target_name),
 #else
                   _code_buffer("Compile::Fill_buffer"),

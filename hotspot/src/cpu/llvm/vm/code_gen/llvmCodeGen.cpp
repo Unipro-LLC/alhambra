@@ -49,6 +49,7 @@ LlvmCodeGen::LlvmCodeGen(LlvmMethod* method, Compile* c, const char* name) :
       }
     }
   }
+  scope_descriptor().scope_info().reserve(nof_Java_calls());
 }
 
 void LlvmCodeGen::run_passes(llvm::SmallVectorImpl<char>& ObjBufferSV) {
@@ -164,11 +165,11 @@ void LlvmCodeGen::fill_code_buffer(address src, uint64_t size, int& exc_offset, 
       if (bdi) {
         bdi->block = blocks()[bdi->idx];
       }
-      CallDebugInfo* cdi = di->asCallDebugInfo();
-      if (cdi) {
-        cdi->record_idx = record_idx;
-        cdi->scope_info = &selector().scope_info()[cdi->idx];
-        assert(cdi->scope_info->stackmap_id == id, "different ids");
+      SafePointDebugInfo* spdi = di->asSafePointDebugInfo();
+      if (spdi) {
+        spdi->record_idx = record_idx;
+        spdi->scope_info = &scope_descriptor().scope_info()[spdi->idx];
+        assert(spdi->scope_info->stackmap_id == id, "different ids");
       }
       record_idx++;
       debug_info().push_back(std::move(di));
@@ -190,13 +191,13 @@ void LlvmCodeGen::fill_code_buffer(address src, uint64_t size, int& exc_offset, 
             assert(a_bl || a_in, "should be BlockStart or Inblock");
             return false;
           }
-          // a block starts after CreateException
+          // CreateException then jump to the next block
           if (a->asExceptionDebugInfo()) {
-            assert(b_bl, "should be BlockStart or Inblock");
+            assert(b_bl, "should be BlockStart");
             return true;
           } 
           if (b->asExceptionDebugInfo()) {
-            assert(a_bl, "should be BlockStart or Inblock");
+            assert(a_bl, "should be BlockStart");
             return false;
           }
           // one block contains just a jump and is optimized out
@@ -250,7 +251,7 @@ void LlvmCodeGen::fill_code_buffer(address src, uint64_t size, int& exc_offset, 
 }
 
 void LlvmCodeGen::patch_call(std::vector<std::unique_ptr<DebugInfo>>::iterator it, std::unordered_map<size_t, uint32_t>& call_offsets) {
-  CallDebugInfo* di = (*it)->asCallDebugInfo();
+  JavaCallDebugInfo* di = (*it)->asJavaCallDebugInfo();
   MachCallNode* cn = di->scope_info->cn;
   address next_inst = code_start() + di->pc_offset;
   address call_site = next_inst - sizeof(uint32_t);
@@ -361,11 +362,11 @@ void LlvmCodeGen::patch(address& pos, const std::vector<byte>& inst) {
 void LlvmCodeGen::add_stubs(int& exc_offset, int& deopt_offset) {
   if (C->has_method()) {
     for (const std::unique_ptr<DebugInfo>& di : debug_info()) {
-      CallDebugInfo* cdi = di->asCallDebugInfo();
-      if (!cdi) continue;
-      MachCallJavaNode* cjn = cdi->scope_info->cjn;
-      if (cjn->is_MachCallStaticJava() && cjn->_method) {
-        address call_site = code_start() + cdi->call_offset;
+      StaticCallDebugInfo* scdi = di->asStaticCallDebugInfo();
+      if (!scdi) continue;
+      MachCallJavaNode* cjn = scdi->scope_info->cjn;
+      if (cjn->_method) {
+        address call_site = code_start() + scdi->call_offset;
         cb()->insts()->set_mark(call_site);
         address stub = CompiledStaticCall::emit_to_interp_stub(*cb());
         assert(stub != NULL, "CodeCache is full");

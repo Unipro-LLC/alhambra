@@ -8,6 +8,8 @@ std::vector<byte> DebugInfo::JMPQ_R10 = { 0x41, 0xFF, 0xE2 };
 std::unique_ptr<DebugInfo> DebugInfo::create(uint64_t id) {
   uint32_t idx = DebugInfo::idx(id);
   switch (DebugInfo::type(id)) {
+    case SafePoint: return std::make_unique<SafePointDebugInfo>(idx);
+    case Call: return std::make_unique<CallDebugInfo>(idx);
     case StaticCall: return std::make_unique<StaticCallDebugInfo>(idx);
     case DynamicCall: return std::make_unique<DynamicCallDebugInfo>(idx);
     case BlockStart: return std::make_unique<BlockStartDebugInfo>(idx);
@@ -22,12 +24,15 @@ std::unique_ptr<DebugInfo> DebugInfo::create(uint64_t id) {
 
 size_t DebugInfo::patch_bytes(Type type) {
   const size_t JAVA_CALL_PATCH_BYTES = NativeCall::instruction_size + BytesPerInt - 1;
+  // 0 leaves the call as it is, 1 is the minimum number of nops so the call won't be inserted
   switch (type) {
+    case SafePoint: return 1;
+    case Call: return 0;
     case DynamicCall: return JAVA_CALL_PATCH_BYTES + NativeMovConstReg::instruction_size;
     case StaticCall: return JAVA_CALL_PATCH_BYTES;
     case Rethrow: return NativeJump::instruction_size - NativeReturn::instruction_size;
     case TailJump: return 2 * NativeMovRegMem::instruction_size + ADD_0x8_RSP.size() + JMPQ_R10.size() - NativeReturn::instruction_size; 
-    case Exception: return 1; // minimum number of nops so the call won't be inserted
+    case Exception: return 1;
     default: ShouldNotReachHere();
   }
 }

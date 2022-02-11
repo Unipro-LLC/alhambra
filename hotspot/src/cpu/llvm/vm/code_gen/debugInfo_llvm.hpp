@@ -8,12 +8,12 @@
 
 #include "llvmHeaders.hpp"
 
-class Node;
 class OopMap;
 class Block;
-class LlvmCodeGen;
 struct IndexDebugInfo;
+struct SafePointDebugInfo;
 struct CallDebugInfo;
+struct JavaCallDebugInfo;
 struct StaticCallDebugInfo;
 struct DynamicCallDebugInfo;
 struct BlockStartDebugInfo;
@@ -26,7 +26,7 @@ struct ScopeInfo;
 
 //unique to each pc_offset
 struct DebugInfo {
-  enum Type { BlockStart, StaticCall, DynamicCall, Inblock, Rethrow, TailJump, PatchBytes, Exception, Count };
+  enum Type { BlockStart, SafePoint, Call, StaticCall, DynamicCall, Inblock, Rethrow, TailJump, PatchBytes, Exception, Count };
   uint32_t pc_offset;
   DebugInfo() {}
   virtual Type type() = 0;
@@ -41,7 +41,9 @@ struct DebugInfo {
   static std::vector<byte> ADD_0x8_RSP;
   static std::vector<byte> JMPQ_R10;
 
+  virtual SafePointDebugInfo* asSafePointDebugInfo() { return nullptr; }
   virtual CallDebugInfo* asCallDebugInfo() { return nullptr; }
+  virtual JavaCallDebugInfo* asJavaCallDebugInfo() { return nullptr; }
   virtual StaticCallDebugInfo* asStaticCallDebugInfo() { return nullptr; }
   virtual DynamicCallDebugInfo* asDynamicCallDebugInfo() { return nullptr; }
   virtual BlockStartDebugInfo* asBlockStartDebugInfo() { return nullptr; }
@@ -53,25 +55,36 @@ struct DebugInfo {
 };
 struct IndexDebugInfo : public DebugInfo {
   uint32_t idx;
-  IndexDebugInfo(uint32_t i) : DebugInfo(), idx(i) {}
+  IndexDebugInfo(uint32_t idx_): DebugInfo(), idx(idx_) {}
 };
-struct CallDebugInfo : public IndexDebugInfo {
+struct SafePointDebugInfo : public IndexDebugInfo {
   unsigned record_idx;
-  uint32_t call_offset;
   ScopeInfo* scope_info;
   OopMap* oopmap;
 
-  CallDebugInfo(uint32_t idx): IndexDebugInfo(idx) {}
-  CallDebugInfo* asCallDebugInfo() override { return this; }
+  SafePointDebugInfo(uint32_t idx): IndexDebugInfo(idx) {}
+  SafePointDebugInfo* asSafePointDebugInfo() override { return this; }
+  Type type() override { return SafePoint; }
   RecordAccessor record(StackMapParser* parser) const { return parser->getRecord(record_idx); }
 };
-struct StaticCallDebugInfo : public CallDebugInfo {
-  StaticCallDebugInfo(uint32_t idx): CallDebugInfo(idx) {}
+struct CallDebugInfo : public SafePointDebugInfo {
+  CallDebugInfo(uint32_t idx): SafePointDebugInfo(idx) {}
+  CallDebugInfo* asCallDebugInfo() override { return this; }
+  Type type() override { return Call; }
+};
+struct JavaCallDebugInfo : public CallDebugInfo {
+  uint32_t call_offset;
+  JavaCallDebugInfo(uint32_t idx): CallDebugInfo(idx) {}
+  JavaCallDebugInfo* asJavaCallDebugInfo() override { return this; }
+};
+
+struct StaticCallDebugInfo : public JavaCallDebugInfo {
+  StaticCallDebugInfo(uint32_t idx): JavaCallDebugInfo(idx) {}
   StaticCallDebugInfo* asStaticCallDebugInfo() override { return this; }
   Type type() override { return StaticCall; }
 };
-struct DynamicCallDebugInfo : public CallDebugInfo {
-  DynamicCallDebugInfo(uint32_t idx): CallDebugInfo(idx) {}
+struct DynamicCallDebugInfo : public JavaCallDebugInfo {
+  DynamicCallDebugInfo(uint32_t idx): JavaCallDebugInfo(idx) {}
   DynamicCallDebugInfo* asDynamicCallDebugInfo() override { return this; }
   Type type() override { return DynamicCall; }
 };

@@ -39,7 +39,6 @@ void Selector::prolog() {
 }
 
 void Selector::select() {
-  scope_info().reserve(cg()->nof_Java_calls());
   for (size_t i = 0; i < C->unique(); ++i) {
     _cache.push_back(std::make_unique<CacheEntry>());
   }
@@ -429,20 +428,18 @@ llvm::FunctionCallee Selector::callee(const void* func, llvm::Type* retType, con
   return llvm::FunctionCallee(funcTy, ptr);
 }
 
-llvm::CallInst* Selector::call_Java(MachCallJavaNode* node, llvm::Type* retType, const std::vector<llvm::Value*>& args) {
-  scope_info().emplace_back();
-  ScopeInfo& si = scope_info().back();
-  si.cn = node;
-  cg()->scope_descriptor().fill_scope_info(&si);
-
+llvm::CallInst* Selector::call(MachCallNode* node, llvm::Type* retType, const std::vector<llvm::Value*>& args) {
   llvm::FunctionCallee f = callee(node->entry_point(), retType, args);
   llvm::Value* callee = f.getCallee();
-  std::vector<llvm::Value*> deopt = cg()->scope_descriptor().statepoint_scope(si);
+  ScopeDescriptor& sd = cg()->scope_descriptor();
+  ScopeInfo& si = sd.register_scope(node);
+  std::vector<llvm::Value*> deopt = sd.stackmap_scope(si);
   llvm::Optional<llvm::ArrayRef<llvm::Value*>> deopt_args(deopt);
 
   Node* block_end = block()->end();
   CatchNode* catch_node = block_end->isa_Catch();
-  uint32_t patch_bytes = DebugInfo::patch_bytes(node->is_MachCallDynamicJava() ? DebugInfo::DynamicCall : DebugInfo::StaticCall);
+  DebugInfo::Type ty = DebugInfo::type(si.stackmap_id);
+  uint32_t patch_bytes = DebugInfo::patch_bytes(ty);
   Block* next_block = nullptr;
 
   if (catch_node) {
@@ -488,7 +485,7 @@ llvm::CallInst* Selector::call_Java(MachCallJavaNode* node, llvm::Type* retType,
         mark_inblock();
         llvm::Value* pred = builder().CreateICmpEQ(thread(), null(thread()->getType()));
         builder().CreateCondBr(pred, basic_block(*it), basic_block(*(it - 1)));
-      }  
+      }
       builder().SetInsertPoint(basic_block());
       llvm::Value* pred = builder().CreateICmpEQ(thread(), null(thread()->getType()));
       builder().CreateCondBr(pred, basic_block(handler_blocks[0]), right_bb);
@@ -499,7 +496,7 @@ llvm::CallInst* Selector::call_Java(MachCallJavaNode* node, llvm::Type* retType,
     llvm::Instruction* statepoint = builder().CreateGCStatepointCall(si.stackmap_id, patch_bytes, callee, args, deopt_args, {});
     next_block = block()->non_connector_successor(0);
     llvm::BasicBlock* next_bb = basic_block(next_block);
-    if (!block_end->is_MachReturn() && !block_end->is_MachGoto()) { // ShouldNotReachHere and jmpDir
+    if (node->is_MachCallJava() && !block_end->is_MachReturn() && !block_end->is_MachGoto()) { // ShouldNotReachHere and jmpDir
       builder().CreateBr(next_bb);
     }
     return retType->isVoidTy() ? NULL : builder().CreateGCResult(statepoint, retType);
