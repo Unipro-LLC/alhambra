@@ -7,11 +7,15 @@
 #include "utilities/growableArray.hpp"
 
 struct ScalarObjectInfo;
+struct ThrowScopeInfo;
 class Node;
 class MachSafePointNode;
 class MachCallNode;
 class MachCallJavaNode;
 
+namespace llvm {
+  class BasicBlock;
+}
 struct NodeInfo {
   Node* node;
   NodeInfo(Node* n) : node(n) {}
@@ -40,6 +44,13 @@ struct ScopeInfo {
   uint64_t stackmap_id;
   GrowableArray<ScopeValue*> *objs;
   std::vector<ScopeValueInfo> sv_info;
+
+  virtual ThrowScopeInfo* asThrow() { return nullptr; }
+};
+
+struct ThrowScopeInfo : public ScopeInfo {
+  llvm::BasicBlock* bb;
+  ThrowScopeInfo* asThrow() override { return this; }
 };
 
 #endif // CPU_LLVM_VM_CODE_GEN_SCOPEINFO_LLVM_HPP

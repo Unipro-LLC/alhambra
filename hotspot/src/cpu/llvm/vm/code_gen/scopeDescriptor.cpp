@@ -9,10 +9,41 @@ ScopeDescriptor::ScopeDescriptor(LlvmCodeGen* code_gen) : _cg(code_gen), C(code_
 void ScopeDescriptor::describe_scopes() {
   C->env()->debug_info()->set_oopmaps(C->oop_map_set());
   for (std::unique_ptr<DebugInfo>& debug_info : cg()->debug_info()) {
-    SafePointDebugInfo* di = debug_info->asSafePointDebugInfo();
-    if (!di) continue;
-    di->oopmap = new OopMap(cg()->stack().frame_size() / BytesPerInt, C->has_method() ? C->method()->arg_size() : 0);
-    describe_scope(di);
+    GCDebugInfo* gcdi = debug_info->asGC();
+    if (gcdi) {
+      SafePointDebugInfo* spdi = debug_info->asSafePoint();
+      RecordAccessor record = gcdi->record(cg()->sm_parser());
+      LocationAccessor deopt_cnt = record.getLocation(DEOPT_CNT_OFFSET);
+      uint32_t gc_idx = deopt_cnt.getSmallConstant() + DEOPT_OFFSET;
+      if (spdi) {
+        int la_idx = describe_scope(spdi);
+        assert(la_idx == gc_idx, "gc locs start after deopt ones");
+      }
+      for (uint16_t i = gc_idx; i < record.getNumLocations(); i += 2) {
+        int off[2];
+        LocationKind kind = StackMapParser::LocationKind::Indirect;
+        uint size = cg()->selector().pointer_size() >> LogBytesPerWord, rbp = 6, rsp = 7;
+        bool skip = false;
+        for (size_t j = 0; j < 2; ++j) {
+          LocationAccessor la = record.getLocation(i + j);
+          if (la.getKind() != kind) {
+            assert(la.getKind() == StackMapParser::LocationKind::Constant && la.getSmallConstant() == 0, "no other choice");
+            skip = true;
+            break;
+          }
+          assert(la.getSizeInBytes() == size, "only support singular locations");
+          if (la.getDwarfRegNum() == rsp) {
+            off[j] = la.getOffset();
+          } else {
+            assert(la.getDwarfRegNum() == rbp, "no other choice");
+            off[j] = la.getOffset() + cg()->stack().unext_offset();
+          }
+        }
+        if (skip) continue;
+        // set_oop is called if arguments are equal
+        gcdi->oopmap->set_derived_oop(VMRegImpl::stack2reg(off[1] / BytesPerInt), VMRegImpl::stack2reg(off[0] / BytesPerInt));
+      }
+    }
   }
 }
 
@@ -69,14 +100,11 @@ bool ScopeDescriptor::fill_loc_array_helper(GrowableArray<ScopeValue*> *array, N
             case Type::Int:
               return Location::normal;
             case Type::NarrowOop:
-            // the way things are now, llvm Function is deleted and the pointers are dangling at this point
-              assert(sel.oop_info(v)->isNarrowPtr(), "sanity check");
               return Location::narrowoop;
             default:
-              OopInfo* oop = sel.oop_info(v);
-              if (!oop) return Location::normal;
-              assert (!oop->isNarrowPtr(), "sanity check");
-              return oop->isManagedPtr() ? Location::oop : Location::normal;
+              std::vector<Node*>& oops = cg()->selector().oops();
+              auto it = std::find(oops.begin(), oops.end(), n);
+              return it != oops.end() ? Location::oop : Location::normal;
           }
         } ();
         const uint16_t rsp = 7, rbp = 6;
@@ -85,7 +113,7 @@ bool ScopeDescriptor::fill_loc_array_helper(GrowableArray<ScopeValue*> *array, N
           return (ScopeValue*)new LocationValue(loc);
         }
         if (la.getDwarfRegNum() == rbp) {
-          Location loc = Location::new_stk_loc(type, la.getOffset() + (cg()->stack().frame_size() - 2 * wordSize));
+          Location loc = Location::new_stk_loc(type, la.getOffset() + cg()->stack().unext_offset());
           return (ScopeValue*)new LocationValue(loc);
         }
         Unimplemented();
@@ -141,7 +169,7 @@ ScopeValue* ScopeDescriptor::con_value(const Type *t, bool& largeType) {
   }
 }
 
-void ScopeDescriptor::describe_scope(SafePointDebugInfo* di) {
+int ScopeDescriptor::describe_scope(SafePointDebugInfo* di) {
   LlvmStack& stack = cg()->stack();
   MachSafePointNode* sfn = di->scope_info->sfn;
 
@@ -171,7 +199,7 @@ void ScopeDescriptor::describe_scope(SafePointDebugInfo* di) {
   // Do not skip safepoints with a NULL method, they need monitor info
   GrowableArray<ScopeValue*> *objs = di->scope_info->objs;
 
-  int la_idx = LOC_OFFSET;
+  int la_idx = DEOPT_OFFSET;
   JVMState* youngest_jvms = sfn->jvms();
   int depth = 0, max_depth = youngest_jvms->depth();
   for (ScopeValueInfo& si : di->scope_info->sv_info) {
@@ -235,19 +263,27 @@ void ScopeDescriptor::describe_scope(SafePointDebugInfo* di) {
   }
 
   C->debug_info()->end_safepoint(di->pc_offset);
+  return la_idx;
 }
 
-ScopeInfo& ScopeDescriptor::register_scope(MachSafePointNode* sfn) {
-  scope_info().emplace_back();
-  ScopeInfo* si = &scope_info().back();
+ScopeInfo* ScopeDescriptor::register_scope(MachSafePointNode* sfn, bool throws_exc) {
+  if (throws_exc) {
+    std::unique_ptr<ThrowScopeInfo> bsi_uptr = std::make_unique<ThrowScopeInfo>();
+    bsi_uptr->bb = cg()->selector().basic_block();
+    scope_info().push_back(std::move(bsi_uptr));
+  } else {
+    std::unique_ptr<ScopeInfo> si_uptr = std::make_unique<ScopeInfo>();
+    scope_info().push_back(std::move(si_uptr));
+  }
+  ScopeInfo* si = scope_info().back().get();
   si->sfn = sfn;
-  uint64_t idx = scope_info().size() - 1;
   DebugInfo::Type ty = [&] {
     if (sfn->is_MachCallStaticJava()) return DebugInfo::StaticCall;
     if (sfn->is_MachCallDynamicJava()) return DebugInfo::DynamicCall;
     if (sfn->is_MachCallRuntime()) return DebugInfo::Call;
     return DebugInfo::SafePoint;
   }();
+  uint64_t idx = scope_info().size() - 1;
   si->stackmap_id = DebugInfo::id(ty, idx);
   JVMState* youngest_jvms = sfn->jvms();
   si->objs = new GrowableArray<ScopeValue*>();
@@ -291,7 +327,7 @@ ScopeInfo& ScopeDescriptor::register_scope(MachSafePointNode* sfn) {
       }
     }
   }
-  return *si;
+  return si;
 }
 
 std::unique_ptr<NodeInfo> ScopeDescriptor::init_node_info(ScopeInfo* si, Node* n) {
@@ -336,9 +372,9 @@ void ScopeDescriptor::add_statepoint_arg(std::vector<llvm::Value*>& args, NodeIn
   }
 }
 
-std::vector<llvm::Value*> ScopeDescriptor::stackmap_scope(const ScopeInfo& si) {
+std::vector<llvm::Value*> ScopeDescriptor::stackmap_scope(const ScopeInfo* si) {
   std::vector<llvm::Value*> args;
-  for (const ScopeValueInfo& svi : si.sv_info) {
+  for (const ScopeValueInfo& svi : si->sv_info) {
     for (const std::unique_ptr<NodeInfo>& info : svi.locs) {
       add_statepoint_arg(args, info.get());
     }

@@ -4120,7 +4120,7 @@ jint Arguments::parse(const JavaVMInitArgs* args) {
     cl_args.push_back("-print-after-all");
   }
   cl_args.push_back("-enable-implicit-null-checks");
-  // cl_args.push_back("-stack-alignment=16");
+  cl_args.push_back("-enable-tail-merge=false");
   cl_args.push_back(0);  // terminator
   llvm::cl::ParseCommandLineOptions(cl_args.size() - 1, (char **) &cl_args[0], "");
 

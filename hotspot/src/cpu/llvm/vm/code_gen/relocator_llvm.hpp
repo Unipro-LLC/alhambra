@@ -34,10 +34,11 @@ class RelocationHolder;
 class CallReloc;
 class VirtualCallReloc;
 
+class ConstReloc;
 class FPReloc;
 class FloatReloc;
 class DoubleReloc;
-
+class OopReloc;
 
 class Reloc: public ResourceObj {
 protected:
@@ -50,9 +51,11 @@ public:
   virtual int getFormat() const       { return 0; }
   virtual CallReloc* asCallReloc()    { return nullptr; }
   virtual VirtualCallReloc* asVirtualCallReloc()    { return nullptr; }
+  virtual ConstReloc* asConstReloc() { return nullptr; }
   virtual FPReloc* asFPReloc() { return nullptr; }
   virtual FloatReloc* asFloatReloc()    { return nullptr; }
   virtual DoubleReloc* asDoubleReloc()    { return nullptr; }
+  virtual OopReloc* asOopReloc()    { return nullptr; }
   virtual RelocationHolder getHolder() = 0;
 };
 
@@ -78,14 +81,22 @@ public:
   RelocationHolder getHolder() override;
 };
 
-class FPReloc : public Reloc {
+class ConstReloc : public Reloc {
   address _con_addr = nullptr;
 protected:
-  FPReloc(size_t offset): Reloc(offset) {}
+  ConstReloc(size_t offset): Reloc(offset) {}
 public:
-  void set_con_addr(address con_addr) { _con_addr = con_addr;}
-  FPReloc* asFPReloc() override { return this; }
+  void set_con_addr(address con_addr) { _con_addr = con_addr; }
+  ConstReloc* asConstReloc() override { return this; }
   RelocationHolder getHolder() override;
+};
+
+class FPReloc : public ConstReloc {
+  address _con_addr = nullptr;
+protected:
+  FPReloc(size_t offset): ConstReloc(offset) {}
+public:
+  FPReloc* asFPReloc() override { return this; }
 };
 
 class FloatReloc : public FPReloc {
@@ -102,6 +113,14 @@ public:
   DoubleReloc(size_t offset, double con): FPReloc(offset), _con(con) {}
   double con() const { return _con; }
   DoubleReloc* asDoubleReloc() override { return this; }
+};
+
+class OopReloc : public ConstReloc {
+  uintptr_t _con;
+public:
+  OopReloc(size_t offset, uintptr_t con): ConstReloc(offset), _con(con) {}
+  uintptr_t con() const { return _con; }
+  OopReloc* asOopReloc() override { return this; }
 };
 
 class LlvmRelocator {

@@ -10,7 +10,6 @@
 #include "utilities/growableArray.hpp"
 
 #include "code_gen/llvmHeaders.hpp"
-#include "code_gen/oopInfo.hpp"
 
 class PhaseCFG;
 class Block;
@@ -31,10 +30,9 @@ private:
   llvm::Function* _func;
   llvm::IRBuilder<> _builder;
   llvm::Value* _thread = nullptr;
-  llvm::Type* _landing_pad_ty;
   GrowableArray<llvm::BasicBlock*> _blocks;
   std::vector<std::pair<PhiNode*, llvm::PHINode*>> _phiNodeMap;
-  std::unordered_map<llvm::Value*, std::unique_ptr<OopInfo>> _oop_info;
+  std::vector<Node*> _oops;
   std::unordered_map<Node*, Node*> _derived_base;
   llvm::SmallVector<std::unique_ptr<CacheEntry>, 256> _cache;
   Block* _block;
@@ -42,7 +40,7 @@ private:
   const char* _name;
   bool _is_fast_compression;
   std::vector<size_t> _nf_pos;
-  std::unordered_map<Block*, std::vector<Block*>> _handler_table;
+  std::unordered_map<llvm::BasicBlock*, ExceptionInfo> _exception_info;
 
   void create_func();
   void create_blocks();
@@ -66,8 +64,8 @@ public:
   llvm::BasicBlock* basic_block(Block* block) { return _blocks.at(block->_pre_order - 1); }
   llvm::Value* thread() const { return _thread; }
   unsigned pointer_size() const { return _pointer_size; }
-  std::unordered_map<Block*, std::vector<Block*>>& handler_table() { return _handler_table; }
-  llvm::Type* landing_pad_ty() { return _landing_pad_ty; }
+  std::unordered_map<llvm::BasicBlock*, ExceptionInfo>& exception_info() { return _exception_info; }
+  std::vector<Node*>& oops() { return _oops; }
 
   llvm::Type* type(BasicType btype) const;
   std::vector<llvm::Type*> types(const std::vector<llvm::Value*>& v) const;
@@ -87,7 +85,6 @@ public:
   void store(llvm::Value* value, llvm::Value* addr);
   llvm::AtomicCmpXchgInst* cmpxchg(llvm::Value* addr, llvm::Value* cmp, llvm::Value* val);
   void replace_return_address(llvm::Value* new_addr);
-  void mark_inblock();
 
   llvm::Value* select_node(Node* node);
   llvm::Value* select_oper(MachOper *oper);
@@ -95,19 +92,12 @@ public:
   llvm::Value* select_condition(Node* cmp, llvm::Value* a, llvm::Value* b, bool is_and, bool flt);
   void select_if(llvm::Value *pred, Node* node);
 
-  void mark_mptr(llvm::Value* oop);
-  void mark_nptr(llvm::Value* oop);
-  void mark_dptr(llvm::Value* ptr, llvm::Value* base);
-  OopInfo* oop_info(llvm::Value* oop) { return _oop_info.count(oop) ? _oop_info[oop].get() : NULL; }
-  Node* derived_base(Node* derived) { return _derived_base.count(derived) ? _derived_base[derived] : NULL; }
-  Node* find_derived_base(Node* derived);
-
   std::vector<llvm::Value*> call_args(MachCallNode* node);
   void callconv_adjust(std::vector<llvm::Value*>& args);
   int param_to_arg(int param_num);
   llvm::FunctionCallee callee(const void* func, llvm::Type* retType, const std::vector<llvm::Value*>& args = {});
   llvm::CallInst* call_C(const void* func, llvm::Type* retType, const std::vector<llvm::Value*>& args = {});
-  llvm::CallInst* call(MachCallNode* node, llvm::Type* retType, const std::vector<llvm::Value*>& args);
+  llvm::CallBase* call(MachCallNode* node, llvm::Type* retType, const std::vector<llvm::Value*>& args);
 
   llvm::Value* loadKlass_not_null(llvm::Value* obj);
   llvm::Value* decodeKlass_not_null(llvm::Value* narrow_klass);

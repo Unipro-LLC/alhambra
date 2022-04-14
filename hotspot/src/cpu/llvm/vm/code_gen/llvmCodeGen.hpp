@@ -31,14 +31,17 @@ class LlvmCodeGen {
   StackMapParser* sm_parser() { return _sm_parser.get(); }
   size_t patch_bytes(DebugInfo::Type type) const;
   unsigned nof_monitors() const { return _nof_monitors; }
-  bool has_exceptions() const { return _has_exceptions; }
+  bool has_exceptions() const { return _nof_exceptions > 0; }
   unsigned nof_Java_calls() const { return _nof_Java_calls; }
   unsigned nof_to_interp_stubs() const { return _nof_to_interp_stubs; }
   std::vector<Block*>& blocks() { return _blocks; }
   bool has_tail_jump() const { return _has_tail_jump; }
   unsigned nof_consts() const { return _nof_consts; }
-  address code_start() { return _code_start; }
-  address code_end() { return _code_end; }
+  void inc_nof_consts() { _nof_consts++; }
+  address code_start() const { return _code_start; }
+  address code_end() const { return _code_end; }
+  unsigned nof_safepoints() { return _nof_safepoints; }
+  unsigned nof_exceptions() { return _nof_exceptions; }
 
   void run_passes(llvm::SmallVectorImpl<char>& ObjBufferSV);
   void process_object_file(const llvm::object::ObjectFile& obj_file, const char *obj_file_start, address& code_start, uint64_t& code_size);
@@ -58,7 +61,6 @@ class LlvmCodeGen {
   LlvmStack _stack;
   std::unique_ptr<StackMapParser> _sm_parser = nullptr;
   unsigned _nof_monitors = 0;
-  bool _has_exceptions = false;
   unsigned _nof_Java_calls = 0;
   unsigned _nof_to_interp_stubs = 0;
   std::vector<Block*> _blocks;
@@ -66,13 +68,16 @@ class LlvmCodeGen {
   unsigned _nof_consts = 0;
   address _code_start;
   address _code_end;
+  unsigned _nof_safepoints = 0;
+  unsigned _nof_exceptions = 0;
 
+  std::unordered_map<const llvm::BasicBlock*, size_t> count_block_offsets(int vep_offset);
   void patch(address& pos, const std::vector<byte>& inst);
-  void patch_call(std::vector<std::unique_ptr<DebugInfo>>::iterator it, std::unordered_map<size_t, uint32_t>& call_offsets);
+  void patch_call(JavaCallDebugInfo* di);
   void patch_rethrow_exception(std::vector<std::unique_ptr<DebugInfo>>::iterator it);
   void patch_tail_jump(std::vector<std::unique_ptr<DebugInfo>>::iterator it);
+  void reloc_const(std::vector<std::unique_ptr<DebugInfo>>::iterator it);
   void add_stubs(int& exc_offset, int& deopt_offset);
-  void fill_handler_table(const std::vector<size_t>& block_offsets, const std::unordered_map<size_t, uint32_t>& call_offsets);
+  void add_exception(JavaCallDebugInfo* di, const std::unordered_map<const llvm::BasicBlock*, size_t>& block_offsets);
 };
-
 #endif // CPU_LLVM_VM_CODE_GEN_LLVMCODEGEN_HPP

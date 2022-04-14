@@ -78,6 +78,7 @@ using RecordAccessor = StackMapParser::RecordAccessor;
 using LocationAccessor = StackMapParser::LocationAccessor;
 using ConstantAccessor = StackMapParser::ConstantAccessor;
 using LocationKind = StackMapParser::LocationKind;
+using ExceptionInfo = std::vector<std::pair<llvm::BasicBlock*, int>>;
 
 #ifdef assert
   #undef assert

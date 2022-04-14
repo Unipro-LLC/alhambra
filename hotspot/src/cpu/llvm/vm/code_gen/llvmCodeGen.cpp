@@ -1,6 +1,7 @@
 #include "llvm/Object/ELFObjectFile.h"
 #include "llvm/CodeGen/BuiltinGCs.h"
 #include "llvm/CodeGen/FaultMaps.h"
+#include "llvm/MC/_BBSCounter.h"
 
 #include "llvmCodeGen.hpp"
 
@@ -32,6 +33,7 @@ LlvmCodeGen::LlvmCodeGen(LlvmMethod* method, Compile* c, const char* name) :
     for (size_t j = 0; j < b->number_of_nodes(); ++j) {
       Node* n = b->get_node(j);
       if (n->is_MachSafePoint()) {
+        _nof_safepoints++;
         JVMState* jvms = n->as_MachSafePoint()->jvms();
         if (jvms) {
           _nof_monitors = MAX(_nof_monitors, jvms->monitor_depth());
@@ -43,13 +45,13 @@ LlvmCodeGen::LlvmCodeGen(LlvmMethod* method, Compile* c, const char* name) :
           }
         }
       } else if (n->is_Catch()) {
-        _has_exceptions = true;
+        _nof_exceptions++;
       } else if (cmp_ideal_Opcode(n, Op_TailJump)) {
         _has_tail_jump = true;
       }
     }
   }
-  scope_descriptor().scope_info().reserve(nof_Java_calls());
+  scope_descriptor().scope_info().reserve(nof_safepoints()); 
 }
 
 void LlvmCodeGen::run_passes(llvm::SmallVectorImpl<char>& ObjBufferSV) {
@@ -68,6 +70,7 @@ void LlvmCodeGen::run_passes(llvm::SmallVectorImpl<char>& ObjBufferSV) {
   FPM.run(*selector().func());
 
   llvm::legacy::PassManager PM;
+  PM.add(llvm::createRewriteStatepointsForGCLegacyPass());
   TM->addPassesToEmitMC(PM, ctx, ObjStream, false);
   TM->setFastISel(false);
   PM.run(*mod());
@@ -86,10 +89,9 @@ void LlvmCodeGen::process_object_file(const llvm::object::ObjectFile& obj_file, 
       assert(sec_name_tmp, "null section name");
       llvm::StringRef sec_name = sec_name_tmp.get();
       if (sec_name == ".llvm_stackmaps") {
-        llvm::ArrayRef<uint8_t> stackmap;
         uint64_t stackmap_size = sec.getSize();
         uint8_t* stackmap_start = (uint8_t*)obj_file_start + elf_sec.getOffset();
-        stackmap = llvm::ArrayRef<uint8_t>(stackmap_start, stackmap_size);
+        llvm::ArrayRef<uint8_t> stackmap(stackmap_start, stackmap_size);
         _sm_parser = std::make_unique<StackMapParser>(stackmap);
       } else if (sec_name == ".llvm_faultmaps") {
         const uint8_t* fm_start = (const uint8_t*)obj_file_start + elf_sec.getOffset();
@@ -97,7 +99,7 @@ void LlvmCodeGen::process_object_file(const llvm::object::ObjectFile& obj_file, 
         auto func_info = fm_parser.getFirstFunctionInfo();
         uint32_t n = func_info.getNumFaultingPCs();
         C->inc_table()->set_size(n);
-        for (auto i = 0; i < n; ++i) {
+        for (size_t i = 0; i < n; ++i) {
           auto ff_info = func_info.getFunctionFaultInfoAt(i);
           int vep_offset = method()->vep_offset();
           C->inc_table()->append(vep_offset + ff_info.getFaultingPCOffset(), vep_offset + ff_info.getHandlerPCOffset());
@@ -115,7 +117,7 @@ void LlvmCodeGen::process_object_file(const llvm::object::ObjectFile& obj_file, 
           assert(Addend, "addend not found");
           size_t offset = method()->vep_offset() + Reloc.getOffset() - 2;
           if (*SecData == ".rodata.cst8") {
-            const double con = *(double*)(Value->data() + *Addend);
+            double con = *(double*)(Value->data() + *Addend);
             relocator().add_double(offset, con);
             _nof_consts++;
           } else if (*SecData == ".rodata.cst4") {
@@ -132,11 +134,12 @@ void LlvmCodeGen::process_object_file(const llvm::object::ObjectFile& obj_file, 
 void LlvmCodeGen::fill_code_buffer(address src, uint64_t size, int& exc_offset, int& deopt_offset) {
   int vep_offset = method()->vep_offset();
   size_t stubs_size = CompiledStaticCall::to_interp_stub_size() * nof_to_interp_stubs() + HandlerImpl::size_exception_handler() + HandlerImpl::size_deopt_handler();
-  size_t code_size = size + 1; // in case call is the last instruction, a nop will be inserted in the last byte
-  size_t cb_size = vep_offset + code_size + stubs_size;
+  size_t consts_size = nof_consts() * wordSize;
+  size_t code_size = size + 1; // in case the last instruction is a call, a nop will be inserted in the very end
+  size_t cb_size = vep_offset + code_size + stubs_size + consts_size;
   size_t locs_size = 1 + nof_Java_calls() + (vep_offset ? 1 : 0);
   cb()->initialize(cb_size, locs_size * sizeof(relocInfo));
-  cb()->initialize_consts_size(nof_consts());
+  cb()->initialize_consts_size(consts_size);
   cb()->initialize_oop_recorder(C->env()->oop_recorder());
   _code_start = cb()->insts()->start();
 
@@ -153,112 +156,107 @@ void LlvmCodeGen::fill_code_buffer(address src, uint64_t size, int& exc_offset, 
   _code_end = verified_entry_point + size;
   *code_end() = NativeInstruction::nop_instruction_code;
 
-  if (sm_parser()) {
-    stack().set_frame_size(method()->frame_size());
-    debug_info().reserve(sm_parser()->getNumRecords());
-    unsigned record_idx = 0;
-    for (RecordAccessor record: sm_parser()->records()) {
-      uint64_t id = record.getID();
-      std::unique_ptr<DebugInfo> di = DebugInfo::create(id);
-      di->pc_offset = vep_offset + record.getInstructionOffset();
-      BlockStartDebugInfo* bdi = di->asBlockStartDebugInfo();
-      if (bdi) {
-        bdi->block = blocks()[bdi->idx];
-      }
-      SafePointDebugInfo* spdi = di->asSafePointDebugInfo();
+  stack().set_frame_size(method()->frame_size());
+  debug_info().reserve(sm_parser()->getNumRecords() + llvm::BasicBlockSizes.size());
+  unsigned record_idx = 0;
+  for (RecordAccessor record: sm_parser()->records()) {
+    uint64_t id = record.getID();
+    std::unique_ptr<DebugInfo> di = DebugInfo::create(id);
+    di->pc_offset = vep_offset + record.getInstructionOffset();
+
+    GCDebugInfo* gcdi = di->asGC();
+    if (gcdi) {
+      gcdi->oopmap = new OopMap(stack().frame_size() / BytesPerInt, C->has_method() ? C->method()->arg_size() : 0);
+      gcdi->record_idx = record_idx;
+      SafePointDebugInfo* spdi = di->asSafePoint();
       if (spdi) {
-        spdi->record_idx = record_idx;
-        spdi->scope_info = &scope_descriptor().scope_info()[spdi->idx];
+        spdi->scope_info = scope_descriptor().scope_info()[DebugInfo::idx(id)].get();
         assert(spdi->scope_info->stackmap_id == id, "different ids");
       }
-      record_idx++;
-      debug_info().push_back(std::move(di));
     }
 
-    std::sort(debug_info().begin(), debug_info().end(),
-      [&](const std::unique_ptr<DebugInfo>& a, const std::unique_ptr<DebugInfo>& b) {
-        if (a->pc_offset == b->pc_offset) {
-          BlockStartDebugInfo* a_bl = a->asBlockStartDebugInfo();
-          InblockDebugInfo* a_in = a->asInblockDebugInfo();
-          BlockStartDebugInfo* b_bl = b->asBlockStartDebugInfo();
-          InblockDebugInfo* b_in = b->asInblockDebugInfo();
-          // a block or inblock starts after a call
-          if (a->asCallDebugInfo()) {
-            assert(b_bl || b_in, "should be BlockStart or Inblock");
-            return true;
-          }
-          if (b->asCallDebugInfo()) {
-            assert(a_bl || a_in, "should be BlockStart or Inblock");
-            return false;
-          }
-          // CreateException then jump to the next block
-          if (a->asExceptionDebugInfo()) {
-            assert(b_bl, "should be BlockStart");
-            return true;
-          } 
-          if (b->asExceptionDebugInfo()) {
-            assert(a_bl, "should be BlockStart");
-            return false;
-          }
-          // one block contains just a jump and is optimized out
-          if (a_bl && b_bl) {
-            size_t i;
-            for (i = 1; a_bl->block->get_node(i)->is_Phi(); ++i);
-            return a_bl->block->get_node(i)->is_MachGoto();
-          }
-          ShouldNotReachHere();
-        }
-        return a->pc_offset < b->pc_offset;
-      });
-    
-    std::unordered_map<size_t, uint32_t> call_offsets;
-    std::vector<size_t> block_offsets;
-    if (has_exceptions()) {
-      block_offsets.resize(C->cfg()->number_of_blocks());
-      call_offsets.reserve(nof_Java_calls());
-    }
-    unsigned call_cnt = 0;
-    for (auto it = debug_info().begin(); it != debug_info().end(); ++it) {
-      switch ((*it)->type()) {
-        case DebugInfo::StaticCall:
-        case DebugInfo::DynamicCall: {
-          call_cnt++;
-          patch_call(it, call_offsets);
-          break;
-        }
-        case DebugInfo::Rethrow: {
-          patch_rethrow_exception(it);
-          break;
-        }
-        case DebugInfo::TailJump: {
-          patch_tail_jump(it);
-          break;
-        }
-        case DebugInfo::BlockStart: {
-          BlockStartDebugInfo* di = (*it)->asBlockStartDebugInfo();
-          block_offsets[di->idx] = di->pc_offset;
-        }
+    record_idx++;
+    debug_info().push_back(std::move(di));
+  }
+
+  auto block_offsets = count_block_offsets(vep_offset);
+
+  // sorted vector is convenient for patching
+  std::sort(debug_info().begin(), debug_info().end(),
+    [&](const std::unique_ptr<DebugInfo>& a, const std::unique_ptr<DebugInfo>& b) {
+      return a->pc_offset == b->pc_offset ? a->less(b.get()) : a->pc_offset < b->pc_offset;
+    });
+  
+  for (auto it = debug_info().begin(); it != debug_info().end(); ++it) {
+    switch ((*it)->type()) {
+      case DebugInfo::StaticCall:
+      case DebugInfo::DynamicCall: {
+        JavaCallDebugInfo* jcdi = (*it)->asJavaCall();
+        patch_call(jcdi);
+        add_exception(jcdi, block_offsets);
+        break;
+      }
+      case DebugInfo::Rethrow: {
+        patch_rethrow_exception(it);
+        break;
+      }
+      case DebugInfo::TailJump: {
+        patch_tail_jump(it);
+        break;
+      }
+      case DebugInfo::Constant: {
+        reloc_const(it);
+        break;
       }
     }
-    assert(call_cnt <= nof_Java_calls(), "unexpected number of calls");
-    scope_descriptor().describe_scopes();
-    relocator().apply_relocs(&masm);
-    fill_handler_table(block_offsets, call_offsets);
   }
+  scope_descriptor().describe_scopes();
+  relocator().apply_relocs(&masm);
   cb()->initialize_stubs_size(stubs_size);
   add_stubs(exc_offset, deopt_offset);
   assert(code_start() == cb()->insts()->start(), "CodeBuffer was reallocated");
 }
 
-void LlvmCodeGen::patch_call(std::vector<std::unique_ptr<DebugInfo>>::iterator it, std::unordered_map<size_t, uint32_t>& call_offsets) {
-  JavaCallDebugInfo* di = (*it)->asJavaCallDebugInfo();
+std::unordered_map<const llvm::BasicBlock*, size_t> LlvmCodeGen::count_block_offsets(int vep_offset) {
+  std::unordered_map<const llvm::BasicBlock*, size_t> block_offsets;
+  block_offsets.reserve(llvm::BasicBlockSizes.size());
+  std::sort(llvm::RelaxSizes.begin(), llvm::RelaxSizes.end());
+  std::sort(llvm::AlignSizes.begin(), llvm::AlignSizes.end());
+  size_t offset = vep_offset;
+  size_t rel_idx = 0, al_idx = 0;
+
+  for (auto& pair : llvm::BasicBlockSizes) {
+    if (pair.second == 0) continue;
+    // these DebugInfo-s may come in handy during patching 
+    std::unique_ptr<DebugInfo> di = DebugInfo::create(DebugInfo::id(DebugInfo::BlockStart));
+    di->pc_offset = offset;
+    debug_info().push_back(std::move(di));
+    if (pair.first) {
+      // basic block pointers are dangling at this point
+      block_offsets.emplace(pair.first, offset);
+    }
+    offset += pair.second;
+    if (rel_idx < llvm::RelaxSizes.size() && offset > llvm::RelaxSizes[rel_idx].first + vep_offset) {
+      offset += llvm::RelaxSizes[rel_idx++].second - llvm::JCC_SIZE;
+    }
+    if (al_idx < llvm::AlignSizes.size() && offset > llvm::AlignSizes[al_idx].first + vep_offset) {
+      offset += llvm::AlignSizes[al_idx++].second;
+    }
+  }
+  llvm::BasicBlockSizes.clear();
+  llvm::RelaxSizes.clear();
+  llvm::AlignSizes.clear();
+  return block_offsets;
+}
+
+void LlvmCodeGen::patch_call(JavaCallDebugInfo* di) {
   MachCallNode* cn = di->scope_info->cn;
   address next_inst = code_start() + di->pc_offset;
   address call_site = next_inst - sizeof(uint32_t);
   call_site = (address)((intptr_t)call_site & -BytesPerInt); // should be aligned by BytesPerInt
   address pos, nop_end = call_site - NativeCall::displacement_offset, call_start = nop_end;
 
-  if (di->asDynamicCallDebugInfo()) {
+  if (di->asDynamicCall()) {
     pos = nop_end -= NativeMovConstReg::instruction_size;
     const byte movabs = 0x48, rax = 0xb8;
     *(pos++) = movabs;
@@ -279,18 +277,6 @@ void LlvmCodeGen::patch_call(std::vector<std::unique_ptr<DebugInfo>>::iterator i
   pos += sizeof(uint32_t);
   di->pc_offset = pos - code_start();
 
-  if (has_exceptions()) {
-    assert(it != debug_info().begin(), "there should be BlockStart before");
-    BlockStartDebugInfo* bdi = (*(it - 1))->asBlockStartDebugInfo();
-    if (!bdi) {
-      assert((*(it - 1))->asExceptionDebugInfo() && (it - 1 != debug_info().begin()), "only other option is Exception");
-      bdi = (*(it - 2))->asBlockStartDebugInfo();
-      assert(bdi, "should be BlockStart");
-    }
-    assert(call_offsets.count(bdi->idx) == 0, "there is already a call for this block");
-    call_offsets.emplace(bdi->idx, di->pc_offset);
-  }
-
   while (pos < next_inst) {
     *(pos++) = NativeInstruction::nop_instruction_code;
   }
@@ -298,16 +284,17 @@ void LlvmCodeGen::patch_call(std::vector<std::unique_ptr<DebugInfo>>::iterator i
   relocator().add(di, di->call_offset);
 }
 
+
 void LlvmCodeGen::patch_rethrow_exception(std::vector<std::unique_ptr<DebugInfo>>::iterator it) {
   // [nop*4|add rsp, pop rbp, etc. |retq|
   // [add rsp, pop rbp, etc.| jmpq dest |
-  RethrowDebugInfo* di = (*it)->asRethrowDebugInfo();
+  RethrowDebugInfo* di = (*it)->asRethrow();
   size_t pb = DebugInfo::patch_bytes(DebugInfo::Rethrow);
 
   address retq_addr = code_end();
   auto next_it = it + 1;
   if (next_it != debug_info().end()) {
-    assert((*next_it)->asBlockStartDebugInfo() || (*next_it)->asInblockDebugInfo(), "should be Block or Inblock");
+    assert((*next_it)->asBlockStart(), "should be BlockStart");
     retq_addr = code_start() + (*next_it)->pc_offset;
   }
   retq_addr -= NativeReturn::instruction_size;
@@ -327,10 +314,10 @@ void LlvmCodeGen::patch_rethrow_exception(std::vector<std::unique_ptr<DebugInfo>
 void LlvmCodeGen::patch_tail_jump(std::vector<std::unique_ptr<DebugInfo>>::iterator it) {
   // |                  nop*8                 |   nop*6   |  add rsp, pop rbp, etc.   |retq|
   // |mov rdx,[rbp - 0x8]|mov r10,[rbp - 0x10]|add rsp, pop rbp, etc.|add rsp, 0x8|jmpq r10|
-  TailJumpDebugInfo* di = (*it)->asTailJumpDebugInfo();
+  TailJumpDebugInfo* di = (*it)->asTailJump();
   size_t pb = DebugInfo::patch_bytes(DebugInfo::TailJump);
   assert(it != debug_info().begin(), "there should be PatchBytes before");
-  PatchBytesDebugInfo* pbdi = (*(it - 1))->asPatchBytesDebugInfo();
+  PatchBytesDebugInfo* pbdi = (*(it - 1))->asPatchBytes();
   assert(pbdi && di->pc_offset - pbdi->pc_offset == pb, "wrong distance");
 
   address pos = code_start() + pbdi->pc_offset, start_pos = pos;
@@ -340,7 +327,7 @@ void LlvmCodeGen::patch_tail_jump(std::vector<std::unique_ptr<DebugInfo>>::itera
   address next_addr = code_end();
   auto next_it = it + 1;
   if (next_it != debug_info().end()) {
-    assert((*next_it)->asBlockStartDebugInfo() || (*next_it)->asInblockDebugInfo(), "should be BlockStart or Inblock");
+    assert((*next_it)->asBlockStart(), "should be BlockStart");
     next_addr = code_start() + (*next_it)->pc_offset;
   }
   assert(next_addr[-NativeReturn::instruction_size] == NativeReturn::instruction_code, "not retq");
@@ -353,6 +340,38 @@ void LlvmCodeGen::patch_tail_jump(std::vector<std::unique_ptr<DebugInfo>>::itera
   patch(pos, DebugInfo::JMPQ_R10);
 }
 
+void LlvmCodeGen::reloc_const(std::vector<std::unique_ptr<DebugInfo>>::iterator it) {
+  // Constant ... MOVABS REG, IMM ... PatchBytes
+  ConstantDebugInfo* di = (*it)->asConstant();
+  address pos = code_start() + di->pc_offset;
+  const size_t mov_reg_size = 3, size = NativeMovConstReg::instruction_size;
+  auto mov = [](address pos) -> bool { return pos[0] == 0x48 || pos[0] == 0x49; };
+  auto mov_mem = [](address pos) -> bool { return pos[1] == 0x8B; };
+  auto movabs = [](address pos) -> bool { return pos[1] >= 0xB8 && pos[1] <= 0xBF; };
+  auto mov_reg = [](address pos) -> bool { return pos[1] == 0x89; };
+  if (mov(pos)) {
+    if (mov_mem(pos)) return; // it's not the first load of this constant and there's already a relocation
+    if (!movabs(pos)) { // try looking from the other end
+      assert(mov_reg(pos), "expected MOV REG, REG");
+      assert(it != debug_info().end(), "expected PatchBytes next");
+      PatchBytesDebugInfo* pbdi = (*(it + 1))->asPatchBytes();
+      assert(pbdi, "probably incorrect sorting");
+      pos = code_start() + pbdi->pc_offset - (mov_reg_size + size);
+      assert(mov(pos) && movabs(pos), "expected MOVABS REG, IMM");
+      assert(mov(pos + size) && mov_mem(pos + size), "expected MOV REG, [REG]");
+    }
+  } else { // the constant is somewhere in between Constant and PatchBytes, so far we can only handle individual cases 
+    Unimplemented();
+    auto test_eax = [](address pos) -> bool { return pos[0] == 0x85 && pos[1] == 0xC0; };
+    assert(test_eax(pos), "expected TEST EAX, EAX");
+    size_t test_eax_size = 2;
+    pos += test_eax_size;
+    assert(mov(pos) && movabs(pos), "expected MOVABS REG, IMM");
+  }
+  di->con = *(uintptr_t*)(pos + size - wordSize);
+  relocator().add(di, pos - code_start());
+}
+
 void LlvmCodeGen::patch(address& pos, const std::vector<byte>& inst) {
   for (size_t i = 0; i < inst.size(); ++i) {
     *(pos++) = inst[i];
@@ -362,7 +381,7 @@ void LlvmCodeGen::patch(address& pos, const std::vector<byte>& inst) {
 void LlvmCodeGen::add_stubs(int& exc_offset, int& deopt_offset) {
   if (C->has_method()) {
     for (const std::unique_ptr<DebugInfo>& di : debug_info()) {
-      StaticCallDebugInfo* scdi = di->asStaticCallDebugInfo();
+      StaticCallDebugInfo* scdi = di->asStaticCall();
       if (!scdi) continue;
       MachCallJavaNode* cjn = scdi->scope_info->cjn;
       if (cjn->_method) {
@@ -377,20 +396,15 @@ void LlvmCodeGen::add_stubs(int& exc_offset, int& deopt_offset) {
   }
 }
 
-void LlvmCodeGen::fill_handler_table(const std::vector<size_t>& block_offsets, const std::unordered_map<size_t, uint32_t>& call_offsets) {
-  for (const auto& pair : selector().handler_table()) {
-    size_t size = pair.second.size();
-    GrowableArray<intptr_t> handler_bcis(size);
-    GrowableArray<intptr_t> handler_pcos(size);
-    CatchNode* c = pair.first->end()->as_Catch();  
-    for (size_t i = 0, j = 0; j < size; ++i) {
-      CatchProjNode* cp = c->raw_out(i)->as_CatchProj();
-      if (cp->_con != CatchProjNode::fall_through_index) {
-        handler_bcis.append(cp->handler_bci());
-        handler_pcos.append(block_offsets[pair.second[j]->_pre_order - 1]);
-        j++;
-      }
-    }
-    C->handler_table()->add_subtable(call_offsets.at(pair.first->_pre_order - 1), &handler_bcis, NULL, &handler_pcos);
+void LlvmCodeGen::add_exception(JavaCallDebugInfo* di, const std::unordered_map<const llvm::BasicBlock*, size_t>& block_offsets) {
+  ThrowScopeInfo* tsi = di->scope_info->asThrow();
+  if (!tsi) return;
+  ExceptionInfo& ei = selector().exception_info().at(tsi->bb);
+  GrowableArray<intptr_t> handler_bcis(ei.size());
+  GrowableArray<intptr_t> handler_pcos(ei.size());
+  for (const auto& pair : ei) {
+    handler_bcis.append(pair.second);
+    handler_pcos.append(block_offsets.at(pair.first));
   }
+  C->handler_table()->add_subtable(di->pc_offset, &handler_bcis, NULL, &handler_pcos);
 }

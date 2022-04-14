@@ -10,23 +10,24 @@
 
 class OopMap;
 class Block;
-struct IndexDebugInfo;
+struct GCDebugInfo;
 struct SafePointDebugInfo;
+struct NativeCallDebugInfo;
 struct CallDebugInfo;
 struct JavaCallDebugInfo;
 struct StaticCallDebugInfo;
 struct DynamicCallDebugInfo;
 struct BlockStartDebugInfo;
-struct InblockDebugInfo;
 struct RethrowDebugInfo;
 struct TailJumpDebugInfo;
 struct PatchBytesDebugInfo;
 struct ExceptionDebugInfo;
+struct ConstantDebugInfo;
 struct ScopeInfo;
 
 //unique to each pc_offset
 struct DebugInfo {
-  enum Type { BlockStart, SafePoint, Call, StaticCall, DynamicCall, Inblock, Rethrow, TailJump, PatchBytes, Exception, Count };
+  enum Type { NativeCall, SafePoint, Call, StaticCall, DynamicCall, BlockStart, Rethrow, TailJump, PatchBytes, Exception, Constant, Count };
   uint32_t pc_offset;
   DebugInfo() {}
   virtual Type type() = 0;
@@ -41,83 +42,101 @@ struct DebugInfo {
   static std::vector<byte> ADD_0x8_RSP;
   static std::vector<byte> JMPQ_R10;
 
-  virtual SafePointDebugInfo* asSafePointDebugInfo() { return nullptr; }
-  virtual CallDebugInfo* asCallDebugInfo() { return nullptr; }
-  virtual JavaCallDebugInfo* asJavaCallDebugInfo() { return nullptr; }
-  virtual StaticCallDebugInfo* asStaticCallDebugInfo() { return nullptr; }
-  virtual DynamicCallDebugInfo* asDynamicCallDebugInfo() { return nullptr; }
-  virtual BlockStartDebugInfo* asBlockStartDebugInfo() { return nullptr; }
-  virtual InblockDebugInfo* asInblockDebugInfo() { return nullptr; }
-  virtual RethrowDebugInfo* asRethrowDebugInfo() { return nullptr; }
-  virtual TailJumpDebugInfo* asTailJumpDebugInfo() { return nullptr; }
-  virtual PatchBytesDebugInfo* asPatchBytesDebugInfo() { return nullptr; }
-  virtual ExceptionDebugInfo* asExceptionDebugInfo() { return nullptr; }
-};
-struct IndexDebugInfo : public DebugInfo {
-  uint32_t idx;
-  IndexDebugInfo(uint32_t idx_): DebugInfo(), idx(idx_) {}
-};
-struct SafePointDebugInfo : public IndexDebugInfo {
-  unsigned record_idx;
-  ScopeInfo* scope_info;
-  OopMap* oopmap;
+  virtual GCDebugInfo* asGC() { return nullptr; }
+  virtual NativeCallDebugInfo* asNativeCall() { return nullptr; }
+  virtual SafePointDebugInfo* asSafePoint() { return nullptr; }
+  virtual CallDebugInfo* asCall() { return nullptr; }
+  virtual JavaCallDebugInfo* asJavaCall() { return nullptr; }
+  virtual StaticCallDebugInfo* asStaticCall() { return nullptr; }
+  virtual DynamicCallDebugInfo* asDynamicCall() { return nullptr; }
+  virtual BlockStartDebugInfo* asBlockStart() { return nullptr; }
+  virtual RethrowDebugInfo* asRethrow() { return nullptr; }
+  virtual TailJumpDebugInfo* asTailJump() { return nullptr; }
+  virtual PatchBytesDebugInfo* asPatchBytes() { return nullptr; }
+  virtual ExceptionDebugInfo* asException() { return nullptr; }
+  virtual ConstantDebugInfo* asConstant() { return nullptr; }
 
-  SafePointDebugInfo(uint32_t idx): IndexDebugInfo(idx) {}
-  SafePointDebugInfo* asSafePointDebugInfo() override { return this; }
-  Type type() override { return SafePoint; }
+  virtual bool block_start() { return false; }
+  virtual bool block_can_start() { return false; }
+  virtual bool block_can_end() { return false; }
+  bool less(DebugInfo* other);
+};
+struct GCDebugInfo : public DebugInfo {
+  OopMap* oopmap;
+  unsigned record_idx;
+  GCDebugInfo() : DebugInfo() {}
+  GCDebugInfo* asGC() override { return this; }
   RecordAccessor record(StackMapParser* parser) const { return parser->getRecord(record_idx); }
 };
+struct NativeCallDebugInfo : public DebugInfo {
+  NativeCallDebugInfo(): DebugInfo() {}
+  NativeCallDebugInfo* asNativeCall() override { return this; }
+  Type type() override { return NativeCall; }
+  bool block_can_end() override { return true; }
+};
+struct SafePointDebugInfo : public GCDebugInfo {
+  ScopeInfo* scope_info;
+  SafePointDebugInfo(): GCDebugInfo() {}
+  SafePointDebugInfo* asSafePoint() override { return this; }
+  Type type() override { return SafePoint; }
+};
 struct CallDebugInfo : public SafePointDebugInfo {
-  CallDebugInfo(uint32_t idx): SafePointDebugInfo(idx) {}
-  CallDebugInfo* asCallDebugInfo() override { return this; }
+  CallDebugInfo(): SafePointDebugInfo() {}
+  CallDebugInfo* asCall() override { return this; }
   Type type() override { return Call; }
+  bool block_can_end() override { return true; }
 };
 struct JavaCallDebugInfo : public CallDebugInfo {
   uint32_t call_offset;
-  JavaCallDebugInfo(uint32_t idx): CallDebugInfo(idx) {}
-  JavaCallDebugInfo* asJavaCallDebugInfo() override { return this; }
+  JavaCallDebugInfo(): CallDebugInfo() {}
+  JavaCallDebugInfo* asJavaCall() override { return this; }
 };
-
 struct StaticCallDebugInfo : public JavaCallDebugInfo {
-  StaticCallDebugInfo(uint32_t idx): JavaCallDebugInfo(idx) {}
-  StaticCallDebugInfo* asStaticCallDebugInfo() override { return this; }
+  StaticCallDebugInfo(): JavaCallDebugInfo() {}
+  StaticCallDebugInfo* asStaticCall() override { return this; }
   Type type() override { return StaticCall; }
 };
 struct DynamicCallDebugInfo : public JavaCallDebugInfo {
-  DynamicCallDebugInfo(uint32_t idx): JavaCallDebugInfo(idx) {}
-  DynamicCallDebugInfo* asDynamicCallDebugInfo() override { return this; }
+  DynamicCallDebugInfo(): JavaCallDebugInfo() {}
+  DynamicCallDebugInfo* asDynamicCall() override { return this; }
   Type type() override { return DynamicCall; }
 };
-struct BlockStartDebugInfo : public IndexDebugInfo {
-  Block* block;
-  BlockStartDebugInfo(uint32_t idx): IndexDebugInfo(idx) {}
-  BlockStartDebugInfo* asBlockStartDebugInfo() override { return this; }
+
+struct BlockStartDebugInfo : public DebugInfo {
+  BlockStartDebugInfo(): DebugInfo() {}
+  BlockStartDebugInfo* asBlockStart() override { return this; }
   Type type() override { return BlockStart; }
-};
-struct InblockDebugInfo : public DebugInfo {
-  InblockDebugInfo(): DebugInfo() {}
-  InblockDebugInfo* asInblockDebugInfo() override { return this; }
-  Type type() override { return Inblock; }
+  bool block_start() override { return true; }
 };
 struct RethrowDebugInfo : public DebugInfo {
   RethrowDebugInfo(): DebugInfo() {}
-  RethrowDebugInfo* asRethrowDebugInfo() override { return this; }
+  RethrowDebugInfo* asRethrow() override { return this; }
   Type type() override { return Rethrow; }
 };
 struct TailJumpDebugInfo : public DebugInfo {
   TailJumpDebugInfo(): DebugInfo() {}
-  TailJumpDebugInfo* asTailJumpDebugInfo() override { return this; }
+  TailJumpDebugInfo* asTailJump() override { return this; }
   Type type() override { return TailJump; }
 };
 struct PatchBytesDebugInfo : public DebugInfo {
   PatchBytesDebugInfo(): DebugInfo() {}
-  PatchBytesDebugInfo* asPatchBytesDebugInfo() override { return this; }
+  PatchBytesDebugInfo* asPatchBytes() override { return this; }
   Type type() override { return PatchBytes; }
+  bool block_can_end() override { return true; }
 };
 
 struct ExceptionDebugInfo : public DebugInfo {
   ExceptionDebugInfo(): DebugInfo() {}
-  ExceptionDebugInfo* asExceptionDebugInfo() override { return this; }
+  ExceptionDebugInfo* asException() override { return this; }
   Type type() override { return Exception; }
+  bool block_start() override { return true; }
+};
+
+struct ConstantDebugInfo : public DebugInfo {
+  uintptr_t con;
+  ConstantDebugInfo(): DebugInfo() {}
+  ConstantDebugInfo* asConstant() override { return this; }
+  Type type() override { return Constant; }
+  bool block_can_start() override { return true; }
 };
 #endif // CPU_LLVM_VM_CODE_GEN_DEBUGINFO_LLVM_HPP

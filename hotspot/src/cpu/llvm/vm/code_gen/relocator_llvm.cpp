@@ -21,20 +21,20 @@ RelocationHolder VirtualCallReloc::getHolder() {
   return virtual_call_Relocation::spec(_IC_addr);
 }
 
-RelocationHolder FPReloc::getHolder() {
+RelocationHolder ConstReloc::getHolder() {
   assert(_con_addr, "address not set");
   return internal_word_Relocation::spec(_con_addr);
 }
 
 void LlvmRelocator::add(DebugInfo* di, size_t offset) {
-  CallReloc* rel;
+  Reloc* rel;
   switch (di->type()) {
     case DebugInfo::DynamicCall: {
       rel = new VirtualCallReloc(offset);
       break;
     }
     case DebugInfo::StaticCall: {
-      ciMethod* method = di->asCallDebugInfo()->scope_info->cjn->_method;
+      ciMethod* method = di->asCall()->scope_info->cjn->_method;
       bool is_runtime = method == NULL;
       HotspotRelocInfo reloc_info;
       if (is_runtime) {
@@ -48,6 +48,7 @@ void LlvmRelocator::add(DebugInfo* di, size_t offset) {
       break;
     }
     case DebugInfo::Rethrow: rel = new CallReloc(HotspotRelocInfo::RelocRuntimeCall, offset); break;
+    case DebugInfo::Constant: rel = new OopReloc(offset, di->asConstant()->con); break;
     default: ShouldNotReachHere();
   }
   relocs.push_back(rel);
@@ -69,18 +70,22 @@ void LlvmRelocator::apply_relocs(MacroAssembler* masm) {
 
   assert(masm->code_section() == cg()->cb()->insts(), "wrong section");
   for (Reloc* rel : relocs) {
-    if (rel->asFPReloc()) {
-      FPReloc* fp_rel = rel->asFPReloc();
+    if (rel->asConstReloc()) {
+      ConstReloc* c_rel = rel->asConstReloc();
       address con_addr = nullptr;
       if (rel->asFloatReloc()) {
         FloatReloc* f_rel = rel->asFloatReloc();
         con_addr = masm->float_constant(f_rel->con());
       } else if (rel->asDoubleReloc()) {
         DoubleReloc* d_rel = rel->asDoubleReloc();
-        assert(d_rel, "no other choice");
         con_addr = masm->double_constant(d_rel->con());
+      } else if (rel->asOopReloc()) {
+        OopReloc* oop_rel = rel->asOopReloc();
+        int oop_index = masm->oop_recorder()->allocate_oop_index((jobject)oop_rel->con());
+        con_addr = masm->address_constant((address)oop_rel->con());
+        cg()->cb()->consts()->relocate(con_addr, oop_Relocation::spec(oop_index));
       }
-      fp_rel->set_con_addr(con_addr);
+      c_rel->set_con_addr(con_addr);
     } else {
       assert(rel->asCallReloc(), "no other choice");
       masm->set_code_section(cg()->cb()->insts());
