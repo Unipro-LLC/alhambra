@@ -29,7 +29,6 @@ class LlvmCodeGen {
   std::vector<std::unique_ptr<DebugInfo>>& debug_info() { return _debug_info; }
   LlvmStack& stack() { return _stack; }
   StackMapParser* sm_parser() { return _sm_parser.get(); }
-  size_t patch_bytes(DebugInfo::Type type) const;
   unsigned nof_monitors() const { return _nof_monitors; }
   bool has_exceptions() const { return _nof_exceptions > 0; }
   unsigned nof_Java_calls() const { return _nof_Java_calls; }
@@ -73,11 +72,11 @@ class LlvmCodeGen {
 
   std::unordered_map<const llvm::BasicBlock*, size_t> count_block_offsets(int vep_offset);
   void patch(address& pos, const std::vector<byte>& inst);
-  void patch_call(JavaCallDebugInfo* di);
+  void patch_call(CallDebugInfo* di);
   void patch_rethrow_exception(std::vector<std::unique_ptr<DebugInfo>>::iterator it);
   void patch_tail_jump(std::vector<std::unique_ptr<DebugInfo>>::iterator it);
   void reloc_const(std::vector<std::unique_ptr<DebugInfo>>::iterator it);
   void add_stubs(int& exc_offset, int& deopt_offset);
-  void add_exception(JavaCallDebugInfo* di, const std::unordered_map<const llvm::BasicBlock*, size_t>& block_offsets);
+  void add_exception(CallDebugInfo* di, const std::unordered_map<const llvm::BasicBlock*, size_t>& block_offsets);
 };
 #endif // CPU_LLVM_VM_CODE_GEN_LLVMCODEGEN_HPP

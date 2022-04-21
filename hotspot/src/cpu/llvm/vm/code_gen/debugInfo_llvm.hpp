@@ -10,6 +10,7 @@
 
 class OopMap;
 class Block;
+class LlvmCodeGen;
 struct GCDebugInfo;
 struct SafePointDebugInfo;
 struct NativeCallDebugInfo;
@@ -24,6 +25,7 @@ struct PatchBytesDebugInfo;
 struct ExceptionDebugInfo;
 struct ConstantDebugInfo;
 struct ScopeInfo;
+struct PatchInfo;
 
 //unique to each pc_offset
 struct DebugInfo {
@@ -34,13 +36,7 @@ struct DebugInfo {
   static uint64_t id(Type ty, uint64_t idx = 0) { return ty + Count * idx; }
   static uint32_t idx(uint64_t id) { return id / Count; }
   static Type type(uint64_t id) { return static_cast<Type>(id % Count); }
-  static std::unique_ptr<DebugInfo> create(uint64_t id);
-  static size_t patch_bytes(Type type);
-
-  static std::vector<byte> MOV_RDX;
-  static std::vector<byte> MOV_R10;
-  static std::vector<byte> ADD_0x8_RSP;
-  static std::vector<byte> JMPQ_R10;
+  static std::unique_ptr<DebugInfo> create(uint64_t id, LlvmCodeGen* cg);
 
   virtual GCDebugInfo* asGC() { return nullptr; }
   virtual NativeCallDebugInfo* asNativeCall() { return nullptr; }
@@ -81,23 +77,24 @@ struct SafePointDebugInfo : public GCDebugInfo {
   Type type() override { return SafePoint; }
 };
 struct CallDebugInfo : public SafePointDebugInfo {
-  CallDebugInfo(): SafePointDebugInfo() {}
+  PatchInfo* patch_info;
+  CallDebugInfo(PatchInfo* pi): SafePointDebugInfo(), patch_info(pi) {}
   CallDebugInfo* asCall() override { return this; }
   Type type() override { return Call; }
   bool block_can_end() override { return true; }
 };
 struct JavaCallDebugInfo : public CallDebugInfo {
   uint32_t call_offset;
-  JavaCallDebugInfo(): CallDebugInfo() {}
+  JavaCallDebugInfo(PatchInfo* pi): CallDebugInfo(pi) {}
   JavaCallDebugInfo* asJavaCall() override { return this; }
 };
 struct StaticCallDebugInfo : public JavaCallDebugInfo {
-  StaticCallDebugInfo(): JavaCallDebugInfo() {}
+  StaticCallDebugInfo(PatchInfo* pi): JavaCallDebugInfo(pi) {}
   StaticCallDebugInfo* asStaticCall() override { return this; }
   Type type() override { return StaticCall; }
 };
 struct DynamicCallDebugInfo : public JavaCallDebugInfo {
-  DynamicCallDebugInfo(): JavaCallDebugInfo() {}
+  DynamicCallDebugInfo(PatchInfo* pi): JavaCallDebugInfo(pi) {}
   DynamicCallDebugInfo* asDynamicCall() override { return this; }
   Type type() override { return DynamicCall; }
 };
@@ -109,12 +106,14 @@ struct BlockStartDebugInfo : public DebugInfo {
   bool block_start() override { return true; }
 };
 struct RethrowDebugInfo : public DebugInfo {
-  RethrowDebugInfo(): DebugInfo() {}
+  PatchInfo* patch_info;
+  RethrowDebugInfo(PatchInfo* pi): DebugInfo(), patch_info(pi) {}
   RethrowDebugInfo* asRethrow() override { return this; }
   Type type() override { return Rethrow; }
 };
 struct TailJumpDebugInfo : public DebugInfo {
-  TailJumpDebugInfo(): DebugInfo() {}
+  PatchInfo* patch_info;
+  TailJumpDebugInfo(PatchInfo* pi): DebugInfo(), patch_info(pi) {}
   TailJumpDebugInfo* asTailJump() override { return this; }
   Type type() override { return TailJump; }
 };
@@ -138,5 +137,25 @@ struct ConstantDebugInfo : public DebugInfo {
   ConstantDebugInfo* asConstant() override { return this; }
   Type type() override { return Constant; }
   bool block_can_start() override { return true; }
+};
+struct SpillPatchInfo;
+struct PatchInfo {
+  static std::vector<byte> MOV_RDX;
+  static std::vector<byte> MOV_R10;
+  static std::vector<byte> JMPQ_R10;
+  static std::vector<byte> ADD_x_RSP(byte x) { return { 0x48, 0x83, 0xC4, x }; }
+  const static size_t ADD_RSP_SIZE = 4;
+  static std::vector<byte> SUB_x_RSP(byte x) { return { 0x48, 0x83, 0xEC, x }; }
+  const static size_t SUB_RSP_SIZE = 4;
+
+  size_t size;
+  PatchInfo(size_t s) : size(s) { }
+  virtual SpillPatchInfo* asSpill() { return nullptr; }
+};
+
+struct SpillPatchInfo : public PatchInfo {
+  size_t spill_size;
+  SpillPatchInfo(size_t s, size_t ss) : PatchInfo(s), spill_size(ss) { }
+  SpillPatchInfo* asSpill() override { return this; }
 };
 #endif // CPU_LLVM_VM_CODE_GEN_DEBUGINFO_LLVM_HPP

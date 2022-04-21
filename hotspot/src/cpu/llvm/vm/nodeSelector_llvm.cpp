@@ -149,9 +149,11 @@ llvm::Value* tailjmpIndNode::select(Selector* sel) {
   sel->store(target_pc, r10_offset);
 
   uint64_t id = DebugInfo::id(DebugInfo::PatchBytes);
-  llvm::Value* patch_bytes = sel->builder().getInt32(DebugInfo::patch_bytes(DebugInfo::TailJump));
+  uint32_t pb = 2 * NativeMovRegMem::instruction_size + PatchInfo::ADD_RSP_SIZE + PatchInfo::JMPQ_R10.size() - NativeReturn::instruction_size;
+  llvm::Value* patch_bytes = sel->builder().getInt32(pb);
   sel->builder().CreateIntrinsic(llvm::Intrinsic::experimental_stackmap, {}, { sel->builder().getInt64(id), patch_bytes });
   id = DebugInfo::id(DebugInfo::TailJump);
+  sel->patch_info().emplace(id, std::make_unique<PatchInfo>(pb));
   sel->builder().CreateIntrinsic(llvm::Intrinsic::experimental_stackmap, {}, { sel->builder().getInt64(id), sel->null(T_INT) });
 
   llvm::Type* retType = sel->func()->getReturnType();
@@ -323,7 +325,8 @@ llvm::Value* RethrowExceptionNode::select(Selector* sel) {
   std::vector<llvm::Value*> args = { exc_oop };
   sel->callconv_adjust(args);
   uint64_t id = DebugInfo::id(DebugInfo::Rethrow);
-  uint32_t patch_bytes = DebugInfo::patch_bytes(DebugInfo::Rethrow);
+  uint32_t patch_bytes = NativeJump::instruction_size - NativeReturn::instruction_size;
+  sel->patch_info().emplace(id, std::make_unique<PatchInfo>(patch_bytes));
   // dummy function (ignore address), takes exc_oop as the sole argument
   llvm::FunctionCallee f = sel->callee(OptoRuntime::rethrow_stub(), sel->type(T_VOID), args);
   llvm::Value* callee = f.getCallee();
@@ -1321,14 +1324,11 @@ llvm::Value* string_equalsNode::select(Selector *sel) {
 llvm::Value* safePoint_pollNode::select(Selector *sel) {
   ScopeDescriptor& sd = sel->cg()->scope_descriptor();
   ScopeInfo* si = sd.register_scope(this);
-  size_t patch_bytes = DebugInfo::patch_bytes(DebugInfo::SafePoint);
+  size_t patch_bytes = 1;
   // call with be replaced with a nop (ignore address)
   llvm::FunctionCallee f = sel->callee(os::get_polling_page(), sel->type(T_VOID), {});
   std::vector<llvm::Value*> deopt = sd.stackmap_scope(si);
   llvm::OperandBundleDef deopt_ob("deopt", deopt);
-  // llvm::ArrayRef<llvm::Value*> args;
-  // llvm::Optional<llvm::ArrayRef<llvm::Value*>> deopt_args(deopt);
-  // sel->builder().CreateGCStatepointCall(si.stackmap_id, patch_bytes, f.getCallee(), args, deopt_args, {});
   llvm::CallInst* call = sel->builder().CreateCall(f, {}, { deopt_ob });
   call->addAttribute(llvm::AttributeList::FunctionIndex, llvm::Attribute::get(sel->ctx(), "statepoint-id", std::to_string(si->stackmap_id)));
   call->addAttribute(llvm::AttributeList::FunctionIndex, llvm::Attribute::get(sel->ctx(), "statepoint-num-patch-bytes", std::to_string(patch_bytes)));

@@ -285,6 +285,7 @@ ScopeInfo* ScopeDescriptor::register_scope(MachSafePointNode* sfn, bool throws_e
   }();
   uint64_t idx = scope_info().size() - 1;
   si->stackmap_id = DebugInfo::id(ty, idx);
+
   JVMState* youngest_jvms = sfn->jvms();
   si->objs = new GrowableArray<ScopeValue*>();
   int max_depth = youngest_jvms->depth();

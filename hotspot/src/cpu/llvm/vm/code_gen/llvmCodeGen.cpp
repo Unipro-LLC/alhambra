@@ -161,7 +161,7 @@ void LlvmCodeGen::fill_code_buffer(address src, uint64_t size, int& exc_offset, 
   unsigned record_idx = 0;
   for (RecordAccessor record: sm_parser()->records()) {
     uint64_t id = record.getID();
-    std::unique_ptr<DebugInfo> di = DebugInfo::create(id);
+    std::unique_ptr<DebugInfo> di = DebugInfo::create(id, this);
     di->pc_offset = vep_offset + record.getInstructionOffset();
 
     GCDebugInfo* gcdi = di->asGC();
@@ -189,11 +189,12 @@ void LlvmCodeGen::fill_code_buffer(address src, uint64_t size, int& exc_offset, 
   
   for (auto it = debug_info().begin(); it != debug_info().end(); ++it) {
     switch ((*it)->type()) {
+      case DebugInfo::Call:
       case DebugInfo::StaticCall:
       case DebugInfo::DynamicCall: {
-        JavaCallDebugInfo* jcdi = (*it)->asJavaCall();
-        patch_call(jcdi);
-        add_exception(jcdi, block_offsets);
+        CallDebugInfo* cdi = (*it)->asCall();
+        patch_call(cdi);
+        add_exception(cdi, block_offsets);
         break;
       }
       case DebugInfo::Rethrow: {
@@ -228,12 +229,11 @@ std::unordered_map<const llvm::BasicBlock*, size_t> LlvmCodeGen::count_block_off
   for (auto& pair : llvm::BasicBlockSizes) {
     if (pair.second == 0) continue;
     // these DebugInfo-s may come in handy during patching 
-    std::unique_ptr<DebugInfo> di = DebugInfo::create(DebugInfo::id(DebugInfo::BlockStart));
+    std::unique_ptr<DebugInfo> di = DebugInfo::create(DebugInfo::id(DebugInfo::BlockStart), this);
     di->pc_offset = offset;
     debug_info().push_back(std::move(di));
     if (pair.first) {
-      // basic block pointers are dangling at this point
-      block_offsets.emplace(pair.first, offset);
+      block_offsets.emplace(pair.first, offset); // basic block pointers are dangling at this point
     }
     offset += pair.second;
     if (rel_idx < llvm::RelaxSizes.size() && offset > llvm::RelaxSizes[rel_idx].first + vep_offset) {
@@ -249,11 +249,25 @@ std::unordered_map<const llvm::BasicBlock*, size_t> LlvmCodeGen::count_block_off
   return block_offsets;
 }
 
-void LlvmCodeGen::patch_call(JavaCallDebugInfo* di) {
+void LlvmCodeGen::patch_call(CallDebugInfo* di) {
+  PatchInfo* pi = di->patch_info;
+  if (pi->size == 0) return;
+  JavaCallDebugInfo* jcdi = di->asJavaCall();
   MachCallNode* cn = di->scope_info->cn;
   address next_inst = code_start() + di->pc_offset;
+  SpillPatchInfo* spi = pi->asSpill();
+  size_t max_spill = selector().max_spill(), spill_size = spi ? max_spill - spi->spill_size : max_spill;
+  bool patch_spill = max_spill && spill_size;
   address call_site = next_inst - sizeof(uint32_t);
-  call_site = (address)((intptr_t)call_site & -BytesPerInt); // should be aligned by BytesPerInt
+
+  if (patch_spill) {
+    call_site -= PatchInfo::ADD_RSP_SIZE;
+  }
+
+  if (jcdi) {
+    call_site = (address)((intptr_t)call_site & -BytesPerInt); // should be aligned by BytesPerInt
+  }
+
   address pos, nop_end = call_site - NativeCall::displacement_offset, call_start = nop_end;
 
   if (di->asDynamicCall()) {
@@ -264,24 +278,39 @@ void LlvmCodeGen::patch_call(JavaCallDebugInfo* di) {
     *(uintptr_t*)pos = (uintptr_t)Universe::non_oop_word();
   }
 
-  pos = next_inst - DebugInfo::patch_bytes(di->type());
+  if (patch_spill) {
+    std::vector<byte> SUB_RSP = PatchInfo::SUB_x_RSP(spill_size);
+    pos = nop_end -= SUB_RSP.size();
+    patch(pos, SUB_RSP);
+  }
+
+  pos = next_inst - pi->size;
   while (pos < nop_end) {
     *(pos++) = NativeInstruction::nop_instruction_code;
   }
 
   pos = call_start;
   address ret_addr = pos + NativeCall::return_address_offset;
-  di->call_offset = pos - code_start();
+  if (jcdi) {
+    jcdi->call_offset = pos - code_start();
+  }
   *(pos++) = NativeCall::instruction_code;
   *(uint32_t*)pos = cn->entry_point() - ret_addr;
   pos += sizeof(uint32_t);
   di->pc_offset = pos - code_start();
 
+  if (patch_spill) {
+    std::vector<byte> ADD_RSP = PatchInfo::ADD_x_RSP(spill_size);
+    patch(pos, ADD_RSP);
+  }
+
   while (pos < next_inst) {
     *(pos++) = NativeInstruction::nop_instruction_code;
   }
 
-  relocator().add(di, di->call_offset);
+  if (jcdi) {
+    relocator().add(jcdi, jcdi->call_offset);
+  }
 }
 
 
@@ -289,7 +318,7 @@ void LlvmCodeGen::patch_rethrow_exception(std::vector<std::unique_ptr<DebugInfo>
   // [nop*4|add rsp, pop rbp, etc. |retq|
   // [add rsp, pop rbp, etc.| jmpq dest |
   RethrowDebugInfo* di = (*it)->asRethrow();
-  size_t pb = DebugInfo::patch_bytes(DebugInfo::Rethrow);
+  size_t pb = di->patch_info->size;
 
   address retq_addr = code_end();
   auto next_it = it + 1;
@@ -315,14 +344,14 @@ void LlvmCodeGen::patch_tail_jump(std::vector<std::unique_ptr<DebugInfo>>::itera
   // |                  nop*8                 |   nop*6   |  add rsp, pop rbp, etc.   |retq|
   // |mov rdx,[rbp - 0x8]|mov r10,[rbp - 0x10]|add rsp, pop rbp, etc.|add rsp, 0x8|jmpq r10|
   TailJumpDebugInfo* di = (*it)->asTailJump();
-  size_t pb = DebugInfo::patch_bytes(DebugInfo::TailJump);
+  size_t pb = di->patch_info->size;
   assert(it != debug_info().begin(), "there should be PatchBytes before");
   PatchBytesDebugInfo* pbdi = (*(it - 1))->asPatchBytes();
   assert(pbdi && di->pc_offset - pbdi->pc_offset == pb, "wrong distance");
 
   address pos = code_start() + pbdi->pc_offset, start_pos = pos;
-  patch(pos, DebugInfo::MOV_RDX);
-  patch(pos, DebugInfo::MOV_R10);
+  patch(pos, PatchInfo::MOV_RDX);
+  patch(pos, PatchInfo::MOV_R10);
 
   address next_addr = code_end();
   auto next_it = it + 1;
@@ -332,12 +361,13 @@ void LlvmCodeGen::patch_tail_jump(std::vector<std::unique_ptr<DebugInfo>>::itera
   }
   assert(next_addr[-NativeReturn::instruction_size] == NativeReturn::instruction_code, "not retq");
 
-  size_t offset = pb - (pos - start_pos), footer_size = DebugInfo::ADD_0x8_RSP.size() + DebugInfo::JMPQ_R10.size();
+  std::vector<byte> ADD_0x8_RSP = PatchInfo::ADD_x_RSP(0x8);
+  size_t offset = pb - (pos - start_pos), footer_size = ADD_0x8_RSP.size() + PatchInfo::JMPQ_R10.size();
   do {
     pos[0] = pos[offset];
   } while (++pos != next_addr - footer_size);
-  patch(pos, DebugInfo::ADD_0x8_RSP);
-  patch(pos, DebugInfo::JMPQ_R10);
+  patch(pos, ADD_0x8_RSP);
+  patch(pos, PatchInfo::JMPQ_R10);
 }
 
 void LlvmCodeGen::reloc_const(std::vector<std::unique_ptr<DebugInfo>>::iterator it) {
@@ -396,7 +426,7 @@ void LlvmCodeGen::add_stubs(int& exc_offset, int& deopt_offset) {
   }
 }
 
-void LlvmCodeGen::add_exception(JavaCallDebugInfo* di, const std::unordered_map<const llvm::BasicBlock*, size_t>& block_offsets) {
+void LlvmCodeGen::add_exception(CallDebugInfo* di, const std::unordered_map<const llvm::BasicBlock*, size_t>& block_offsets) {
   ThrowScopeInfo* tsi = di->scope_info->asThrow();
   if (!tsi) return;
   ExceptionInfo& ei = selector().exception_info().at(tsi->bb);

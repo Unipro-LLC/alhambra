@@ -9,7 +9,7 @@
 #include "adfiles/ad_llvm.hpp"
 
 Selector::Selector(LlvmCodeGen* code_gen, const char* name) :
-  Phase(Phase::BlockLayout), 
+  Phase(Phase::BlockLayout),
   _cg(code_gen), _ctx(code_gen->ctx()), _mod(code_gen->mod()), _builder(ctx()),
   _blocks(C->cfg()->number_of_blocks()),
   _pointer_size(mod()->getDataLayout().getPointerSize() * 8), _name(name),
@@ -20,6 +20,7 @@ void Selector::run() {
   prolog();
   select();
   complete_phi_nodes();
+  epilog();
 }
 
 void Selector::prolog() {
@@ -427,11 +428,45 @@ llvm::CallBase* Selector::call(MachCallNode* node, llvm::Type* retType, const st
   CatchNode* catch_node = block_end->isa_Catch();
   ScopeInfo* si = sd.register_scope(node, catch_node);
   std::vector<llvm::Value*> deopt = sd.stackmap_scope(si);
-  llvm::OperandBundleDef deopt_ob("deopt", deopt);
-  uint32_t patch_bytes = DebugInfo::patch_bytes(DebugInfo::type(si->stackmap_id));
+  std::vector<llvm::OperandBundleDef> ob = { llvm::OperandBundleDef("deopt", deopt) };
+
+  uint32_t patch_bytes = 0;
+  if (node->is_MachCallJava()) {
+    patch_bytes += NativeCall::instruction_size + BytesPerInt - 1;
+    if (node->is_MachCallDynamicJava()) {
+      patch_bytes += NativeMovConstReg::instruction_size;
+    }
+  }
+  unsigned nf_cnt = 0;
+  size_t spill_size = 0, first_spill_size = 0;
+  for (llvm::Value* val : args) {
+    llvm::Type* ty = val->getType();
+    if (ty->isFloatingPointTy()) continue;
+    nf_cnt++;
+    if (nf_cnt > NF_REGS) {
+      size_t size = ty->isPointerTy() 
+      ? mod()->getDataLayout().getIndexTypeSizeInBits(val->getType())
+      : ty->getScalarSizeInBits();
+      size >>= 3;
+      spill_size += size == 8 ? 8 : 4;
+      first_spill_size = first_spill_size ? first_spill_size : spill_size;
+    }
+  }
+  if (spill_size == first_spill_size) {
+    spill_size = 0;
+  } else {
+    const int ALIGNMENT = 16;
+    spill_size = ((spill_size-1) & -ALIGNMENT) + ALIGNMENT;
+  }
+  _max_spill = MAX(max_spill(), spill_size);
+  std::unique_ptr<PatchInfo> pi_uptr = nf_cnt > NF_REGS
+    ? std::make_unique<SpillPatchInfo>(patch_bytes, spill_size)
+    : std::make_unique<PatchInfo>(patch_bytes);
+  PatchInfo* pi = pi_uptr.get();
+  patch_info().emplace(si->stackmap_id, std::move(pi_uptr));
+  
   llvm::BasicBlock* next_bb = nullptr;
   llvm::CallBase* ret = nullptr;
-
   if (catch_node) {
     ExceptionInfo& catch_info = exception_info()[basic_block()];
     uint num_succs = block()->_num_succs;
@@ -454,9 +489,9 @@ llvm::CallBase* Selector::call(MachCallNode* node, llvm::Type* retType, const st
       llvm::LandingPadInst* lp = builder().CreateLandingPad(llvm::Type::getTokenTy(ctx()), 0);
       lp->setCleanup(true);
       builder().SetInsertPoint(basic_block());
-      ret = builder().CreateInvoke(f, next_bb, handler_bb, args, { deopt_ob });
+      ret = builder().CreateInvoke(f, next_bb, handler_bb, args, ob);
     } else {
-      ret = builder().CreateCall(f, args, { deopt_ob });
+      ret = builder().CreateCall(f, args, ob);
       // a faux comparison just to attach blocks to the CFG
       llvm::BasicBlock* right_bb = catch_info[1].first;
       for (auto it = catch_info.rbegin() + 1; it != catch_info.rend() - 1; ++it) {
@@ -470,14 +505,14 @@ llvm::CallBase* Selector::call(MachCallNode* node, llvm::Type* retType, const st
       builder().CreateCondBr(pred, catch_info[0].first, right_bb);
     }
   } else {
-    ret = builder().CreateCall(f, args, { deopt_ob });
+    ret = builder().CreateCall(f, args, ob);
     next_bb = basic_block(block()->non_connector_successor(0));
     if (node->is_MachCallJava() && !block_end->is_MachReturn() && !block_end->is_MachGoto()) { // ShouldNotReachHere and jmpDir
       builder().CreateBr(next_bb);
     }
   }
   ret->addAttribute(llvm::AttributeList::FunctionIndex, llvm::Attribute::get(ctx(), "statepoint-id", std::to_string(si->stackmap_id)));
-  ret->addAttribute(llvm::AttributeList::FunctionIndex, llvm::Attribute::get(ctx(), "statepoint-num-patch-bytes", std::to_string(patch_bytes)));
+  call_info().emplace_back(ret, pi);
   return retType->isVoidTy() ? NULL : ret;
 }
 
@@ -650,4 +685,21 @@ void Selector::complete_phi_node(Block *case_block, Node* case_val, llvm::PHINod
     llvm::cast<llvm::Instruction>(phi_case)->insertBefore(bb->getTerminator());
   }
   phi_inst->addIncoming(phi_case, case_bb);
+}
+
+void Selector::epilog() {
+  for (auto& pair : call_info()) {
+    size_t* tmp = &pair.second->size;
+    size_t& patch_bytes = *tmp;
+    if (max_spill()) {
+      SpillPatchInfo* spi = pair.second->asSpill();
+      if (!spi || (spi->spill_size != max_spill())) {
+        if (patch_bytes == 0) {
+          patch_bytes += NativeCall::instruction_size;
+        }
+        patch_bytes += PatchInfo::SUB_RSP_SIZE + PatchInfo::ADD_RSP_SIZE;
+      }
+    }
+    pair.first->addAttribute(llvm::AttributeList::FunctionIndex, llvm::Attribute::get(ctx(), "statepoint-num-patch-bytes", std::to_string(patch_bytes)));
+  }
 }

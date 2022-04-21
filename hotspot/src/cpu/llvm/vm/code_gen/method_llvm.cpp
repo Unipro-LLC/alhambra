@@ -8,8 +8,9 @@
 
 LlvmMethod::LlvmMethod(Compile* C, const char* target_name) {
   LlvmCodeGen code_gen(this, C, target_name);
+  Selector& sel = code_gen.selector();
 
-  code_gen.selector().run();
+  sel.run();
   NOT_PRODUCT( if (PrintLlvmIR) { code_gen.mod()->dump(); } )
 
   llvm::SmallVector<char, 4096> ObjBufferSV;
@@ -26,7 +27,7 @@ LlvmMethod::LlvmMethod(Compile* C, const char* target_name) {
   code_gen.process_object_file(obj, ObjectToLoad.getBufferStart(), code_start, code_size);
 
   if (code_gen.sm_parser()) {
-    _frame_size = wordSize + code_gen.sm_parser()->getFunction(0).getStackSize();
+    _frame_size = wordSize + code_gen.sm_parser()->getFunction(0).getStackSize() + sel.max_spill();
   }
   code_gen.fill_code_buffer(code_start, code_size, _exc_offset, _deopt_offset);
   _orig_pc_offset = code_gen.stack().unext_orig_pc_offset();
