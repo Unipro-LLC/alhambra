@@ -9,40 +9,36 @@ ScopeDescriptor::ScopeDescriptor(LlvmCodeGen* code_gen) : _cg(code_gen), C(code_
 void ScopeDescriptor::describe_scopes() {
   C->env()->debug_info()->set_oopmaps(C->oop_map_set());
   for (std::unique_ptr<DebugInfo>& debug_info : cg()->debug_info()) {
-    GCDebugInfo* gcdi = debug_info->asGC();
-    if (gcdi) {
-      SafePointDebugInfo* spdi = debug_info->asSafePoint();
-      RecordAccessor record = gcdi->record(cg()->sm_parser());
-      LocationAccessor deopt_cnt = record.getLocation(DEOPT_CNT_OFFSET);
-      uint32_t gc_idx = deopt_cnt.getSmallConstant() + DEOPT_OFFSET;
-      if (spdi) {
-        int la_idx = describe_scope(spdi);
-        assert(la_idx == gc_idx, "gc locs start after deopt ones");
-      }
-      for (uint16_t i = gc_idx; i < record.getNumLocations(); i += 2) {
-        int off[2];
-        LocationKind kind = StackMapParser::LocationKind::Indirect;
-        uint size = cg()->selector().pointer_size() >> LogBytesPerWord, rbp = 6, rsp = 7;
-        bool skip = false;
-        for (size_t j = 0; j < 2; ++j) {
-          LocationAccessor la = record.getLocation(i + j);
-          if (la.getKind() != kind) {
-            assert(la.getKind() == StackMapParser::LocationKind::Constant && la.getSmallConstant() == 0, "no other choice");
-            skip = true;
-            break;
-          }
-          assert(la.getSizeInBytes() == size, "only support singular locations");
-          if (la.getDwarfRegNum() == rsp) {
-            off[j] = la.getOffset();
-          } else {
-            assert(la.getDwarfRegNum() == rbp, "no other choice");
-            off[j] = la.getOffset() + cg()->stack().unext_offset();
-          }
+    SafePointDebugInfo* di = debug_info->asSafePoint();
+    if (!di) continue;
+    RecordAccessor record = di->record(cg()->sm_parser());
+    LocationAccessor deopt_cnt = record.getLocation(DEOPT_CNT_OFFSET);
+    uint32_t gc_idx = deopt_cnt.getSmallConstant() + DEOPT_OFFSET;
+    int la_idx = describe_scope(di);
+    assert(la_idx == gc_idx, "gc locs start after deopt ones");
+    for (uint16_t i = gc_idx; i < record.getNumLocations(); i += 2) {
+      int off[2];
+      LocationKind kind = StackMapParser::LocationKind::Indirect;
+      uint size = cg()->selector().pointer_size() >> LogBytesPerWord, rbp = 6, rsp = 7;
+      bool skip = false;
+      for (size_t j = 0; j < 2; ++j) {
+        LocationAccessor la = record.getLocation(i + j);
+        if (la.getKind() != kind) {
+          assert(la.getKind() == StackMapParser::LocationKind::Constant && la.getSmallConstant() == 0, "no other choice");
+          skip = true;
+          break;
         }
-        if (skip) continue;
-        // set_oop is called if arguments are equal
-        gcdi->oopmap->set_derived_oop(VMRegImpl::stack2reg(off[1] / BytesPerInt), VMRegImpl::stack2reg(off[0] / BytesPerInt));
+        assert(la.getSizeInBytes() == size, "only support singular locations");
+        if (la.getDwarfRegNum() == rsp) {
+          off[j] = la.getOffset();
+        } else {
+          assert(la.getDwarfRegNum() == rbp, "no other choice");
+          off[j] = la.getOffset() + cg()->stack().unext_offset();
+        }
       }
+      if (skip) continue;
+      // set_oop is called if arguments are equal
+      di->oopmap->set_derived_oop(VMRegImpl::stack2reg(off[1] / BytesPerInt), VMRegImpl::stack2reg(off[0] / BytesPerInt));
     }
   }
 }

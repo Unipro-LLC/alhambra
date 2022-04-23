@@ -4,10 +4,11 @@
 
 size_t LlvmStack::calc_alloc() {
   size_t extra_alloc = wordSize;
+  _orig_pc_offset = -extra_alloc;
   if (cg()->has_tail_jump()) {
-    extra_alloc += 2 * wordSize;
+    extra_alloc = MAX(extra_alloc, 2 * wordSize);
   }
-  _mon_offset = _orig_pc_offset = -extra_alloc;
+  _mon_offset = -extra_alloc;
   return cg()->nof_monitors() * monitor_size() + extra_alloc;
 }
 

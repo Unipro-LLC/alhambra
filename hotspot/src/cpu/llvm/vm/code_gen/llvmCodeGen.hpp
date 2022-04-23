@@ -33,7 +33,6 @@ class LlvmCodeGen {
   bool has_exceptions() const { return _nof_exceptions > 0; }
   unsigned nof_Java_calls() const { return _nof_Java_calls; }
   unsigned nof_to_interp_stubs() const { return _nof_to_interp_stubs; }
-  std::vector<Block*>& blocks() { return _blocks; }
   bool has_tail_jump() const { return _has_tail_jump; }
   unsigned nof_consts() const { return _nof_consts; }
   void inc_nof_consts() { _nof_consts++; }
@@ -41,6 +40,7 @@ class LlvmCodeGen {
   address code_end() const { return _code_end; }
   unsigned nof_safepoints() { return _nof_safepoints; }
   unsigned nof_exceptions() { return _nof_exceptions; }
+  std::unordered_map<const llvm::BasicBlock*, size_t>& block_offsets() { return _block_offsets; }
 
   void run_passes(llvm::SmallVectorImpl<char>& ObjBufferSV);
   void process_object_file(const llvm::object::ObjectFile& obj_file, const char *obj_file_start, address& code_start, uint64_t& code_size);
@@ -62,21 +62,15 @@ class LlvmCodeGen {
   unsigned _nof_monitors = 0;
   unsigned _nof_Java_calls = 0;
   unsigned _nof_to_interp_stubs = 0;
-  std::vector<Block*> _blocks;
   bool _has_tail_jump = false;
   unsigned _nof_consts = 0;
   address _code_start;
   address _code_end;
   unsigned _nof_safepoints = 0;
   unsigned _nof_exceptions = 0;
+  std::unordered_map<const llvm::BasicBlock*, size_t> _block_offsets;
 
-  std::unordered_map<const llvm::BasicBlock*, size_t> count_block_offsets(int vep_offset);
-  void patch(address& pos, const std::vector<byte>& inst);
-  void patch_call(CallDebugInfo* di);
-  void patch_rethrow_exception(std::vector<std::unique_ptr<DebugInfo>>::iterator it);
-  void patch_tail_jump(std::vector<std::unique_ptr<DebugInfo>>::iterator it);
-  void reloc_const(std::vector<std::unique_ptr<DebugInfo>>::iterator it);
+  void count_block_offsets(int vep_offset);
   void add_stubs(int& exc_offset, int& deopt_offset);
-  void add_exception(CallDebugInfo* di, const std::unordered_map<const llvm::BasicBlock*, size_t>& block_offsets);
 };
 #endif // CPU_LLVM_VM_CODE_GEN_LLVMCODEGEN_HPP

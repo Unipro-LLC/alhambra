@@ -30,15 +30,13 @@ enum HotspotRelocInfo {
 };
 
 class RelocationHolder;
-
 class CallReloc;
 class VirtualCallReloc;
-
 class ConstReloc;
-class FPReloc;
 class FloatReloc;
 class DoubleReloc;
 class OopReloc;
+class InternalReloc;
 
 class Reloc: public ResourceObj {
 protected:
@@ -48,14 +46,13 @@ protected:
 public:
   size_t     offset() const              { return _offset; }
 
-  virtual int getFormat() const       { return 0; }
   virtual CallReloc* asCallReloc()    { return nullptr; }
   virtual VirtualCallReloc* asVirtualCallReloc()    { return nullptr; }
   virtual ConstReloc* asConstReloc() { return nullptr; }
-  virtual FPReloc* asFPReloc() { return nullptr; }
   virtual FloatReloc* asFloatReloc()    { return nullptr; }
   virtual DoubleReloc* asDoubleReloc()    { return nullptr; }
   virtual OopReloc* asOopReloc()    { return nullptr; }
+  virtual InternalReloc* asInternalReloc()    { return nullptr; }
   virtual RelocationHolder getHolder() = 0;
 };
 
@@ -91,26 +88,18 @@ public:
   RelocationHolder getHolder() override;
 };
 
-class FPReloc : public ConstReloc {
-  address _con_addr = nullptr;
-protected:
-  FPReloc(size_t offset): ConstReloc(offset) {}
-public:
-  FPReloc* asFPReloc() override { return this; }
-};
-
-class FloatReloc : public FPReloc {
+class FloatReloc : public ConstReloc {
   float _con;
 public: 
-  FloatReloc(size_t offset, float con): FPReloc(offset), _con(con) {}
+  FloatReloc(size_t offset, float con): ConstReloc(offset), _con(con) {}
   float con() const { return _con; }
   FloatReloc* asFloatReloc() override { return this; }
 };
 
-class DoubleReloc : public FPReloc {
+class DoubleReloc : public ConstReloc {
   double _con;
 public: 
-  DoubleReloc(size_t offset, double con): FPReloc(offset), _con(con) {}
+  DoubleReloc(size_t offset, double con): ConstReloc(offset), _con(con) {}
   double con() const { return _con; }
   DoubleReloc* asDoubleReloc() override { return this; }
 };
@@ -121,6 +110,13 @@ public:
   OopReloc(size_t offset, uintptr_t con): ConstReloc(offset), _con(con) {}
   uintptr_t con() const { return _con; }
   OopReloc* asOopReloc() override { return this; }
+};
+
+class InternalReloc : public Reloc {
+public:
+  InternalReloc(size_t offset): Reloc(offset) {}
+  InternalReloc* asInternalReloc() override { return this; }
+  RelocationHolder getHolder() override;
 };
 
 class LlvmRelocator {

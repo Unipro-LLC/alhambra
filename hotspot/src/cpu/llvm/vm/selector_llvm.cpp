@@ -262,7 +262,7 @@ llvm::Value* Selector::select_oper(MachOper *oper) {
   case T_OBJECT: {
     assert(ty->isa_narrowoop() == NULL, "check");
     llvm::Value* addr = get_ptr(ty->is_oopptr()->const_oop()->constant_encoding(), T_OBJECT);
-    llvm::Value* id = builder().getInt64(DebugInfo::id(DebugInfo::Constant));
+    llvm::Value* id = builder().getInt64(DebugInfo::id(DebugInfo::Oop));
     builder().CreateIntrinsic(llvm::Intrinsic::experimental_stackmap, {}, { id, null(T_INT) });
     llvm::Value* const_oop = load(addr, T_OBJECT);
     id = builder().getInt64(DebugInfo::id(DebugInfo::PatchBytes));
@@ -697,7 +697,7 @@ void Selector::epilog() {
         if (patch_bytes == 0) {
           patch_bytes += NativeCall::instruction_size;
         }
-        patch_bytes += PatchInfo::SUB_RSP_SIZE + PatchInfo::ADD_RSP_SIZE;
+        patch_bytes += CallDebugInfo::SUB_RSP_SIZE + CallDebugInfo::ADD_RSP_SIZE;
       }
     }
     pair.first->addAttribute(llvm::AttributeList::FunctionIndex, llvm::Attribute::get(ctx(), "statepoint-num-patch-bytes", std::to_string(patch_bytes)));

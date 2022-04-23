@@ -51,6 +51,8 @@ public:
 
   int32_t unextended_mon_obj_offset(int idx) const;
 
+  int32_t orig_pc_offset() { return _orig_pc_offset; }
+
   int32_t unext_orig_pc_offset() { return unext_offset() + _orig_pc_offset; }
 };
 

@@ -26,6 +26,10 @@ RelocationHolder ConstReloc::getHolder() {
   return internal_word_Relocation::spec(_con_addr);
 }
 
+RelocationHolder InternalReloc::getHolder() {
+  return Relocation::spec_simple(relocInfo::internal_word_type);
+}
+
 void LlvmRelocator::add(DebugInfo* di, size_t offset) {
   Reloc* rel;
   switch (di->type()) {
@@ -48,7 +52,8 @@ void LlvmRelocator::add(DebugInfo* di, size_t offset) {
       break;
     }
     case DebugInfo::Rethrow: rel = new CallReloc(HotspotRelocInfo::RelocRuntimeCall, offset); break;
-    case DebugInfo::Constant: rel = new OopReloc(offset, di->asConstant()->con); break;
+    case DebugInfo::Oop: rel = new OopReloc(offset, di->asOop()->con); break;
+    case DebugInfo::OrigPC: rel = new InternalReloc(offset); break;
     default: ShouldNotReachHere();
   }
   relocs.push_back(rel);
@@ -65,33 +70,32 @@ void LlvmRelocator::add_double(size_t offset, double con) {
 }
 
 void LlvmRelocator::apply_relocs(MacroAssembler* masm) {
+  CodeSection *insts = cg()->cb()->insts(), *consts = cg()->cb()->consts();
+  assert(masm->code_section() == insts, "sanity check");
   std::sort(relocs.begin(), relocs.end(),
     [](const Reloc* a, const Reloc* b) { return a->offset() < b->offset(); });
-
-  assert(masm->code_section() == cg()->cb()->insts(), "wrong section");
   for (Reloc* rel : relocs) {
-    if (rel->asConstReloc()) {
-      ConstReloc* c_rel = rel->asConstReloc();
+    ConstReloc* c_rel;
+    CallReloc* call_rel;
+    if (c_rel = rel->asConstReloc()) {
       address con_addr = nullptr;
-      if (rel->asFloatReloc()) {
-        FloatReloc* f_rel = rel->asFloatReloc();
+      FloatReloc* f_rel;
+      DoubleReloc* d_rel;
+      OopReloc* oop_rel;
+      if (f_rel = rel->asFloatReloc()) {
         con_addr = masm->float_constant(f_rel->con());
-      } else if (rel->asDoubleReloc()) {
-        DoubleReloc* d_rel = rel->asDoubleReloc();
+      } else if (d_rel = rel->asDoubleReloc()) {
         con_addr = masm->double_constant(d_rel->con());
-      } else if (rel->asOopReloc()) {
-        OopReloc* oop_rel = rel->asOopReloc();
+      } else if (oop_rel = rel->asOopReloc()) {
         int oop_index = masm->oop_recorder()->allocate_oop_index((jobject)oop_rel->con());
         con_addr = masm->address_constant((address)oop_rel->con());
         cg()->cb()->consts()->relocate(con_addr, oop_Relocation::spec(oop_index));
       }
       c_rel->set_con_addr(con_addr);
-    } else {
-      assert(rel->asCallReloc(), "no other choice");
-      masm->set_code_section(cg()->cb()->insts());
-      if (rel->asVirtualCallReloc()) {
-        VirtualCallReloc* vc_rel = rel->asVirtualCallReloc();
-        vc_rel->set_IC_addr(masm->addr_at(vc_rel->offset() - NativeMovConstReg::instruction_size));
+    } else if (call_rel = rel->asCallReloc()) {
+      VirtualCallReloc* v_rel;
+      if (v_rel = rel->asVirtualCallReloc()) {
+        v_rel->set_IC_addr(masm->addr_at(v_rel->offset() - NativeMovConstReg::instruction_size));
       }
     }
     address addr = masm->addr_at(rel->offset());

@@ -2378,9 +2378,7 @@ void Compile::Code_Gen() {
 #ifdef LLVM
   _oop_map_set = new OopMapSet();
   LlvmMethod llvm_method(this, _target_name);
-  if (has_method()) {
-    _frame_slots = llvm_method.frame_size() >> LogBytesPerInt;
-  }
+  _frame_slots = (has_method() ? llvm_method.frame_size() : 2 * wordSize) >> LogBytesPerInt;
   _code_offsets.set_value(CodeOffsets::Entry, 0);
   _code_offsets.set_value(CodeOffsets::Verified_Entry, llvm_method.vep_offset());
   _code_offsets.set_value(CodeOffsets::Frame_Complete, 0);

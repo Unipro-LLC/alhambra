@@ -48,6 +48,15 @@ llvm::Value* MachProjNode::select(Selector* sel) {
 }
 
 llvm::Value* CallRuntimeDirectNode::select(Selector* sel) {
+  if (!sel->C->has_method()) {
+    LlvmStack& st = sel->cg()->stack();
+    llvm::Value* val = sel->builder().getInt64(OrigPCDebugInfo::MAGIC_NUMBER);
+    llvm::Value* addr = sel->gep(st.FP(), st.orig_pc_offset());
+    llvm::Value* id = sel->builder().getInt64(DebugInfo::id(DebugInfo::OrigPC));
+    sel->builder().CreateIntrinsic(llvm::Intrinsic::experimental_stackmap, {}, { id, sel->null(T_INT) });
+    sel->store(val, addr);
+    sel->cg()->inc_nof_consts();
+  }
   llvm::Type* retType = sel->type(tf()->return_type());
   return sel->call(this, retType, sel->call_args(this));
 }
@@ -149,7 +158,7 @@ llvm::Value* tailjmpIndNode::select(Selector* sel) {
   sel->store(target_pc, r10_offset);
 
   uint64_t id = DebugInfo::id(DebugInfo::PatchBytes);
-  uint32_t pb = 2 * NativeMovRegMem::instruction_size + PatchInfo::ADD_RSP_SIZE + PatchInfo::JMPQ_R10.size() - NativeReturn::instruction_size;
+  uint32_t pb = 2 * NativeMovRegMem::instruction_size + TailJumpDebugInfo::ADD_RSP_SIZE + TailJumpDebugInfo::JMPQ_R10.size() - NativeReturn::instruction_size;
   llvm::Value* patch_bytes = sel->builder().getInt32(pb);
   sel->builder().CreateIntrinsic(llvm::Intrinsic::experimental_stackmap, {}, { sel->builder().getInt64(id), patch_bytes });
   id = DebugInfo::id(DebugInfo::TailJump);
@@ -1784,6 +1793,11 @@ llvm::Value* compareAndSwapPNode::select(Selector* sel) {
   return res;
 }
 
+llvm::Value* subL_rReg_imm0Node::select(Selector* sel){
+  llvm::Value* a = sel->select_node(in(1));
+  return sel->builder().CreateNeg(a);
+}
+
 llvm::Value* loadSNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
@@ -1993,10 +2007,6 @@ llvm::Value* xchgPNode::select(Selector* sel){
 }
 
 llvm::Value* xchgNNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* subL_rReg_imm0Node::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
