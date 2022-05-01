@@ -214,10 +214,10 @@ llvm::Value* Selector::select_address(MachNode *mem_node) {
       Node* addr_node = mem_node->in(op_index++);
       assert(addr_node != NULL, "check");
       uint addr_rule = addr_node->is_Mach() ? addr_node->as_Mach()->rule() : _last_Mach_Node;
-      if (cg()->cmp_ideal_Opcode(addr_node, Op_AddP)) {
+      if (LlvmCodeGen::cmp_ideal_Opcode(addr_node, Op_AddP)) {
         MachNode* mach_addr = addr_node->as_Mach();
         Node* base_node = mach_addr->in(2);
-        if (cg()->cmp_ideal_Opcode(base_node, Op_ConP)) {
+        if (LlvmCodeGen::cmp_ideal_Opcode(base_node, Op_ConP)) {
           offset = select_oper(base_node->as_Mach()->_opnds[1]);
           base = mach_addr->rule() == addP_rReg_rule
               ? select_node(mach_addr->in(3))
@@ -228,7 +228,7 @@ llvm::Value* Selector::select_address(MachNode *mem_node) {
               ? select_node(mach_addr->in(3))
               : select_oper(mach_addr->_opnds[2]);
         }
-      } else if (cg()->cmp_ideal_Opcode(addr_node, Op_ConP)) {
+      } else if (LlvmCodeGen::cmp_ideal_Opcode(addr_node, Op_ConP)) {
         return select_oper(addr_node->as_Mach()->_opnds[1]);
         base = llvm::Constant::getNullValue(llvm::PointerType::getUnqual(offset->getType()));
       } else {
@@ -262,11 +262,9 @@ llvm::Value* Selector::select_oper(MachOper *oper) {
   case T_OBJECT: {
     assert(ty->isa_narrowoop() == NULL, "check");
     llvm::Value* addr = get_ptr(ty->is_oopptr()->const_oop()->constant_encoding(), T_OBJECT);
-    llvm::Value* id = builder().getInt64(DebugInfo::id(DebugInfo::Oop));
-    builder().CreateIntrinsic(llvm::Intrinsic::experimental_stackmap, {}, { id, null(T_INT) });
+    stackmap(DebugInfo::Oop);
     llvm::Value* const_oop = load(addr, T_OBJECT);
-    id = builder().getInt64(DebugInfo::id(DebugInfo::PatchBytes));
-    builder().CreateIntrinsic(llvm::Intrinsic::experimental_stackmap, {}, { id, null(T_INT) });
+    stackmap(DebugInfo::PatchBytes);
     cg()->inc_nof_consts();
     return const_oop;
   }
@@ -281,8 +279,8 @@ llvm::Value* Selector::select_oper(MachOper *oper) {
   case T_NARROWOOP: {
     uint64_t con = ty->is_narrowoop()->get_con();
     if (con != 0) {
-      con = *(uint64_t*)con;
-      con >>= Universe::narrow_oop_shift();
+      con = C->env()->oop_recorder()->allocate_oop_index((jobject)con);
+      con += NarrowOopDebugInfo::MAGIC_NUMBER;
     }
     llvm::Value* narrow_oop = llvm::ConstantInt::get(type(T_NARROWOOP), con);
     // mark_nptr(narrow_oop);
@@ -662,6 +660,11 @@ void Selector::complete_phi_nodes() {
       complete_phi_node(case_block, case_val, phi_inst);
     }
   }
+}
+
+void Selector::stackmap(DebugInfo::Type type, size_t patch_bytes) {
+  llvm::Value* id = builder().getInt64(DebugInfo::id(type));
+  builder().CreateIntrinsic(llvm::Intrinsic::experimental_stackmap, {}, { id, builder().getInt32(patch_bytes) });
 }
 
 void Selector::complete_phi_node(Block *case_block, Node* case_val, llvm::PHINode *phi_inst) {

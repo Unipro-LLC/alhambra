@@ -37,6 +37,7 @@ class FloatReloc;
 class DoubleReloc;
 class OopReloc;
 class InternalReloc;
+class InlineOopReloc;
 
 class Reloc: public ResourceObj {
 protected:
@@ -46,14 +47,16 @@ protected:
 public:
   size_t     offset() const              { return _offset; }
 
-  virtual CallReloc* asCallReloc()    { return nullptr; }
-  virtual VirtualCallReloc* asVirtualCallReloc()    { return nullptr; }
-  virtual ConstReloc* asConstReloc() { return nullptr; }
-  virtual FloatReloc* asFloatReloc()    { return nullptr; }
-  virtual DoubleReloc* asDoubleReloc()    { return nullptr; }
-  virtual OopReloc* asOopReloc()    { return nullptr; }
-  virtual InternalReloc* asInternalReloc()    { return nullptr; }
+  virtual CallReloc* asCall()    { return nullptr; }
+  virtual VirtualCallReloc* asVirtualCall()    { return nullptr; }
+  virtual ConstReloc* asConst() { return nullptr; }
+  virtual FloatReloc* asFloat()    { return nullptr; }
+  virtual DoubleReloc* asDouble()    { return nullptr; }
+  virtual OopReloc* asOop()    { return nullptr; }
+  virtual InternalReloc* asInternal()    { return nullptr; }
+  virtual InlineOopReloc* asInlineOop()    { return nullptr; }
   virtual RelocationHolder getHolder() = 0;
+  virtual int format();
 };
 
 class CallReloc: public Reloc {
@@ -65,16 +68,16 @@ public:
     _kind(info) {}
 
   RelocationHolder getHolder() override;
-  CallReloc* asCallReloc() override         { return this; }
+  CallReloc* asCall() override         { return this; }
   HotspotRelocInfo kind() const       { return _kind; }
 };
 
 class VirtualCallReloc : public CallReloc {
-  address _IC_addr = nullptr;
+  address _IC_addr;
 public:
   VirtualCallReloc(size_t offset): CallReloc(HotspotRelocInfo::RelocVirtualCall, offset) {}
   void set_IC_addr(address IC_addr) { _IC_addr = IC_addr; }
-  VirtualCallReloc* asVirtualCallReloc() override { return this; }
+  VirtualCallReloc* asVirtualCall() override { return this; }
   RelocationHolder getHolder() override;
 };
 
@@ -84,7 +87,7 @@ protected:
   ConstReloc(size_t offset): Reloc(offset) {}
 public:
   void set_con_addr(address con_addr) { _con_addr = con_addr; }
-  ConstReloc* asConstReloc() override { return this; }
+  ConstReloc* asConst() override { return this; }
   RelocationHolder getHolder() override;
 };
 
@@ -93,7 +96,7 @@ class FloatReloc : public ConstReloc {
 public: 
   FloatReloc(size_t offset, float con): ConstReloc(offset), _con(con) {}
   float con() const { return _con; }
-  FloatReloc* asFloatReloc() override { return this; }
+  FloatReloc* asFloat() override { return this; }
 };
 
 class DoubleReloc : public ConstReloc {
@@ -101,7 +104,7 @@ class DoubleReloc : public ConstReloc {
 public: 
   DoubleReloc(size_t offset, double con): ConstReloc(offset), _con(con) {}
   double con() const { return _con; }
-  DoubleReloc* asDoubleReloc() override { return this; }
+  DoubleReloc* asDouble() override { return this; }
 };
 
 class OopReloc : public ConstReloc {
@@ -109,14 +112,23 @@ class OopReloc : public ConstReloc {
 public:
   OopReloc(size_t offset, uintptr_t con): ConstReloc(offset), _con(con) {}
   uintptr_t con() const { return _con; }
-  OopReloc* asOopReloc() override { return this; }
+  OopReloc* asOop() override { return this; }
 };
 
 class InternalReloc : public Reloc {
 public:
   InternalReloc(size_t offset): Reloc(offset) {}
-  InternalReloc* asInternalReloc() override { return this; }
+  InternalReloc* asInternal() override { return this; }
   RelocationHolder getHolder() override;
+};
+
+class InlineOopReloc : public Reloc {
+  size_t _oop_index;
+public:
+  InlineOopReloc(size_t offset, size_t oop_index): Reloc(offset), _oop_index(oop_index) {}
+  InlineOopReloc* asInlineOop() override { return this; }
+  RelocationHolder getHolder() override;
+  int format() override;
 };
 
 class LlvmRelocator {

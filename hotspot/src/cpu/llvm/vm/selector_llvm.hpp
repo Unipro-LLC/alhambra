@@ -10,6 +10,7 @@
 #include "utilities/growableArray.hpp"
 
 #include "code_gen/llvmHeaders.hpp"
+#include "code_gen/debugInfo_llvm.hpp"
 
 class PhaseCFG;
 class Block;
@@ -71,7 +72,6 @@ public:
   llvm::Value* thread() const { return _thread; }
   unsigned pointer_size() const { return _pointer_size; }
   std::unordered_map<llvm::BasicBlock*, ExceptionInfo>& exception_info() { return _exception_info; }
-  std::vector<Node*>& oops() { return _oops; }
 
   llvm::Type* type(BasicType btype) const;
   std::vector<llvm::Type*> types(const std::vector<llvm::Value*>& v) const;
@@ -91,6 +91,7 @@ public:
   void store(llvm::Value* value, llvm::Value* addr);
   llvm::AtomicCmpXchgInst* cmpxchg(llvm::Value* addr, llvm::Value* cmp, llvm::Value* val);
   void replace_return_address(llvm::Value* new_addr);
+  void stackmap(DebugInfo::Type type, size_t patch_bytes = 0);
 
   llvm::Value* select_node(Node* node);
   llvm::Value* select_oper(MachOper *oper);
@@ -112,6 +113,7 @@ public:
   llvm::Value* decodeKlass_not_null(llvm::Value* narrow_klass);
   llvm::Value* decode_heap_oop(llvm::Value* narrow_oop, bool not_null);
   llvm::Value* encode_heap_oop(llvm::Value *oop, bool not_null);
+  std::vector<Node*>& oops() { return _oops; }
 
   void map_phi_nodes(PhiNode* opto_node, llvm::PHINode* llvm_node);
 };

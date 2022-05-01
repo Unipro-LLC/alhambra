@@ -734,7 +734,8 @@ address Assembler::locate_operand(address inst, WhichOperand which) {
     }
     debug_only(has_disp32 = true); // has both kinds of operands!
     break;
-
+  case 0x3D: // cmp eax
+    return ip;
   default:
     ShouldNotReachHere();
 

@@ -386,7 +386,7 @@ std::vector<llvm::Value*> ScopeDescriptor::stackmap_scope(const ScopeInfo* si) {
 }
 
 bool ScopeDescriptor::empty_loc(Node* n) const {
-  return n->is_top() || cg()->cmp_ideal_Opcode(n, Op_CreateEx);
+  return n->is_top() || LlvmCodeGen::cmp_ideal_Opcode(n, Op_CreateEx);
 }
 
 bool ScopeDescriptor::con_loc(Node* n) const {

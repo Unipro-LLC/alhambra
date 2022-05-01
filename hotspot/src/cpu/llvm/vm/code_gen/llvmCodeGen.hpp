@@ -45,7 +45,7 @@ class LlvmCodeGen {
   void run_passes(llvm::SmallVectorImpl<char>& ObjBufferSV);
   void process_object_file(const llvm::object::ObjectFile& obj_file, const char *obj_file_start, address& code_start, uint64_t& code_size);
   void fill_code_buffer(address src, uint64_t size, int& exc_offset, int& deopt_offset);
-  bool cmp_ideal_Opcode(Node* n, int opcode) const { return n->is_Mach() && n->as_Mach()->ideal_Opcode() == opcode; }
+  static bool cmp_ideal_Opcode(Node* n, int opcode) { return n->is_Mach() && n->as_Mach()->ideal_Opcode() == opcode; }
   
  private:
   CodeBuffer* _cb;

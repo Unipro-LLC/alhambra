@@ -7,6 +7,10 @@
 
 #include "llvmCodeGen.hpp"
 
+int Reloc::format() { return Assembler::imm_operand; }
+
+int InlineOopReloc::format() { return Assembler::narrow_oop_operand; }
+
 RelocationHolder CallReloc::getHolder() {
   switch (kind()) {
     case HotspotRelocInfo::RelocOptVirtualCall: return opt_virtual_call_Relocation::spec();
@@ -30,13 +34,14 @@ RelocationHolder InternalReloc::getHolder() {
   return Relocation::spec_simple(relocInfo::internal_word_type);
 }
 
+RelocationHolder InlineOopReloc::getHolder() {
+  return oop_Relocation::spec(_oop_index);
+}
+
 void LlvmRelocator::add(DebugInfo* di, size_t offset) {
   Reloc* rel;
   switch (di->type()) {
-    case DebugInfo::DynamicCall: {
-      rel = new VirtualCallReloc(offset);
-      break;
-    }
+    case DebugInfo::DynamicCall: rel = new VirtualCallReloc(offset); break;
     case DebugInfo::StaticCall: {
       ciMethod* method = di->asCall()->scope_info->cjn->_method;
       bool is_runtime = method == NULL;
@@ -53,6 +58,7 @@ void LlvmRelocator::add(DebugInfo* di, size_t offset) {
     }
     case DebugInfo::Rethrow: rel = new CallReloc(HotspotRelocInfo::RelocRuntimeCall, offset); break;
     case DebugInfo::Oop: rel = new OopReloc(offset, di->asOop()->con); break;
+    case DebugInfo::NarrowOop: rel = new InlineOopReloc(offset, di->asNarrowOop()->oop_index); break;
     case DebugInfo::OrigPC: rel = new InternalReloc(offset); break;
     default: ShouldNotReachHere();
   }
@@ -76,29 +82,27 @@ void LlvmRelocator::apply_relocs(MacroAssembler* masm) {
     [](const Reloc* a, const Reloc* b) { return a->offset() < b->offset(); });
   for (Reloc* rel : relocs) {
     ConstReloc* c_rel;
-    CallReloc* call_rel;
-    if (c_rel = rel->asConstReloc()) {
+    VirtualCallReloc* v_rel;
+    InlineOopReloc* i_rel;
+    if (c_rel = rel->asConst()) {
       address con_addr = nullptr;
       FloatReloc* f_rel;
       DoubleReloc* d_rel;
       OopReloc* oop_rel;
-      if (f_rel = rel->asFloatReloc()) {
+      if (f_rel = rel->asFloat()) {
         con_addr = masm->float_constant(f_rel->con());
-      } else if (d_rel = rel->asDoubleReloc()) {
+      } else if (d_rel = rel->asDouble()) {
         con_addr = masm->double_constant(d_rel->con());
-      } else if (oop_rel = rel->asOopReloc()) {
+      } else if (oop_rel = rel->asOop()) {
         int oop_index = masm->oop_recorder()->allocate_oop_index((jobject)oop_rel->con());
         con_addr = masm->address_constant((address)oop_rel->con());
         cg()->cb()->consts()->relocate(con_addr, oop_Relocation::spec(oop_index));
       }
       c_rel->set_con_addr(con_addr);
-    } else if (call_rel = rel->asCallReloc()) {
-      VirtualCallReloc* v_rel;
-      if (v_rel = rel->asVirtualCallReloc()) {
-        v_rel->set_IC_addr(masm->addr_at(v_rel->offset() - NativeMovConstReg::instruction_size));
-      }
+    } else if (v_rel = rel->asVirtualCall()) {
+      v_rel->set_IC_addr(masm->addr_at(v_rel->offset() - NativeMovConstReg::instruction_size));
     }
     address addr = masm->addr_at(rel->offset());
-    masm->code_section()->relocate(addr, rel->getHolder());
+    masm->code_section()->relocate(addr, rel->getHolder(), rel->format());
   }
 }

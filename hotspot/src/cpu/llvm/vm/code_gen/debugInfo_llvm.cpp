@@ -22,6 +22,7 @@ std::unique_ptr<DebugInfo> DebugInfo::create(uint64_t id, LlvmCodeGen* cg) {
     case TailJump: return std::make_unique<TailJumpDebugInfo>(pi);
     case PatchBytes: return std::make_unique<PatchBytesDebugInfo>();
     case Oop: return std::make_unique<OopDebugInfo>();
+    case NarrowOop: return std::make_unique<NarrowOopDebugInfo>();
     case OrigPC: return std::make_unique<OrigPCDebugInfo>();
     default: ShouldNotReachHere();
   }
@@ -78,6 +79,25 @@ void OopDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
   }
   con = *(uintptr_t*)(pos + NativeMovConstReg::data_offset);
   cg->relocator().add(this, pos - cg->code_start());
+}
+
+void NarrowOopDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
+  size_t off;
+  address pos = cg->code_start() + pc_offset;
+  if (movl(pos)) { // MOV DWORD PTR [REG+OFF], IMM
+    off = rex(pos) ? 4 : 3;
+  } else { // CMP REG, IMM
+    if (cmp(pos, true)) {
+      pc_offset++;
+      *(pos++) = NativeInstruction::nop_instruction_code;
+    }
+    assert(cmp(pos, false), "no other choice");
+    off = cmp_rax(pos, false) ? 1 :
+    (cmp_indir(pos) ? 3 :
+    (cmp_no_rex(pos) ? 2 : 3));
+  }
+  oop_index = *(uint32_t*)(pos + off) - MAGIC_NUMBER;
+  cg->relocator().add(this, pc_offset);
 }
 
 void TailJumpDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {

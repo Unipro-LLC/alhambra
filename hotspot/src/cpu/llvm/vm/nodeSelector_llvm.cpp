@@ -52,8 +52,7 @@ llvm::Value* CallRuntimeDirectNode::select(Selector* sel) {
     LlvmStack& st = sel->cg()->stack();
     llvm::Value* val = sel->builder().getInt64(OrigPCDebugInfo::MAGIC_NUMBER);
     llvm::Value* addr = sel->gep(st.FP(), st.orig_pc_offset());
-    llvm::Value* id = sel->builder().getInt64(DebugInfo::id(DebugInfo::OrigPC));
-    sel->builder().CreateIntrinsic(llvm::Intrinsic::experimental_stackmap, {}, { id, sel->null(T_INT) });
+    sel->stackmap(DebugInfo::OrigPC);
     sel->store(val, addr);
     sel->cg()->inc_nof_consts();
   }
@@ -157,13 +156,10 @@ llvm::Value* tailjmpIndNode::select(Selector* sel) {
   llvm::Value* target_pc = sel->select_node(in(TypeFunc::Parms));
   sel->store(target_pc, r10_offset);
 
-  uint64_t id = DebugInfo::id(DebugInfo::PatchBytes);
-  uint32_t pb = 2 * NativeMovRegMem::instruction_size + TailJumpDebugInfo::ADD_RSP_SIZE + TailJumpDebugInfo::JMPQ_R10.size() - NativeReturn::instruction_size;
-  llvm::Value* patch_bytes = sel->builder().getInt32(pb);
-  sel->builder().CreateIntrinsic(llvm::Intrinsic::experimental_stackmap, {}, { sel->builder().getInt64(id), patch_bytes });
-  id = DebugInfo::id(DebugInfo::TailJump);
-  sel->patch_info().emplace(id, std::make_unique<PatchInfo>(pb));
-  sel->builder().CreateIntrinsic(llvm::Intrinsic::experimental_stackmap, {}, { sel->builder().getInt64(id), sel->null(T_INT) });
+  uint32_t patch_bytes = 2 * NativeMovRegMem::instruction_size + TailJumpDebugInfo::ADD_RSP_SIZE + TailJumpDebugInfo::JMPQ_R10.size() - NativeReturn::instruction_size;
+  sel->stackmap(DebugInfo::PatchBytes, patch_bytes);
+  sel->patch_info().emplace(DebugInfo::id(DebugInfo::TailJump), std::make_unique<PatchInfo>(patch_bytes));
+  sel->stackmap(DebugInfo::TailJump);
 
   llvm::Type* retType = sel->func()->getReturnType();
   if (retType->isVoidTy()) {
@@ -1226,10 +1222,13 @@ llvm::Value* encodeHeapOop_not_nullNode::select(Selector *sel) {
 
 llvm::Value* storeNNode::select(Selector *sel) {
   assert(in(MemNode::Address)->is_BoxLock() == false, "check");
-  int op_index = MemNode::Address + 1;
+  Node* val_n = in(MemNode::Address + 1);
   llvm::Value* addr = sel->select_address(this);
-  llvm::Value* value = sel->select_node(in(op_index++));
+  llvm::Value* value = sel->select_node(val_n); 
   assert(value->getType() == sel->type(T_NARROWOOP), "wrong type");
+  if (LlvmCodeGen::cmp_ideal_Opcode(val_n, Op_ConN) && (val_n->as_Mach()->_opnds)[1]->type()->is_narrowoop()->get_con() != 0) {
+    sel->stackmap(DebugInfo::NarrowOop);
+  }
   sel->store(value, addr);
   return NULL;
 }
@@ -1504,6 +1503,7 @@ llvm::Value* andI_rReg_imm65535Node::select(Selector* sel) {
 llvm::Value* cmpN_reg_immNode::select(Selector* sel) {
   llvm::Value* a = sel->select_node(in(1));
   llvm::Value* b = sel->select_oper(opnd_array(2));
+  sel->stackmap(DebugInfo::NarrowOop);
   return sel->select_condition(this, a, b, false, false);
 }
 

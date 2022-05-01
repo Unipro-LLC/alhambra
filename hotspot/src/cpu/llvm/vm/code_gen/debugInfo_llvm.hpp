@@ -24,12 +24,12 @@ struct PatchBytesDebugInfo;
 struct ExceptionDebugInfo;
 struct ConstantDebugInfo;
 struct OopDebugInfo;
+struct NarrowOopDebugInfo;
 struct OrigPCDebugInfo;
 struct ScopeInfo;
 struct PatchInfo;
 struct SpillPatchInfo;
 
-//unique to each pc_offset
 struct DebugInfo {
   enum Type { 
     NativeCall, 
@@ -41,7 +41,8 @@ struct DebugInfo {
     Rethrow, 
     TailJump, 
     PatchBytes, 
-    Oop, 
+    Oop,
+    NarrowOop, 
     OrigPC, 
 
     Count };
@@ -73,6 +74,7 @@ struct DebugInfo {
   virtual ExceptionDebugInfo* asException() { return nullptr; }
   virtual ConstantDebugInfo* asConstant() { return nullptr; }
   virtual OopDebugInfo* asOop() { return nullptr; }
+  virtual NarrowOopDebugInfo* asNarrowOop() { return nullptr; }
   virtual OrigPCDebugInfo* asOrigPC() { return nullptr; }
 
   virtual bool block_start() { return false; }
@@ -152,6 +154,9 @@ struct PatchBytesDebugInfo : public DebugInfo {
 struct ConstantDebugInfo : public DebugInfo {
   static bool mov(address pos) { return pos[0] == 0x48 || pos[0] == 0x49; }
   static bool movabs(address pos) { return pos[1] >= 0xB8 && pos[1] <= 0xBF; }
+  static bool mov_mem(address pos) { return pos[1] == 0x8B; }
+  static bool mov_reg(address pos) { return pos[1] == 0x89; }
+  const static size_t MOV_REG_SIZE = 3;
   ConstantDebugInfo(): DebugInfo() {}
   ConstantDebugInfo* asConstant() override { return this; }
   bool block_can_start() override { return true; }
@@ -159,12 +164,33 @@ struct ConstantDebugInfo : public DebugInfo {
 
 struct OopDebugInfo : public ConstantDebugInfo {
   uintptr_t con;
-  static bool mov_mem(address pos) { return pos[1] == 0x8B; }
-  static bool mov_reg(address pos) { return pos[1] == 0x89; }
-  const static size_t MOV_REG_SIZE = 3;
   OopDebugInfo(): ConstantDebugInfo() {}
   OopDebugInfo* asOop() override { return this; }
   Type type() override { return Oop; }
+  void handle(size_t idx, LlvmCodeGen* cg) override;
+};
+
+struct NarrowOopDebugInfo : public ConstantDebugInfo {
+  const static size_t MAGIC_NUMBER = 1 << 30; // addend to oopIndex so it's always 4 bytes
+  size_t oop_index;
+  static bool rex(address pos) { return pos[0] == 0x41; }
+  static bool movl(address pos) { return pos[0] == 0xC7 || (rex(pos) && pos[1] == 0xC7); }
+  static bool cmp(address pos, bool is64bit) {
+    return cmp_no_rax(pos, is64bit) || cmp_rax(pos, is64bit);
+  }
+  static bool cmp_rax(address pos, bool is64bit) {
+    if (is64bit) return pos[0] == 0x48 && cmp_rax(pos + 1, false);
+    return pos[0] == 0x3D;
+  }
+  static bool cmp_no_rax(address pos, bool is64bit) {
+    if (is64bit) return (pos[0] == 0x48 || pos[0] == 0x49) && cmp_no_rex(pos + 1);
+    return (rex(pos) && cmp_no_rex(pos + 1)) || cmp_no_rex(pos);
+  }
+  static bool cmp_no_rex(address pos) { return pos[0] == 0x81; }
+  static bool cmp_indir(address pos) { return cmp_no_rex(pos) && pos[1] == 0x7D; }
+  NarrowOopDebugInfo(): ConstantDebugInfo() {}
+  NarrowOopDebugInfo* asNarrowOop() override { return this; }
+  Type type() override { return NarrowOop; }
   void handle(size_t idx, LlvmCodeGen* cg) override;
 };
 
@@ -175,8 +201,6 @@ struct OrigPCDebugInfo : public ConstantDebugInfo {
   OrigPCDebugInfo* asOrigPC() override { return this; }
   void handle(size_t idx, LlvmCodeGen* cg) override;
 };
-
-using DebugInfoIterator = std::vector<std::unique_ptr<DebugInfo>>::iterator;
 
 struct PatchInfo {
   size_t size;
