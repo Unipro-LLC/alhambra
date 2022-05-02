@@ -950,7 +950,8 @@ llvm::Value* if_fastlockNode::select(Selector* sel) {
   llvm::Value* unused_mark = sel->builder().getInt64(intptr_t(markOopDesc::unused_mark()));
   sel->store(unused_mark, mon_header_addr);
   llvm::Value* infl_offset = sel->builder().getInt32(ObjectMonitor::owner_offset_in_bytes()-2);
-  llvm::Value* infl_addr = sel->gep(mark_addr, infl_offset);
+  llvm::Value* mark_as_ptr = sel->builder().CreateIntToPtr(mark, sel->type(T_ADDRESS));
+  llvm::Value* infl_addr = sel->gep(mark_as_ptr, infl_offset);
   llvm::Value* infl_tmp = sel->load(infl_addr, T_LONG);
   llvm::Value* pr_infl = sel->builder().CreateICmpEQ(infl_tmp, zero);
   llvm::BasicBlock* infl_cas_bb = llvm::BasicBlock::Create(sel->ctx(), infl_bb->getName() + "_CAS", sel->func());
