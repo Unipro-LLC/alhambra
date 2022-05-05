@@ -35,7 +35,9 @@ class VirtualCallReloc;
 class ConstReloc;
 class FloatReloc;
 class DoubleReloc;
+class LoadConstReloc;
 class OopReloc;
+class MetadataReloc;
 class InternalReloc;
 class InlineOopReloc;
 
@@ -52,7 +54,9 @@ public:
   virtual ConstReloc* asConst() { return nullptr; }
   virtual FloatReloc* asFloat()    { return nullptr; }
   virtual DoubleReloc* asDouble()    { return nullptr; }
+  virtual LoadConstReloc* asLoadConst() { return nullptr; }
   virtual OopReloc* asOop()    { return nullptr; }
+  virtual MetadataReloc* asMetadata()    { return nullptr; }
   virtual InternalReloc* asInternal()    { return nullptr; }
   virtual InlineOopReloc* asInlineOop()    { return nullptr; }
   virtual RelocationHolder getHolder() = 0;
@@ -107,12 +111,24 @@ public:
   DoubleReloc* asDouble() override { return this; }
 };
 
-class OopReloc : public ConstReloc {
+class LoadConstReloc : public ConstReloc {
   uintptr_t _con;
 public:
-  OopReloc(size_t offset, uintptr_t con): ConstReloc(offset), _con(con) {}
+  LoadConstReloc(size_t offset, uintptr_t con): ConstReloc(offset), _con(con) {}
   uintptr_t con() const { return _con; }
+  LoadConstReloc* asLoadConst() override { return this; }
+};
+
+class OopReloc : public LoadConstReloc {
+public:
+  OopReloc(size_t offset, uintptr_t con): LoadConstReloc(offset, con) {}
   OopReloc* asOop() override { return this; }
+};
+
+class MetadataReloc : public LoadConstReloc {
+public:
+  MetadataReloc(size_t offset, uintptr_t con): LoadConstReloc(offset, con) {}
+  MetadataReloc* asMetadata() override { return this; }
 };
 
 class InternalReloc : public Reloc {

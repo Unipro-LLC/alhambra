@@ -269,12 +269,18 @@ llvm::Value* Selector::select_oper(MachOper *oper) {
     return const_oop;
   }
   case T_METADATA: {
+    llvm::Value* addr;
     if (ty->base() == Type::KlassPtr) {
       assert(ty->is_klassptr()->klass()->is_loaded(), "klass not loaded");
-      return get_ptr(ty->is_klassptr()->klass()->constant_encoding(), T_METADATA);
+      addr = get_ptr(ty->is_klassptr()->klass()->constant_encoding(), T_METADATA);
     } else {
-      return get_ptr(ty->is_metadataptr()->metadata(), T_METADATA);
+      addr = get_ptr(ty->is_metadataptr()->metadata()->constant_encoding(), T_METADATA);
     }
+    stackmap(DebugInfo::Metadata);
+    llvm::Value* md = load(addr, T_METADATA);
+    stackmap(DebugInfo::PatchBytes);
+    cg()->inc_nof_consts();
+    return md;
   }
   case T_NARROWOOP: {
     uint64_t con = ty->is_narrowoop()->get_con();

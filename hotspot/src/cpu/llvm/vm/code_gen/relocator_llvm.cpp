@@ -59,6 +59,7 @@ void LlvmRelocator::add(DebugInfo* di, size_t offset) {
     case DebugInfo::Rethrow: rel = new CallReloc(HotspotRelocInfo::RelocRuntimeCall, offset); break;
     case DebugInfo::Oop: rel = new OopReloc(offset, di->asOop()->con); break;
     case DebugInfo::NarrowOop: rel = new InlineOopReloc(offset, di->asNarrowOop()->oop_index); break;
+    case DebugInfo::Metadata: rel = new MetadataReloc(offset, di->asMetadata()->con); break;
     case DebugInfo::OrigPC: rel = new InternalReloc(offset); break;
     default: ShouldNotReachHere();
   }
@@ -89,6 +90,7 @@ void LlvmRelocator::apply_relocs(MacroAssembler* masm) {
       FloatReloc* f_rel;
       DoubleReloc* d_rel;
       OopReloc* oop_rel;
+      MetadataReloc* m_rel;
       if (f_rel = rel->asFloat()) {
         con_addr = masm->float_constant(f_rel->con());
       } else if (d_rel = rel->asDouble()) {
@@ -97,6 +99,10 @@ void LlvmRelocator::apply_relocs(MacroAssembler* masm) {
         int oop_index = masm->oop_recorder()->allocate_oop_index((jobject)oop_rel->con());
         con_addr = masm->address_constant((address)oop_rel->con());
         cg()->cb()->consts()->relocate(con_addr, oop_Relocation::spec(oop_index));
+      } else if (m_rel = rel->asMetadata()) {
+        int md_index = masm->oop_recorder()->allocate_metadata_index((Metadata*)m_rel->con());
+        con_addr = masm->address_constant((address)m_rel->con());
+        cg()->cb()->consts()->relocate(con_addr, metadata_Relocation::spec(md_index));
       }
       c_rel->set_con_addr(con_addr);
     } else if (v_rel = rel->asVirtualCall()) {

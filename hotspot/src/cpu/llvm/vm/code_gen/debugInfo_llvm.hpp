@@ -23,8 +23,10 @@ struct TailJumpDebugInfo;
 struct PatchBytesDebugInfo;
 struct ExceptionDebugInfo;
 struct ConstantDebugInfo;
+struct LoadConstantDebugInfo;
 struct OopDebugInfo;
 struct NarrowOopDebugInfo;
+struct MetadataDebugInfo;
 struct OrigPCDebugInfo;
 struct ScopeInfo;
 struct PatchInfo;
@@ -41,8 +43,9 @@ struct DebugInfo {
     Rethrow, 
     TailJump, 
     PatchBytes, 
-    Oop,
+    Oop, 
     NarrowOop, 
+    Metadata, 
     OrigPC, 
 
     Count };
@@ -73,8 +76,10 @@ struct DebugInfo {
   virtual PatchBytesDebugInfo* asPatchBytes() { return nullptr; }
   virtual ExceptionDebugInfo* asException() { return nullptr; }
   virtual ConstantDebugInfo* asConstant() { return nullptr; }
+  virtual LoadConstantDebugInfo* asLoadConstant() { return nullptr; }
   virtual OopDebugInfo* asOop() { return nullptr; }
   virtual NarrowOopDebugInfo* asNarrowOop() { return nullptr; }
+  virtual MetadataDebugInfo* asMetadata() { return nullptr; }
   virtual OrigPCDebugInfo* asOrigPC() { return nullptr; }
 
   virtual bool block_start() { return false; }
@@ -162,12 +167,17 @@ struct ConstantDebugInfo : public DebugInfo {
   bool block_can_start() override { return true; }
 };
 
-struct OopDebugInfo : public ConstantDebugInfo {
+struct LoadConstantDebugInfo : public ConstantDebugInfo {
   uintptr_t con;
-  OopDebugInfo(): ConstantDebugInfo() {}
+  LoadConstantDebugInfo(): ConstantDebugInfo() {}
+  LoadConstantDebugInfo* asLoadConstant() override { return this; }
+  void handle(size_t idx, LlvmCodeGen* cg) override;
+};
+
+struct OopDebugInfo : public LoadConstantDebugInfo {
+  OopDebugInfo(): LoadConstantDebugInfo() {}
   OopDebugInfo* asOop() override { return this; }
   Type type() override { return Oop; }
-  void handle(size_t idx, LlvmCodeGen* cg) override;
 };
 
 struct NarrowOopDebugInfo : public ConstantDebugInfo {
@@ -200,6 +210,12 @@ struct OrigPCDebugInfo : public ConstantDebugInfo {
   Type type() override { return OrigPC; }
   OrigPCDebugInfo* asOrigPC() override { return this; }
   void handle(size_t idx, LlvmCodeGen* cg) override;
+};
+
+struct MetadataDebugInfo : public LoadConstantDebugInfo {
+  MetadataDebugInfo(): LoadConstantDebugInfo() {}
+  MetadataDebugInfo* asMetadata() override { return this; }
+  Type type() override { return Metadata; }
 };
 
 struct PatchInfo {

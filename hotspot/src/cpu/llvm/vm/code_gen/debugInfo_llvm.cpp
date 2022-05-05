@@ -23,6 +23,7 @@ std::unique_ptr<DebugInfo> DebugInfo::create(uint64_t id, LlvmCodeGen* cg) {
     case PatchBytes: return std::make_unique<PatchBytesDebugInfo>();
     case Oop: return std::make_unique<OopDebugInfo>();
     case NarrowOop: return std::make_unique<NarrowOopDebugInfo>();
+    case Metadata: return std::make_unique<MetadataDebugInfo>();
     case OrigPC: return std::make_unique<OrigPCDebugInfo>();
     default: ShouldNotReachHere();
   }
@@ -57,9 +58,10 @@ void OrigPCDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
   assert(mov(pos) && movabs(pos), "expected MOVABS REG, IMM");
   pos += NativeMovConstReg::data_offset;
   assert(*(uintptr_t*)pos == MAGIC_NUMBER, "expected magic number");
+  // patching and adding a relocation happens in CallDebugInfo::handle
 }
 
-void OopDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
+void LoadConstantDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
   // Constant ... MOVABS REG, IMM ... PatchBytes
   address pos = cg->code_start() + pc_offset;
   const size_t size = NativeMovConstReg::instruction_size;
