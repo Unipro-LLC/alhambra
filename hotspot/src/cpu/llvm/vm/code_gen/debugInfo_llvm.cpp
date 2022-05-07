@@ -198,9 +198,7 @@ void CallDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
 
     pos = call_start;
     address ret_addr = pos + NativeCall::return_address_offset;
-    if (jcdi) {
-      jcdi->call_offset = pos - code_start;
-    }
+    size_t call_offset = pos - code_start;
     *(pos++) = NativeCall::instruction_code;
     *(uint32_t*)pos = scope_info->cn->entry_point() - ret_addr;
     pos += sizeof(uint32_t);
@@ -215,9 +213,7 @@ void CallDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
       *(pos++) = NativeInstruction::nop_instruction_code;
     }
 
-    if (jcdi) {
-      cg->relocator().add(jcdi, jcdi->call_offset);
-    }
+    cg->relocator().add(this, call_offset);
 
     ThrowScopeInfo* tsi = scope_info->asThrow();
     if (tsi) {

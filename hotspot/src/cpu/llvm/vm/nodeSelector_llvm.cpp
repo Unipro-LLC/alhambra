@@ -958,8 +958,10 @@ llvm::Value* if_fastlockNode::select(Selector* sel) {
   sel->builder().CreateCondBr(pr_infl, infl_cas_bb, slow_bb);
 
   sel->builder().SetInsertPoint(infl_cas_bb);
-  sel->cmpxchg(infl_addr, infl_tmp, sel->thread());
-  sel->builder().CreateBr(slow_bb);
+  llvm::Value* pr_infl_cas = sel->cmpxchg(infl_addr, infl_tmp, sel->thread());
+  pr_infl_cas = sel->builder().CreateExtractValue(pr_infl_cas, 1);
+  sel->builder().CreateCondBr(pr_infl_cas, ok_bb, slow_bb);
+  
   return NULL;
 }
 

@@ -15,6 +15,7 @@ void ScopeDescriptor::describe_scopes() {
     LocationAccessor deopt_cnt = record.getLocation(DEOPT_CNT_OFFSET);
     uint32_t gc_idx = deopt_cnt.getSmallConstant() + DEOPT_OFFSET;
     int la_idx = describe_scope(di);
+    if (!C->has_method()) continue;
     assert(la_idx == gc_idx, "gc locs start after deopt ones");
     for (uint16_t i = gc_idx; i < record.getNumLocations(); i += 2) {
       int off[2];

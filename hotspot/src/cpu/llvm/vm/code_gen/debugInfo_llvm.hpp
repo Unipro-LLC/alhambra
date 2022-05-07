@@ -111,7 +111,6 @@ struct CallDebugInfo : public SafePointDebugInfo {
   bool block_can_end() override { return true; }
 };
 struct JavaCallDebugInfo : public CallDebugInfo {
-  uint32_t call_offset;
   JavaCallDebugInfo(PatchInfo* pi): CallDebugInfo(pi) {}
   JavaCallDebugInfo* asJavaCall() override { return this; }
 };

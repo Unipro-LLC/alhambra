@@ -184,7 +184,7 @@ void LlvmCodeGen::fill_code_buffer(address src, uint64_t size, int& exc_offset, 
   for (size_t i = 0; i < debug_info().size(); ++i) {
     debug_info()[i]->handle(i, this);
   }
-  
+
   scope_descriptor().describe_scopes();
   relocator().apply_relocs(&masm);
   cb()->initialize_stubs_size(stubs_size);
@@ -228,7 +228,7 @@ void LlvmCodeGen::add_stubs(int& exc_offset, int& deopt_offset) {
       if (!scdi) continue;
       MachCallJavaNode* cjn = scdi->scope_info->cjn;
       if (cjn->_method) {
-        address call_site = code_start() + scdi->call_offset;
+        address call_site = code_start() + scdi->pc_offset - NativeCall::instruction_size;
         cb()->insts()->set_mark(call_site);
         address stub = CompiledStaticCall::emit_to_interp_stub(*cb());
         assert(stub != NULL, "CodeCache is full");
