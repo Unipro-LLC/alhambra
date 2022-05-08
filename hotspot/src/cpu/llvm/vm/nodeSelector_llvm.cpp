@@ -961,7 +961,7 @@ llvm::Value* if_fastlockNode::select(Selector* sel) {
   llvm::Value* pr_infl_cas = sel->cmpxchg(infl_addr, infl_tmp, sel->thread());
   pr_infl_cas = sel->builder().CreateExtractValue(pr_infl_cas, 1);
   sel->builder().CreateCondBr(pr_infl_cas, ok_bb, slow_bb);
-  
+
   return NULL;
 }
 
@@ -1801,6 +1801,11 @@ llvm::Value* subL_rReg_imm0Node::select(Selector* sel){
   return sel->builder().CreateNeg(a);
 }
 
+llvm::Value* zerox_long_reg_regNode::select(Selector* sel) {
+  llvm::Value* i_op = sel->select_node(in(1));
+  return sel->builder().CreateZExt(i_op, sel->type(T_LONG));
+}
+
 llvm::Value* loadSNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
@@ -2418,10 +2423,6 @@ llvm::Value* convL2I2LNode::select(Selector* sel){
 }
 
 llvm::Value* convI2L_reg_reg_zexNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* zerox_long_reg_regNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 

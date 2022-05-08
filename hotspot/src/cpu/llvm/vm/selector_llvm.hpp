@@ -47,6 +47,7 @@ private:
   size_t _max_spill = 0;
   using CallInfo = std::pair<llvm::CallBase*, PatchInfo*>;
   std::vector<CallInfo> _call_info;
+  std::vector<size_t> _param_to_arg;
 
   void create_func();
   void create_blocks();

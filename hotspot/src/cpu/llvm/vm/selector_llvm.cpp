@@ -105,26 +105,27 @@ void Selector::create_func() {
   std::vector<llvm::Type*> paramTypes;
 
   unsigned nf_cnt = 0;
-  bool nf_pos_full = false;
-  _nf_pos.reserve(NF_REGS);
+  _param_to_arg.reserve(domain->cnt() - TypeFunc::Parms);
   for (uint i = TypeFunc::Parms; i < domain->cnt(); ++i) {
     BasicType btype = domain->field_at(i)->basic_type();
     if (btype != T_VOID) {
-      if (!nf_pos_full && btype != T_FLOAT && btype != T_DOUBLE) {
+      if (btype != T_FLOAT && btype != T_DOUBLE) {
         nf_cnt++;
-        _nf_pos.push_back(i);
       }
       llvm::Type* ty = type(btype);
-      if (nf_cnt == NF_REGS && !nf_pos_full) {
-        nf_pos_full = true;
+      if (nf_cnt == NF_REGS) {
+        nf_cnt++;
         paramTypes.insert(paramTypes.begin(), ty);
+        _param_to_arg.insert(_param_to_arg.begin(), i);
       } else {
         paramTypes.push_back(ty);
+        _param_to_arg.push_back(i);
       }
     }
   }
-  if (nf_cnt != 0 && !nf_pos_full) {
+  if (nf_cnt != 0 && nf_cnt < NF_REGS) {
     paramTypes.insert(paramTypes.begin(), type(T_LONG));
+    _param_to_arg.insert(_param_to_arg.begin(), 0);
   }
 
   llvm::FunctionType *ftype = llvm::FunctionType::get(retType, paramTypes, false);
@@ -170,20 +171,9 @@ void Selector::callconv_adjust(std::vector<llvm::Value*>& args) {
 }
 
 int Selector::param_to_arg(int param_num) {
-  auto it = std::find(_nf_pos.begin(), _nf_pos.end(), param_num);
-  if (it != _nf_pos.end()) {
-    return (1 + std::distance(_nf_pos.begin(), it)) % NF_REGS;
-  }
-  const TypeTuple* domain = C->tf()->domain();
-  if (domain->cnt() == TypeFunc::Parms)
+  if (C->tf()->domain()->cnt() == TypeFunc::Parms)
     return 0;
-  int arg_num = (_nf_pos.size() > 0 && _nf_pos.size() < NF_REGS) ? 1 : 0;
-  for (uint i = TypeFunc::Parms; i < param_num; ++i) {
-    const Type* at = domain->field_at(i);
-    if (at->base() == Type::Half) continue;
-    arg_num++;
-  }
-  return arg_num;
+  return std::find(_param_to_arg.begin(), _param_to_arg.end(), param_num) - _param_to_arg.begin();
 }
 
 void Selector::create_blocks() {
