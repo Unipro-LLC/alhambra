@@ -251,7 +251,7 @@ llvm::Value* Selector::select_oper(MachOper *oper) {
   case T_ARRAY:
   case T_OBJECT: {
     assert(ty->isa_narrowoop() == NULL, "check");
-    llvm::Value* addr = get_ptr(ty->is_oopptr()->const_oop()->constant_encoding(), T_OBJECT);
+    llvm::Value* addr = get_ptr(ty->is_oopptr()->const_oop()->constant_encoding(), T_ADDRESS);
     stackmap(DebugInfo::Oop);
     llvm::Value* const_oop = load(addr, T_OBJECT);
     stackmap(DebugInfo::PatchBytes);
@@ -262,9 +262,9 @@ llvm::Value* Selector::select_oper(MachOper *oper) {
     llvm::Value* addr;
     if (ty->base() == Type::KlassPtr) {
       assert(ty->is_klassptr()->klass()->is_loaded(), "klass not loaded");
-      addr = get_ptr(ty->is_klassptr()->klass()->constant_encoding(), T_METADATA);
+      addr = get_ptr(ty->is_klassptr()->klass()->constant_encoding(), T_ADDRESS);
     } else {
-      addr = get_ptr(ty->is_metadataptr()->metadata()->constant_encoding(), T_METADATA);
+      addr = get_ptr(ty->is_metadataptr()->metadata()->constant_encoding(), T_ADDRESS);
     }
     stackmap(DebugInfo::Metadata);
     llvm::Value* md = load(addr, T_METADATA);
@@ -273,12 +273,18 @@ llvm::Value* Selector::select_oper(MachOper *oper) {
     return md;
   }
   case T_NARROWOOP: {
-    uint64_t con = ty->is_narrowoop()->get_con();
+    llvm::Value* narrow_oop;
+    uintptr_t con = ty->is_narrowoop()->get_con();
     if (con != 0) {
-      con = C->env()->oop_recorder()->allocate_oop_index((jobject)con);
-      con += NarrowOopDebugInfo::MAGIC_NUMBER;
+      llvm::Value* addr = get_ptr(ty->is_narrowoop()->get_con(), T_ADDRESS);
+      stackmap(DebugInfo::Oop);
+      llvm::Value* const_oop = load(addr, T_ADDRESS);
+      stackmap(DebugInfo::PatchBytes);
+      narrow_oop = encode_heap_oop(const_oop, true);
+      cg()->inc_nof_consts();
+    } else {
+      narrow_oop = llvm::ConstantInt::get(type(T_NARROWOOP), con);
     }
-    llvm::Value* narrow_oop = llvm::ConstantInt::get(type(T_NARROWOOP), con);
     // mark_nptr(narrow_oop);
     return narrow_oop;
   }
