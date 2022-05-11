@@ -105,7 +105,7 @@ public:
 
 class DoubleReloc : public ConstReloc {
   double _con;
-public: 
+public:
   DoubleReloc(size_t offset, double con): ConstReloc(offset), _con(con) {}
   double con() const { return _con; }
   DoubleReloc* asDouble() override { return this; }
@@ -151,13 +151,16 @@ class LlvmRelocator {
 private:
   LlvmCodeGen* _cg;
   std::vector<Reloc*> relocs;
+  std::vector<FloatReloc*> f_relocs;
+  std::vector<DoubleReloc*> d_relocs, da_relocs;
 
 public:
   LlvmCodeGen* cg() { return _cg; }
   void add(DebugInfo* di, size_t offset);
   void add_float(size_t offset, float con);
-  void add_double(size_t offset, double con);
+  void add_double(size_t offset, double con, bool align);
   void apply_relocs(MacroAssembler* masm);
+  void floats_to_cb(MacroAssembler* masm);
 
   LlvmRelocator(LlvmCodeGen* code_gen) : _cg(code_gen) {}
 };

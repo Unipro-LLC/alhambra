@@ -52,12 +52,12 @@ LlvmCodeGen::LlvmCodeGen(LlvmMethod* method, Compile* c, const char* name) :
 }
 
 void LlvmCodeGen::run_passes(llvm::SmallVectorImpl<char>& ObjBufferSV) {
-  llvm::EngineBuilder builder(std::move(_mod_owner));
-  builder
-    .setEngineKind(llvm::EngineKind::JIT)
+  _builder = std::make_unique<llvm::EngineBuilder>(std::move(_mod_owner));
+  _builder
+    ->setEngineKind(llvm::EngineKind::JIT)
     .setOptLevel(llvm::CodeGenOpt::Aggressive);
   llvm::linkAllBuiltinGCs();
-  llvm::TargetMachine* TM = builder.selectTarget();
+  llvm::TargetMachine* TM = _builder->selectTarget();
   mod()->setDataLayout(TM->createDataLayout());
   llvm::MCContext* ctx = nullptr;
   llvm::raw_svector_ostream ObjStream(ObjBufferSV);
@@ -71,8 +71,6 @@ void LlvmCodeGen::run_passes(llvm::SmallVectorImpl<char>& ObjBufferSV) {
   TM->addPassesToEmitMC(PM, ctx, ObjStream, false);
   TM->setFastISel(false);
   PM.run(*mod());
-
-  selector().func()->deleteBody();
 }
 
 void LlvmCodeGen::process_object_file(const llvm::object::ObjectFile& obj_file, const char *obj_file_start, address& code_start, uint64_t& code_size) {
@@ -113,9 +111,13 @@ void LlvmCodeGen::process_object_file(const llvm::object::ObjectFile& obj_file, 
           llvm::Expected<int64_t> Addend = Reloc.getAddend();
           assert(Addend, "addend not found");
           size_t offset = method()->vep_offset() + Reloc.getOffset() - 2;
-          if (*SecData == ".rodata.cst8") {
+          if (*SecData == ".rodata.cst16") {
             double con = *(double*)(Value->data() + *Addend);
-            relocator().add_double(offset, con);
+            relocator().add_double(offset, con, true);
+            _nof_consts += 2;
+          } else if (*SecData == ".rodata.cst8") {
+            double con = *(double*)(Value->data() + *Addend);
+            relocator().add_double(offset, con, false);
             _nof_consts++;
           } else if (*SecData == ".rodata.cst4") {
             float con = *(float*)(Value->data() + *Addend);

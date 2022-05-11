@@ -1725,7 +1725,7 @@ llvm::Value* storeFNode::select(Selector *sel) {
 
 llvm::Value* MoveF2I_reg_regNode::select(Selector *sel) {
   llvm::Value* val = sel->select_node(in(1));
-  return sel->builder().CreateFPToSI(val, sel->type(T_INT));
+  return sel->builder().CreateBitCast(val, sel->type(T_INT));
 }
 
 llvm::Value* mergeF_reg_regNode::select(Selector* sel) {
@@ -1802,7 +1802,7 @@ llvm::Value* zerox_long_reg_regNode::select(Selector* sel) {
   return sel->builder().CreateZExt(i_op, sel->type(T_LONG));
 }
 
-llvm::Value* storeDNode::select(Selector *sel) {
+llvm::Value* storeDNode::select(Selector* sel) {
   int op_index = MemNode::Address + 1;
   llvm::Value* addr = sel->select_address(this);
   llvm::Value* value = sel->select_node(in(op_index++));
@@ -1811,11 +1811,84 @@ llvm::Value* storeDNode::select(Selector *sel) {
   return NULL;
 }
 
-llvm::Value* modL_rRegNode::select(Selector *sel) {
+llvm::Value* modL_rRegNode::select(Selector* sel) {
   llvm::Value* divident = sel->select_node(in(1));
   llvm::Value* diviser = sel->select_node(in(2));
   return sel->builder().CreateSRem(divident, diviser);
 }
+
+llvm::Value* cmpD_reg_regNode::select(Selector* sel) {
+  llvm::Value* a = sel->select_node(in(1));
+  llvm::Value* b = sel->select_node(in(2));
+  return sel->select_condition(this, a, b, false, true);
+}
+
+llvm::Value* negD_reg_regNode::select(Selector* sel) {
+  llvm::Value* val = sel->select_node(in(1));
+  return sel->builder().CreateFNeg(val);
+}
+
+llvm::Value* loadDNode::select(Selector* sel) {
+  llvm::Value* addr = sel->select_address(this);
+  return sel->load(addr, T_DOUBLE);
+}
+
+llvm::Value* mergeL_reg_regNode::select(Selector* sel) {
+  llvm::Value* pred = sel->select_node(in(1));
+  llvm::Value* v1 = sel->select_node(in(2));
+  llvm::Value* v2 = sel->select_node(in(3));
+  return sel->builder().CreateSelect(pred, v2, v1);
+}
+
+llvm::Value* MoveD2L_reg_regNode::select(Selector* sel) {
+  llvm::Value* val = sel->select_node(in(1));
+  assert(val->getType() == sel->type(T_DOUBLE), "wrong type");
+  return sel->builder().CreateBitCast(val, sel->type(T_LONG));
+}
+
+llvm::Value* countLeadingZerosLNode::select(Selector* sel) {
+  llvm::Value* val = sel->select_node(in(1));
+  assert(val->getType() == sel->type(T_LONG), "wrong type");
+  llvm::Value* res = sel->builder().CreateIntrinsic(llvm::Intrinsic::ctlz, { val->getType() }, { val, sel->builder().getFalse() });
+  return sel->builder().CreateTrunc(res, sel->type(T_INT));
+}
+
+llvm::Value* countTrailingZerosLNode::select(Selector* sel) {
+  llvm::Value* val = sel->select_node(in(1));
+  assert(val->getType() == sel->type(T_LONG), "wrong type");
+  llvm::Value* res = sel->builder().CreateIntrinsic(llvm::Intrinsic::cttz, { val->getType() }, { val, sel->builder().getFalse() });
+  return sel->builder().CreateTrunc(res, sel->type(T_INT));
+}
+
+llvm::Value* convI2L_reg_reg_zexNode::select(Selector* sel) {
+  llvm::Value* a = sel->select_node(in(1));
+  return sel->builder().CreateZExt(a, sel->type(T_LONG));
+}
+
+llvm::Value* MoveL2D_reg_regNode::select(Selector* sel) {
+  llvm::Value* val = sel->select_node(in(1));
+  assert(val->getType() == sel->type(T_LONG), "wrong type");
+  return sel->builder().CreateBitCast(val, sel->type(T_DOUBLE));
+}
+
+
+llvm::Value* sarL_rReg_CLNode::select(Selector* sel) {
+  llvm::Value* a = sel->select_node(in(1));
+  llvm::Value* b = sel->select_node(in(2));
+  llvm::Type* longTy = sel->type(T_LONG);
+  if(b->getType() != longTy) {
+    b = sel->builder().CreateSExt(b, longTy);
+  }
+  return sel->builder().CreateAShr(a, b);
+}
+
+
+llvm::Value* divL_rRegNode::select(Selector* sel) {
+  llvm::Value* a = sel->select_node(in(1));
+  llvm::Value* b = sel->select_node(in(2));
+  return sel->builder().CreateSDiv(a, b);
+}
+
 
 llvm::Value* loadSNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
@@ -1826,10 +1899,6 @@ llvm::Value* loadI2UBNode::select(Selector* sel){
 }
 
 llvm::Value* loadI2USNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* loadDNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
@@ -1917,15 +1986,7 @@ llvm::Value* storeImmD0Node::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
-llvm::Value* countLeadingZerosLNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
 llvm::Value* countTrailingZerosINode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* countTrailingZerosLNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
@@ -1954,10 +2015,6 @@ llvm::Value* convN2INode::select(Selector* sel){
 }
 
 llvm::Value* encodeKlass_not_nullNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* mergeL_reg_regNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
@@ -2045,10 +2102,6 @@ llvm::Value* divI_rReg_immNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
-llvm::Value* divL_rRegNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
 llvm::Value* divL_rReg_immNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
@@ -2058,10 +2111,6 @@ llvm::Value* modI_rReg_immNode::select(Selector* sel){
 }
 
 llvm::Value* modL_rReg_immNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* sarL_rReg_CLNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
@@ -2425,19 +2474,7 @@ llvm::Value* convL2I2LNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
-llvm::Value* convI2L_reg_reg_zexNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* MoveD2L_reg_regNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
 llvm::Value* MoveI2F_reg_regNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* MoveL2D_reg_regNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
@@ -2501,10 +2538,6 @@ llvm::Value* maxI_rReg_immNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
-llvm::Value* cmpD_reg_regNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
 llvm::Value* jmpLoopEndUNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
@@ -2534,10 +2567,6 @@ llvm::Value* absD_reg_regNode::select(Selector* sel){
 }
 
 llvm::Value* negF_reg_regNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* negD_reg_regNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 

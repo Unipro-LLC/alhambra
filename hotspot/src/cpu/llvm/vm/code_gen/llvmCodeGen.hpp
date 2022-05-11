@@ -51,6 +51,7 @@ class LlvmCodeGen {
   CodeBuffer* _cb;
   llvm::LLVMContext _ctx;
   std::unique_ptr<llvm::Module> _mod_owner;
+  std::unique_ptr<llvm::EngineBuilder> _builder;
   llvm::Module* _mod;
   LlvmMethod* _method;
   Selector _selector;
