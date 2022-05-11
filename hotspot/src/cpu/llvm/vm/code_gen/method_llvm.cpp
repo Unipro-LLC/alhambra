@@ -1,4 +1,4 @@
-#include "llvm/Support/SmallVectorMemoryBuffer.h"
+#include "llvmHeaders.hpp"
 
 #include "method_llvm.hpp"
 

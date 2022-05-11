@@ -1,7 +1,7 @@
 #include "llvm/Object/ELFObjectFile.h"
 #include "llvm/CodeGen/BuiltinGCs.h"
 #include "llvm/CodeGen/FaultMaps.h"
-#include "llvm/MC/_BBSCounter.h"
+#include "llvm/MC/MCContext.h"
 
 #include "llvmCodeGen.hpp"
 
@@ -18,6 +18,7 @@ LlvmCodeGen::LlvmCodeGen(LlvmMethod* method, Compile* c, const char* name) :
   _cb(C->code_buffer()),
   _ctx(),
   _mod_owner(std::make_unique<llvm::Module>("normal", ctx())),
+  _bbs_info(std::make_unique<llvm::BBSInfo>()),
   _mod(_mod_owner.get()),
   _method(method),
   _selector(this, name),
@@ -69,6 +70,7 @@ void LlvmCodeGen::run_passes(llvm::SmallVectorImpl<char>& ObjBufferSV) {
   llvm::legacy::PassManager PM;
   PM.add(llvm::createRewriteStatepointsForGCLegacyPass());
   TM->addPassesToEmitMC(PM, ctx, ObjStream, false);
+  ctx->bbs_info = bbs_info();
   TM->setFastISel(false);
   PM.run(*mod());
 }
@@ -156,7 +158,7 @@ void LlvmCodeGen::fill_code_buffer(address src, uint64_t size, int& exc_offset, 
   *code_end() = NativeInstruction::nop_instruction_code;
 
   stack().set_frame_size(method()->frame_size());
-  debug_info().reserve(sm_parser()->getNumRecords() + llvm::BasicBlockSizes.size());
+  debug_info().reserve(sm_parser()->getNumRecords() + bbs_info()->BasicBlockSizes.size());
   unsigned record_idx = 0;
   for (RecordAccessor record: sm_parser()->records()) {
     uint64_t id = record.getID();
@@ -195,13 +197,15 @@ void LlvmCodeGen::fill_code_buffer(address src, uint64_t size, int& exc_offset, 
 }
 
 void LlvmCodeGen::count_block_offsets(int vep_offset) {
-  block_offsets().reserve(llvm::BasicBlockSizes.size());
-  std::sort(llvm::RelaxSizes.begin(), llvm::RelaxSizes.end());
-  std::sort(llvm::AlignSizes.begin(), llvm::AlignSizes.end());
+  block_offsets().reserve(bbs_info()->BasicBlockSizes.size());
+  auto& RelaxSizes = bbs_info()->RelaxSizes;
+  auto& AlignSizes = bbs_info()->AlignSizes;
+  std::sort(RelaxSizes.begin(), RelaxSizes.end());
+  std::sort(AlignSizes.begin(), AlignSizes.end());
   size_t offset = vep_offset;
   size_t rel_idx = 0, al_idx = 0;
 
-  for (auto& pair : llvm::BasicBlockSizes) {
+  for (auto& pair : bbs_info()->BasicBlockSizes) {
     if (pair.second == 0) continue;
     // these DebugInfo-s may come in handy during patching 
     std::unique_ptr<DebugInfo> di = DebugInfo::create(DebugInfo::id(DebugInfo::BlockStart), this);
@@ -211,16 +215,13 @@ void LlvmCodeGen::count_block_offsets(int vep_offset) {
       block_offsets().emplace(pair.first, offset); // basic block pointers are dangling at this point
     }
     offset += pair.second;
-    if (rel_idx < llvm::RelaxSizes.size() && offset > llvm::RelaxSizes[rel_idx].first + vep_offset) {
-      offset += llvm::RelaxSizes[rel_idx++].second - llvm::JCC_SIZE;
+    if (rel_idx < RelaxSizes.size() && offset > RelaxSizes[rel_idx].first + vep_offset) {
+      offset += RelaxSizes[rel_idx++].second - llvm::BBSInfo::JCC_SIZE;
     }
-    if (al_idx < llvm::AlignSizes.size() && offset > llvm::AlignSizes[al_idx].first + vep_offset) {
-      offset += llvm::AlignSizes[al_idx++].second;
+    if (al_idx < AlignSizes.size() && offset > AlignSizes[al_idx].first + vep_offset) {
+      offset += AlignSizes[al_idx++].second;
     }
   }
-  llvm::BasicBlockSizes.clear();
-  llvm::RelaxSizes.clear();
-  llvm::AlignSizes.clear();
 }
 
 void LlvmCodeGen::add_stubs(int& exc_offset, int& deopt_offset) {

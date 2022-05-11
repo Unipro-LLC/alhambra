@@ -66,11 +66,11 @@
 #include <llvm/ADT/StringMap.h>
 #include <llvm/Support/Debug.h>
 #include <llvm/Support/Host.h>
+#include "llvm/Support/SmallVectorMemoryBuffer.h"
 #include <llvm/CodeGen/Passes.h>
-
+#include "llvm/MC/MCContext.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/GVN.h"
-
 #include "llvm/Object/StackMapParser.h"
 
 using StackMapParser = llvm::StackMapParser<llvm::support::endianness::native>;

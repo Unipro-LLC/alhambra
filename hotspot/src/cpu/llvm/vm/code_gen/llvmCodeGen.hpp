@@ -41,6 +41,7 @@ class LlvmCodeGen {
   unsigned nof_safepoints() { return _nof_safepoints; }
   unsigned nof_exceptions() { return _nof_exceptions; }
   std::unordered_map<const llvm::BasicBlock*, size_t>& block_offsets() { return _block_offsets; }
+  llvm::BBSInfo* bbs_info() { return _bbs_info.get(); }
 
   void run_passes(llvm::SmallVectorImpl<char>& ObjBufferSV);
   void process_object_file(const llvm::object::ObjectFile& obj_file, const char *obj_file_start, address& code_start, uint64_t& code_size);
@@ -52,6 +53,7 @@ class LlvmCodeGen {
   llvm::LLVMContext _ctx;
   std::unique_ptr<llvm::Module> _mod_owner;
   std::unique_ptr<llvm::EngineBuilder> _builder;
+  std::unique_ptr<llvm::BBSInfo> _bbs_info;
   llvm::Module* _mod;
   LlvmMethod* _method;
   Selector _selector;
