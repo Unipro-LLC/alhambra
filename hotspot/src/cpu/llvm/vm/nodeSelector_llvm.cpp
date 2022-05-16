@@ -1889,6 +1889,19 @@ llvm::Value* divL_rRegNode::select(Selector* sel) {
   return sel->builder().CreateSDiv(a, b);
 }
 
+llvm::Value* and_cmpLTMaskNode::select(Selector* sel) {
+  llvm::Value* p = sel->select_node(in(1));
+  llvm::Value* q = sel->select_node(in(2));
+  llvm::Value* y = sel->select_node(in(3));
+  llvm::Value* pred = sel->builder().CreateICmpSLT(p, q);
+  return sel->builder().CreateSelect(pred, y, sel->null(y->getType()));
+}
+
+llvm::Value* i2sNode::select(Selector* sel) {
+  llvm::Value* i_op = sel->select_node(in(1));
+  llvm::Value* res = sel->builder().CreateTrunc(i_op, sel->type(T_SHORT));
+  return sel->builder().CreateSExt(res, sel->type(T_INT));
+}
 
 llvm::Value* loadSNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
@@ -2111,10 +2124,6 @@ llvm::Value* modI_rReg_immNode::select(Selector* sel){
 }
 
 llvm::Value* modL_rReg_immNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* i2sNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
@@ -2387,10 +2396,6 @@ llvm::Value* cadd_cmpLTMask_0Node::select(Selector* sel){
 }
 
 llvm::Value* cadd_cmpLTMask_2Node::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* and_cmpLTMaskNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
