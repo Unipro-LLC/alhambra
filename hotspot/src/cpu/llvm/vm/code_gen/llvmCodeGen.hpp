@@ -38,10 +38,12 @@ class LlvmCodeGen {
   void inc_nof_consts() { _nof_consts++; }
   address code_start() const { return _code_start; }
   address code_end() const { return _code_end; }
+  address addr(size_t pc_offset) { return code_start() + pc_offset; }
   unsigned nof_safepoints() { return _nof_safepoints; }
   unsigned nof_exceptions() { return _nof_exceptions; }
   std::unordered_map<const llvm::BasicBlock*, size_t>& block_offsets() { return _block_offsets; }
   llvm::BBSInfo* bbs_info() { return _bbs_info.get(); }
+  MacroAssembler* masm() { return _masm; }
 
   void run_passes(llvm::SmallVectorImpl<char>& ObjBufferSV);
   void process_object_file(const llvm::object::ObjectFile& obj_file, const char *obj_file_start, address& code_start, uint64_t& code_size);
@@ -72,6 +74,7 @@ class LlvmCodeGen {
   unsigned _nof_safepoints = 0;
   unsigned _nof_exceptions = 0;
   std::unordered_map<const llvm::BasicBlock*, size_t> _block_offsets;
+  MacroAssembler* _masm;
 
   void count_block_offsets(int vep_offset);
   void add_stubs(int& exc_offset, int& deopt_offset);

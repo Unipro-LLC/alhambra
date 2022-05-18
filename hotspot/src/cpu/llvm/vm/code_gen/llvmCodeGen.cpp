@@ -112,7 +112,7 @@ void LlvmCodeGen::process_object_file(const llvm::object::ObjectFile& obj_file, 
           assert(Value, "invalid section contents");
           llvm::Expected<int64_t> Addend = Reloc.getAddend();
           assert(Addend, "addend not found");
-          size_t offset = method()->vep_offset() + Reloc.getOffset() - 2;
+          size_t offset = method()->vep_offset() + Reloc.getOffset() - NativeMovConstReg::data_offset;
           if (*SecData == ".rodata.cst16") {
             double con = *(double*)(Value->data() + *Addend);
             relocator().add_double(offset, con, true);
@@ -124,6 +124,11 @@ void LlvmCodeGen::process_object_file(const llvm::object::ObjectFile& obj_file, 
           } else if (*SecData == ".rodata.cst4") {
             float con = *(float*)(Value->data() + *Addend);
             relocator().add_float(offset, con);
+            _nof_consts++;
+          } else if (*SecData == ".rodata") {
+            std::unique_ptr<DebugInfo> di = DebugInfo::create(DebugInfo::id(DebugInfo::Switch), this);
+            di->pc_offset = offset;
+            debug_info().push_back(std::move(di));
             _nof_consts++;
           }
         }
@@ -144,18 +149,21 @@ void LlvmCodeGen::fill_code_buffer(address src, uint64_t size, int& exc_offset, 
   cb()->initialize_oop_recorder(C->env()->oop_recorder());
   _code_start = cb()->insts()->start();
 
-  MacroAssembler masm(cb());
+  MacroAssembler ma(cb());
+  _masm = &ma;
   if (vep_offset != 0) {
-    masm.generate_unverified_entry();
+    masm()->generate_unverified_entry();
   }
-  address verified_entry_point = masm.pc();
+  address verified_entry_point = masm()->pc();
   assert(verified_entry_point - code_start() == vep_offset, "expected equal offsets");
 
   assert(verified_entry_point + size < cb()->insts()->limit(), "cannot memcpy");
   memcpy(verified_entry_point, src, size);
-  masm.code_section()->set_end(verified_entry_point + code_size);
+  masm()->code_section()->set_end(verified_entry_point + code_size);
   _code_end = verified_entry_point + size;
   *code_end() = NativeInstruction::nop_instruction_code;
+
+  relocator().floats_to_cb();
 
   stack().set_frame_size(method()->frame_size());
   debug_info().reserve(sm_parser()->getNumRecords() + bbs_info()->BasicBlockSizes.size());
@@ -190,7 +198,7 @@ void LlvmCodeGen::fill_code_buffer(address src, uint64_t size, int& exc_offset, 
   }
 
   scope_descriptor().describe_scopes();
-  relocator().apply_relocs(&masm);
+  relocator().apply_relocs();
   cb()->initialize_stubs_size(stubs_size);
   add_stubs(exc_offset, deopt_offset);
   assert(code_start() == cb()->insts()->start(), "CodeBuffer was reallocated");
@@ -210,6 +218,7 @@ void LlvmCodeGen::count_block_offsets(int vep_offset) {
     // these DebugInfo-s may come in handy during patching 
     std::unique_ptr<DebugInfo> di = DebugInfo::create(DebugInfo::id(DebugInfo::BlockStart), this);
     di->pc_offset = offset;
+    di->asBlockStart()->bb = pair.first;
     debug_info().push_back(std::move(di));
     if (pair.first) {
       block_offsets().emplace(pair.first, offset); // basic block pointers are dangling at this point
@@ -231,7 +240,7 @@ void LlvmCodeGen::add_stubs(int& exc_offset, int& deopt_offset) {
       if (!scdi) continue;
       MachCallJavaNode* cjn = scdi->scope_info->cjn;
       if (cjn->_method) {
-        address call_site = code_start() + scdi->pc_offset - NativeCall::instruction_size;
+        address call_site = addr(scdi->pc_offset) - NativeCall::instruction_size;
         cb()->insts()->set_mark(call_site);
         address stub = CompiledStaticCall::emit_to_interp_stub(*cb());
         assert(stub != NULL, "CodeCache is full");

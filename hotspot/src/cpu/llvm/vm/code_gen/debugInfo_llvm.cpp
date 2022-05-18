@@ -25,6 +25,7 @@ std::unique_ptr<DebugInfo> DebugInfo::create(uint64_t id, LlvmCodeGen* cg) {
     case NarrowOop: return std::make_unique<NarrowOopDebugInfo>();
     case Metadata: return std::make_unique<MetadataDebugInfo>();
     case OrigPC: return std::make_unique<OrigPCDebugInfo>();
+    case Switch: return std::make_unique<SwitchDebugInfo>();
     default: ShouldNotReachHere();
   }
 }
@@ -54,38 +55,62 @@ void DebugInfo::patch(address& pos, const std::vector<byte>& inst) {
 }
 
 void OrigPCDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
-  address pos = cg->code_start() + pc_offset;
+  address pos = cg->addr(pc_offset);
   assert(mov(pos) && movabs(pos), "expected MOVABS REG, IMM");
   pos += NativeMovConstReg::data_offset;
   assert(*(uintptr_t*)pos == MAGIC_NUMBER, "expected magic number");
   // patching and adding a relocation happens in CallDebugInfo::handle
 }
 
-void LoadConstantDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
+void SwitchDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
+  auto it = cg->debug_info().begin() + idx;
+  BlockStartDebugInfo* bsdi;
+  for (size_t i = idx; !(bsdi = cg->debug_info()[i]->asBlockStart()); --i);
+  SwitchInfo& si = cg->selector().switch_info().at(bsdi->bb);
+  SwitchReloc* rel = new SwitchReloc(pc_offset, si, cg);
+  cg->relocator().add(rel);
+}
+
+address LoadConstantDebugInfo::get_con(size_t idx, LlvmCodeGen* cg, uintptr_t& con) {
   // Constant ... MOVABS REG, IMM ... PatchBytes
-  address pos = cg->code_start() + pc_offset;
-  const size_t size = NativeMovConstReg::instruction_size;
-  if (mov(pos)) {
-    if (mov_mem(pos)) return; // it's not the first load of this constant and there's already a relocation
-    if (!movabs(pos)) { // try looking from the other end
-      assert(mov_reg(pos), "expected MOV REG, REG");
-      assert(idx < cg->debug_info().size() - 1, "expected PatchBytes next");
-      PatchBytesDebugInfo* pbdi = cg->debug_info()[idx + 1]->asPatchBytes();
-      assert(pbdi, "probably incorrect sorting");
-      pos = cg->code_start() + pbdi->pc_offset - (MOV_REG_SIZE + size);
-      assert(mov(pos) && movabs(pos), "expected MOVABS REG, IMM");
-      assert(mov(pos + size) && mov_mem(pos + size), "expected MOV REG, [REG]");
-    }
-  } else { // the constant is somewhere in between Constant and PatchBytes, so far we can only handle individual cases 
-    Unimplemented();
+  address pos = cg->addr(pc_offset);
+  assert(mov(pos), "should be some kind of MOV");
+  if (mov_mem(pos)) return nullptr; // there should already be a relocation
+  if (!movabs(pos)) { // try looking from the other end
+    assert(mov_reg(pos), "expected MOV REG, REG");
+    assert(idx < cg->debug_info().size() - 1, "expected PatchBytes next");
+    PatchBytesDebugInfo* pbdi = cg->debug_info()[idx + 1]->asPatchBytes();
+    assert(pbdi, "probably incorrect sorting");
+    pos = cg->addr(pbdi->pc_offset - MOV_REG_SIZE);
+    assert(mov(pos) && mov_mem(pos), "expected MOV REG, [REG]");
+    pos -= NativeMovConstReg::instruction_size;
+    if (!(mov(pos) && movabs(pos))) return nullptr; // there should already be a relocation
   }
   con = *(uintptr_t*)(pos + NativeMovConstReg::data_offset);
-  cg->relocator().add(this, pos - cg->code_start());
+  return pos;
+}
+
+void OopDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
+  uintptr_t con;
+  address pos = get_con(idx, cg, con);
+  if (pos) {
+    OopReloc* rel = new OopReloc(pos - cg->code_start(), con, cg);
+    cg->relocator().add(rel);
+  }
+}
+
+void MetadataDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
+  uintptr_t con;
+  address pos = get_con(idx, cg, con);
+  if (pos) {
+    MetadataReloc* rel = new MetadataReloc(pos - cg->code_start(), con, cg);
+    cg->relocator().add(rel);
+  }
 }
 
 void NarrowOopDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
   size_t off;
-  address pos = cg->code_start() + pc_offset;
+  address pos = cg->addr(pc_offset);
   if (movl(pos)) { // MOV DWORD PTR [REG+OFF], IMM
     off = rex(pos) ? 4 : 3;
   } else { // CMP REG, IMM
@@ -98,8 +123,9 @@ void NarrowOopDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
     (cmp_indir(pos) ? 3 :
     (cmp_no_rex(pos) ? 2 : 3));
   }
-  oop_index = *(uint32_t*)(pos + off) - MAGIC_NUMBER;
-  cg->relocator().add(this, pc_offset);
+  size_t oop_index = *(uint32_t*)(pos + off) - MAGIC_NUMBER;
+  InlineOopReloc* rel = new InlineOopReloc(pc_offset, oop_index);
+  cg->relocator().add(rel);
 }
 
 void TailJumpDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
@@ -110,7 +136,7 @@ void TailJumpDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
   PatchBytesDebugInfo* pbdi = cg->debug_info()[idx - 1]->asPatchBytes();
   assert(pbdi && pc_offset - pbdi->pc_offset == pb, "wrong distance");
 
-  address pos = cg->code_start() + pbdi->pc_offset, start_pos = pos;
+  address pos = cg->addr(pbdi->pc_offset), start_pos = pos;
   patch(pos, MOV_RDX);
   patch(pos, MOV_R10);
 
@@ -118,7 +144,7 @@ void TailJumpDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
   if (idx < cg->debug_info().size() - 1) {
     BlockStartDebugInfo* bsdi = cg->debug_info()[idx + 1]->asBlockStart();
     assert(bsdi, "should be BlockStart");
-    next_addr = cg->code_start() + bsdi->pc_offset;
+    next_addr = cg->addr(bsdi->pc_offset);
   }
   assert(next_addr[-NativeReturn::instruction_size] == NativeReturn::instruction_code, "not retq");
 
@@ -153,7 +179,8 @@ void RethrowDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
   *(pos++) = NativeJump::instruction_code;
   *(uint32_t*)pos = OptoRuntime::rethrow_stub() - (pos + sizeof(uint32_t));
 
-  cg->relocator().add(this, rel_off);
+  CallReloc* rel = new CallReloc(rel_off, this);
+  cg->relocator().add(rel);
 }
 
 void CallDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
@@ -175,10 +202,11 @@ void CallDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
       call_site = (address)((intptr_t)call_site & -BytesPerInt); // should be aligned by BytesPerInt
     }
 
-    address pos, nop_end = call_site - NativeCall::displacement_offset, call_start = nop_end;
+    address pos, nop_end = call_site - NativeCall::displacement_offset, call_start = nop_end, ic_addr;
 
-    if (asDynamicCall()) {
-      pos = nop_end -= NativeMovConstReg::instruction_size;
+    DynamicCallDebugInfo* dcdi = asDynamicCall();
+    if (dcdi) {
+      ic_addr = pos = nop_end -= NativeMovConstReg::instruction_size;
       const byte movabs = 0x48, rax = 0xb8;
       *(pos++) = movabs;
       *(pos++) = rax;
@@ -213,7 +241,8 @@ void CallDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
       *(pos++) = NativeInstruction::nop_instruction_code;
     }
 
-    cg->relocator().add(this, call_offset);
+    Reloc* rel = dcdi ? new VirtualCallReloc(call_offset, dcdi, ic_addr) : new CallReloc(call_offset, this);
+    cg->relocator().add(rel);
 
     ThrowScopeInfo* tsi = scope_info->asThrow();
     if (tsi) {
@@ -233,6 +262,7 @@ void CallDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
     OrigPCDebugInfo* opdi = cg->debug_info()[idx - 1]->asOrigPC();
     assert(opdi, "sanity check");
     *(uintptr_t*)(code_start + opdi->pc_offset + NativeMovConstReg::data_offset) = (uintptr_t)code_start + pc_offset;
-    cg->relocator().add(opdi, opdi->pc_offset);
+    InternalReloc* rel = new InternalReloc(opdi->pc_offset);
+    cg->relocator().add(rel);
   }
 }

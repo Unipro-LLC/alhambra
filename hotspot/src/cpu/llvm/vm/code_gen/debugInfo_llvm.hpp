@@ -28,6 +28,7 @@ struct OopDebugInfo;
 struct NarrowOopDebugInfo;
 struct MetadataDebugInfo;
 struct OrigPCDebugInfo;
+struct SwitchDebugInfo;
 struct ScopeInfo;
 struct PatchInfo;
 struct SpillPatchInfo;
@@ -47,6 +48,7 @@ struct DebugInfo {
     NarrowOop, 
     Metadata, 
     OrigPC, 
+    Switch, 
 
     Count };
   uint32_t pc_offset;
@@ -81,6 +83,7 @@ struct DebugInfo {
   virtual NarrowOopDebugInfo* asNarrowOop() { return nullptr; }
   virtual MetadataDebugInfo* asMetadata() { return nullptr; }
   virtual OrigPCDebugInfo* asOrigPC() { return nullptr; }
+  virtual SwitchDebugInfo* asSwitch() { return nullptr; }
 
   virtual bool block_start() { return false; }
   virtual bool block_can_start() { return false; }
@@ -126,6 +129,7 @@ struct DynamicCallDebugInfo : public JavaCallDebugInfo {
 };
 
 struct BlockStartDebugInfo : public DebugInfo {
+  const llvm::BasicBlock* bb;
   BlockStartDebugInfo(): DebugInfo() {}
   BlockStartDebugInfo* asBlockStart() override { return this; }
   Type type() override { return BlockStart; }
@@ -167,21 +171,20 @@ struct ConstantDebugInfo : public DebugInfo {
 };
 
 struct LoadConstantDebugInfo : public ConstantDebugInfo {
-  uintptr_t con;
   LoadConstantDebugInfo(): ConstantDebugInfo() {}
   LoadConstantDebugInfo* asLoadConstant() override { return this; }
-  void handle(size_t idx, LlvmCodeGen* cg) override;
+  address get_con(size_t idx, LlvmCodeGen* cg, uintptr_t& con);
 };
 
 struct OopDebugInfo : public LoadConstantDebugInfo {
   OopDebugInfo(): LoadConstantDebugInfo() {}
   OopDebugInfo* asOop() override { return this; }
   Type type() override { return Oop; }
+  void handle(size_t idx, LlvmCodeGen* cg) override;
 };
 
 struct NarrowOopDebugInfo : public ConstantDebugInfo {
   const static size_t MAGIC_NUMBER = 1 << 30; // addend to oopIndex so it's always 4 bytes
-  size_t oop_index;
   static bool rex(address pos) { return pos[0] == 0x41; }
   static bool movl(address pos) { return pos[0] == 0xC7 || (rex(pos) && pos[1] == 0xC7); }
   static bool cmp(address pos, bool is64bit) {
@@ -211,10 +214,18 @@ struct OrigPCDebugInfo : public ConstantDebugInfo {
   void handle(size_t idx, LlvmCodeGen* cg) override;
 };
 
+struct SwitchDebugInfo : public ConstantDebugInfo {
+  SwitchDebugInfo(): ConstantDebugInfo() {}
+  Type type() override { return Switch; }
+  SwitchDebugInfo* asSwitch() override { return this; }
+  void handle(size_t idx, LlvmCodeGen* cg) override;
+};
+
 struct MetadataDebugInfo : public LoadConstantDebugInfo {
   MetadataDebugInfo(): LoadConstantDebugInfo() {}
   MetadataDebugInfo* asMetadata() override { return this; }
   Type type() override { return Metadata; }
+  void handle(size_t idx, LlvmCodeGen* cg) override;
 };
 
 struct PatchInfo {

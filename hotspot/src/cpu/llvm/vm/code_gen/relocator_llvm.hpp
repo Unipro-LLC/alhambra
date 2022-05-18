@@ -6,6 +6,8 @@
 #include "utilities/globalDefinitions.hpp"
 #include "memory/allocation.hpp"
 
+#include "llvmHeaders.hpp"
+
 class MacroAssembler;
 class Reloc;
 class MachCallJavaNode;
@@ -35,11 +37,12 @@ class VirtualCallReloc;
 class ConstReloc;
 class FloatReloc;
 class DoubleReloc;
-class LoadConstReloc;
 class OopReloc;
 class MetadataReloc;
 class InternalReloc;
 class InlineOopReloc;
+class SwitchReloc;
+class DynamicCallDebugInfo;
 
 class Reloc: public ResourceObj {
 protected:
@@ -54,11 +57,11 @@ public:
   virtual ConstReloc* asConst() { return nullptr; }
   virtual FloatReloc* asFloat()    { return nullptr; }
   virtual DoubleReloc* asDouble()    { return nullptr; }
-  virtual LoadConstReloc* asLoadConst() { return nullptr; }
   virtual OopReloc* asOop()    { return nullptr; }
   virtual MetadataReloc* asMetadata()    { return nullptr; }
   virtual InternalReloc* asInternal()    { return nullptr; }
   virtual InlineOopReloc* asInlineOop()    { return nullptr; }
+  virtual SwitchReloc* asSwitch()    { return nullptr; }
   virtual RelocationHolder getHolder() = 0;
   virtual int format();
 };
@@ -67,9 +70,7 @@ class CallReloc: public Reloc {
   HotspotRelocInfo _kind;
 
 public:
-  CallReloc(HotspotRelocInfo info, size_t offset):
-    Reloc(offset),
-    _kind(info) {}
+  CallReloc(size_t offset, DebugInfo* di);
 
   RelocationHolder getHolder() override;
   CallReloc* asCall() override         { return this; }
@@ -79,8 +80,7 @@ public:
 class VirtualCallReloc : public CallReloc {
   address _IC_addr;
 public:
-  VirtualCallReloc(size_t offset): CallReloc(HotspotRelocInfo::RelocVirtualCall, offset) {}
-  void set_IC_addr(address IC_addr) { _IC_addr = IC_addr; }
+  VirtualCallReloc(size_t offset, DynamicCallDebugInfo* di, address ic_addr);
   VirtualCallReloc* asVirtualCall() override { return this; }
   RelocationHolder getHolder() override;
 };
@@ -111,23 +111,15 @@ public:
   DoubleReloc* asDouble() override { return this; }
 };
 
-class LoadConstReloc : public ConstReloc {
-  uintptr_t _con;
+class OopReloc : public ConstReloc {
 public:
-  LoadConstReloc(size_t offset, uintptr_t con): ConstReloc(offset), _con(con) {}
-  uintptr_t con() const { return _con; }
-  LoadConstReloc* asLoadConst() override { return this; }
-};
-
-class OopReloc : public LoadConstReloc {
-public:
-  OopReloc(size_t offset, uintptr_t con): LoadConstReloc(offset, con) {}
+  OopReloc(size_t offset, uintptr_t con, LlvmCodeGen* cg);
   OopReloc* asOop() override { return this; }
 };
 
-class MetadataReloc : public LoadConstReloc {
+class MetadataReloc : public ConstReloc {
 public:
-  MetadataReloc(size_t offset, uintptr_t con): LoadConstReloc(offset, con) {}
+  MetadataReloc(size_t offset, uintptr_t con, LlvmCodeGen* cg);
   MetadataReloc* asMetadata() override { return this; }
 };
 
@@ -147,6 +139,12 @@ public:
   int format() override;
 };
 
+class SwitchReloc : public ConstReloc {
+public: 
+  SwitchReloc(size_t offset, SwitchInfo& si, LlvmCodeGen* cg);
+  SwitchReloc* asSwitch() override { return this; }
+};
+
 class LlvmRelocator {
 private:
   LlvmCodeGen* _cg;
@@ -156,11 +154,11 @@ private:
 
 public:
   LlvmCodeGen* cg() { return _cg; }
-  void add(DebugInfo* di, size_t offset);
+  void add(Reloc* rel) { relocs.push_back(rel); }
   void add_float(size_t offset, float con);
   void add_double(size_t offset, double con, bool align);
-  void apply_relocs(MacroAssembler* masm);
-  void floats_to_cb(MacroAssembler* masm);
+  void apply_relocs();
+  void floats_to_cb();
 
   LlvmRelocator(LlvmCodeGen* code_gen) : _cg(code_gen) {}
 };

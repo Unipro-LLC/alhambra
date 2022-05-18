@@ -1553,12 +1553,16 @@ llvm::Value* jumpXtndNode::select(Selector *sel) {
   uint size = outcnt();
 
   llvm::Value* addr_offset = sel->select_node(in(1));
+  llvm::Value* shift = llvm::ConstantInt::get(addr_offset->getType(), LogBytesPerWord);
+  addr_offset = sel->builder().CreateAShr(addr_offset, shift);
   llvm::BasicBlock* bb = sel->basic_block();
   llvm::BasicBlock* bb_default = llvm::BasicBlock::Create(sel->ctx(), bb->getName() + "_default", sel->func());
   sel->builder().SetInsertPoint(bb_default);
   sel->builder().CreateUnreachable();
   sel->builder().SetInsertPoint(bb);
   llvm::SwitchInst* switch_inst = sel->builder().CreateSwitch(addr_offset, bb_default, size);
+  SwitchInfo& switch_info = sel->switch_info()[sel->basic_block()];
+  switch_info.reserve(size);
 
   for (uint i = 0; i < size; ++i) {
     Node* switch_case = NULL;
@@ -1580,8 +1584,14 @@ llvm::Value* jumpXtndNode::select(Selector *sel) {
     }
 
     assert(switch_case != NULL, "Some switch cases are missing");
-    llvm::BasicBlock* bb_dest = sel->basic_block(sel->C->cfg()->get_block_for_node(switch_case));
-    llvm::ConstantInt* switch_val = llvm::cast<llvm::ConstantInt>(llvm::ConstantInt::get(addr_offset->getType(), i << LogBytesPerWord));
+    Block *b_dest = sel->C->cfg()->get_block_for_node(switch_case);
+    llvm::BasicBlock *bb_dest = sel->basic_block(b_dest), *bb_extra = nullptr;
+    if (b_dest->get_node(1)->is_MachGoto()) {
+      bb_extra = sel->basic_block(b_dest->non_connector_successor(0));
+    }
+    switch_info.emplace_back(bb_dest, bb_extra);
+    sel->cg()->inc_nof_consts();
+    llvm::ConstantInt* switch_val = llvm::cast<llvm::ConstantInt>(llvm::ConstantInt::get(addr_offset->getType(), i));
     switch_inst->addCase(switch_val, bb_dest);
   }
   return NULL;

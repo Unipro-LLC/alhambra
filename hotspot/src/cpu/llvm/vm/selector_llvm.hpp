@@ -48,6 +48,7 @@ private:
   using CallInfo = std::pair<llvm::CallBase*, PatchInfo*>;
   std::vector<CallInfo> _call_info;
   std::vector<size_t> _param_to_arg;
+  std::unordered_map<const llvm::BasicBlock*, SwitchInfo> _switch_info; 
 
   void create_func();
   void create_blocks();
@@ -73,6 +74,7 @@ public:
   llvm::Value* thread() const { return _thread; }
   unsigned pointer_size() const { return _pointer_size; }
   std::unordered_map<llvm::BasicBlock*, ExceptionInfo>& exception_info() { return _exception_info; }
+  std::unordered_map<const llvm::BasicBlock*, SwitchInfo>&  switch_info() { return _switch_info; }
 
   llvm::Type* type(BasicType btype) const;
   std::vector<llvm::Type*> types(const std::vector<llvm::Value*>& v) const;
