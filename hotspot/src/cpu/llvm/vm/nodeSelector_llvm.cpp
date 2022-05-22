@@ -157,7 +157,7 @@ llvm::Value* tailjmpIndNode::select(Selector* sel) {
   sel->store(target_pc, r10_offset);
 
   uint32_t patch_bytes = 2 * NativeMovRegMem::instruction_size + TailJumpDebugInfo::ADD_RSP_SIZE + TailJumpDebugInfo::JMPQ_R10.size() - NativeReturn::instruction_size;
-  sel->stackmap(DebugInfo::PatchBytes, patch_bytes);
+  sel->stackmap(DebugInfo::PatchBytes, 0, patch_bytes);
   sel->patch_info().emplace(DebugInfo::id(DebugInfo::TailJump), std::make_unique<PatchInfo>(patch_bytes));
   sel->stackmap(DebugInfo::TailJump);
 
@@ -284,7 +284,8 @@ llvm::Value* membar_storestoreNode::select(Selector* sel) {
 
 llvm::Value* checkCastPPNode::select(Selector* sel) {
   sel->oops().push_back(this);
-  return sel->select_node(in(1));
+  llvm::Value* ptr = sel->select_node(in(1));
+  return sel->builder().CreatePointerCast(ptr, sel->type(T_OBJECT));
 }
 
 llvm::Value* PhiNode::select(Selector* sel) {
@@ -1144,10 +1145,9 @@ llvm::Value* MachNullCheckNode::select(Selector *sel) {
   sel->builder().SetInsertPoint(bb_not_null);
   llvm::Instruction* br = sel->builder().CreateBr(next_bb);
   // move the remaining instructions from bb to bb_not_null
-  for (llvm::BasicBlock::reverse_iterator it = bb->rbegin(); it != cond_br->getReverseIterator(); it = bb->rbegin()) {
+  for (auto it = ++cond_br->getIterator(); it != bb->end(); it = ++cond_br->getIterator()) {
     llvm::Instruction& inst = *it;
-    inst.removeFromParent();
-    inst.insertBefore(br);
+    inst.moveBefore(br);
   }
   return NULL;
 }
@@ -1913,6 +1913,18 @@ llvm::Value* i2sNode::select(Selector* sel) {
   return sel->builder().CreateSExt(res, sel->type(T_INT));
 }
 
+llvm::Value* minI_rReg_imm_0Node::select(Selector* sel) {
+  llvm::Value* a = sel->select_node(in(1));
+  llvm::Value* b = sel->select_oper(opnd_array(2));
+  llvm::Value* pred = sel->builder().CreateICmpSLE(a, b);
+  return sel->builder().CreateSelect(pred, a, b);
+}
+
+llvm::Value* convD2F_reg_regNode::select(Selector* sel){
+  llvm::Value* a = sel->select_node(in(1));
+  return sel->builder().CreateFPCast(a, sel->type(T_FLOAT));
+}
+
 llvm::Value* loadSNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
@@ -2465,10 +2477,6 @@ llvm::Value* roundDouble_nopNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
-llvm::Value* convD2F_reg_regNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
 llvm::Value* convF2L_reg_regNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
@@ -2542,10 +2550,6 @@ llvm::Value* overflowNegL_rRegNode::select(Selector* sel){
 }
 
 llvm::Value* cmpL3_reg_regNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* minI_rReg_imm_0Node::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 

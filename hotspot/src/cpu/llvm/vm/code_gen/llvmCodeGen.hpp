@@ -42,7 +42,7 @@ class LlvmCodeGen {
   unsigned nof_safepoints() { return _nof_safepoints; }
   unsigned nof_exceptions() { return _nof_exceptions; }
   std::unordered_map<const llvm::BasicBlock*, size_t>& block_offsets() { return _block_offsets; }
-  llvm::BBSInfo* bbs_info() { return _bbs_info.get(); }
+  llvm::AsmInfo* asm_info() { return _asm_info.get(); }
   MacroAssembler* masm() { return _masm; }
 
   void run_passes(llvm::SmallVectorImpl<char>& ObjBufferSV);
@@ -55,7 +55,7 @@ class LlvmCodeGen {
   llvm::LLVMContext _ctx;
   std::unique_ptr<llvm::Module> _mod_owner;
   std::unique_ptr<llvm::EngineBuilder> _builder;
-  std::unique_ptr<llvm::BBSInfo> _bbs_info;
+  std::unique_ptr<llvm::AsmInfo> _asm_info;
   llvm::Module* _mod;
   LlvmMethod* _method;
   Selector _selector;
@@ -76,7 +76,7 @@ class LlvmCodeGen {
   std::unordered_map<const llvm::BasicBlock*, size_t> _block_offsets;
   MacroAssembler* _masm;
 
-  void count_block_offsets(int vep_offset);
+  void process_asm_info(int vep_offset);
   void add_stubs(int& exc_offset, int& deopt_offset);
 };
 #endif // CPU_LLVM_VM_CODE_GEN_LLVMCODEGEN_HPP

@@ -38,8 +38,9 @@ private:
   LlvmCodeGen* _cg;
   Compile* C;
   std::vector<std::unique_ptr<ScopeInfo>> _scope_info;
-  const int DEOPT_CNT_OFFSET = 2;
-  const int DEOPT_OFFSET = 3;
+  static const int DEOPT_CNT_OFFSET = 2;
+  static const int DEOPT_OFFSET = 3;
+  static const int RBP = 6, RSP = 7;
 
   void fill_loc_array(GrowableArray<ScopeValue*> *array, const std::vector<std::unique_ptr<NodeInfo>>& src, SafePointDebugInfo* di, int& la_idx);
   bool fill_loc_array_helper(GrowableArray<ScopeValue*> *array, NodeInfo* ni, SafePointDebugInfo* di, int& la_idx);

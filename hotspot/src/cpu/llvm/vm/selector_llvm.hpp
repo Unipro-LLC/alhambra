@@ -48,12 +48,14 @@ private:
   using CallInfo = std::pair<llvm::CallBase*, PatchInfo*>;
   std::vector<CallInfo> _call_info;
   std::vector<size_t> _param_to_arg;
-  std::unordered_map<const llvm::BasicBlock*, SwitchInfo> _switch_info; 
+  std::unordered_map<const llvm::BasicBlock*, SwitchInfo> _switch_info;
+  std::unordered_map<uintptr_t, DebugInfo::Type> _consts;
 
   void create_func();
   void create_blocks();
   void prolog();
   void select();
+  llvm::Value* select_oper_helper(const Type* ty, bool oop, bool narrow);
   void complete_phi_nodes();
   void complete_phi_node(Block *case_block, Node* case_val, llvm::PHINode *phi_inst);
   void epilog();
@@ -75,6 +77,7 @@ public:
   unsigned pointer_size() const { return _pointer_size; }
   std::unordered_map<llvm::BasicBlock*, ExceptionInfo>& exception_info() { return _exception_info; }
   std::unordered_map<const llvm::BasicBlock*, SwitchInfo>&  switch_info() { return _switch_info; }
+  std::unordered_map<uintptr_t, DebugInfo::Type>& consts() { return _consts; }
 
   llvm::Type* type(BasicType btype) const;
   std::vector<llvm::Type*> types(const std::vector<llvm::Value*>& v) const;
@@ -94,7 +97,7 @@ public:
   void store(llvm::Value* value, llvm::Value* addr);
   llvm::AtomicCmpXchgInst* cmpxchg(llvm::Value* addr, llvm::Value* cmp, llvm::Value* val);
   void replace_return_address(llvm::Value* new_addr);
-  void stackmap(DebugInfo::Type type, size_t patch_bytes = 0);
+  void stackmap(DebugInfo::Type type, size_t idx = 0, size_t patch_bytes = 0);
 
   llvm::Value* select_node(Node* node);
   llvm::Value* select_oper(MachOper *oper);

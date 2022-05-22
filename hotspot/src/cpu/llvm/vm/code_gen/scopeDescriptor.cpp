@@ -19,21 +19,19 @@ void ScopeDescriptor::describe_scopes() {
     assert(la_idx == gc_idx, "gc locs start after deopt ones");
     for (uint16_t i = gc_idx; i < record.getNumLocations(); i += 2) {
       int off[2];
-      LocationKind kind = StackMapParser::LocationKind::Indirect;
-      uint size = cg()->selector().pointer_size() >> LogBytesPerWord, rbp = 6, rsp = 7;
       bool skip = false;
       for (size_t j = 0; j < 2; ++j) {
         LocationAccessor la = record.getLocation(i + j);
-        if (la.getKind() != kind) {
-          assert(la.getKind() == StackMapParser::LocationKind::Constant && la.getSmallConstant() == 0, "no other choice");
+        if (la.getKind() != LocationKind::Indirect) {
+          assert(la.getKind() == LocationKind::Constant && la.getSmallConstant() == 0, "no other choice");
           skip = true;
           break;
         }
-        assert(la.getSizeInBytes() == size, "only support singular locations");
-        if (la.getDwarfRegNum() == rsp) {
+        assert(la.getSizeInBytes() == cg()->selector().pointer_size() >> LogBytesPerWord, "only support singular locations");
+        if (la.getDwarfRegNum() == RSP) {
           off[j] = la.getOffset();
         } else {
-          assert(la.getDwarfRegNum() == rbp, "no other choice");
+          assert(la.getDwarfRegNum() == RBP, "no other choice");
           off[j] = la.getOffset() + cg()->stack().unext_offset();
         }
       }
@@ -104,12 +102,11 @@ bool ScopeDescriptor::fill_loc_array_helper(GrowableArray<ScopeValue*> *array, N
               return it != oops.end() ? Location::oop : Location::normal;
           }
         } ();
-        const uint16_t rsp = 7, rbp = 6;
-        if (la.getDwarfRegNum() == rsp) {
+        if (la.getDwarfRegNum() == RSP) {
           Location loc = Location::new_stk_loc(type, la.getOffset());
           return (ScopeValue*)new LocationValue(loc);
         }
-        if (la.getDwarfRegNum() == rbp) {
+        if (la.getDwarfRegNum() == RBP) {
           Location loc = Location::new_stk_loc(type, la.getOffset() + cg()->stack().unext_offset());
           return (ScopeValue*)new LocationValue(loc);
         }

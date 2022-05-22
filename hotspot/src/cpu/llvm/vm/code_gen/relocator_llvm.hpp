@@ -130,15 +130,6 @@ public:
   RelocationHolder getHolder() override;
 };
 
-class InlineOopReloc : public Reloc {
-  size_t _oop_index;
-public:
-  InlineOopReloc(size_t offset, size_t oop_index): Reloc(offset), _oop_index(oop_index) {}
-  InlineOopReloc* asInlineOop() override { return this; }
-  RelocationHolder getHolder() override;
-  int format() override;
-};
-
 class SwitchReloc : public ConstReloc {
 public: 
   SwitchReloc(size_t offset, SwitchInfo& si, LlvmCodeGen* cg);

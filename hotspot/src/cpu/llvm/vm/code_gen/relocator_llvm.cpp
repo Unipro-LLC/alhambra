@@ -9,8 +9,6 @@
 
 int Reloc::format() { return Assembler::imm_operand; }
 
-int InlineOopReloc::format() { return Assembler::narrow_oop_operand; }
-
 RelocationHolder CallReloc::getHolder() {
   switch (kind()) {
     case HotspotRelocInfo::RelocOptVirtualCall: return opt_virtual_call_Relocation::spec();
@@ -32,10 +30,6 @@ RelocationHolder ConstReloc::getHolder() {
 
 RelocationHolder InternalReloc::getHolder() {
   return Relocation::spec_simple(relocInfo::internal_word_type);
-}
-
-RelocationHolder InlineOopReloc::getHolder() {
-  return oop_Relocation::spec(_oop_index);
 }
 
 OopReloc::OopReloc(size_t offset, uintptr_t con, LlvmCodeGen* cg): ConstReloc(offset) {

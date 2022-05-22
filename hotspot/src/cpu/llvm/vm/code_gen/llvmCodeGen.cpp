@@ -18,7 +18,7 @@ LlvmCodeGen::LlvmCodeGen(LlvmMethod* method, Compile* c, const char* name) :
   _cb(C->code_buffer()),
   _ctx(),
   _mod_owner(std::make_unique<llvm::Module>("normal", ctx())),
-  _bbs_info(std::make_unique<llvm::BBSInfo>()),
+  _asm_info(std::make_unique<llvm::AsmInfo>()),
   _mod(_mod_owner.get()),
   _method(method),
   _selector(this, name),
@@ -41,6 +41,8 @@ LlvmCodeGen::LlvmCodeGen(LlvmMethod* method, Compile* c, const char* name) :
           if (n->is_MachCallStaticJava() && n->as_MachCallJava()->_method) {
             _nof_to_interp_stubs++;
           }
+        } else if (cmp_ideal_Opcode(n, Op_SafePoint)) {
+          asm_info()->HasPoll = true;
         }
       } else if (n->is_Catch()) {
         _nof_exceptions++;
@@ -70,7 +72,7 @@ void LlvmCodeGen::run_passes(llvm::SmallVectorImpl<char>& ObjBufferSV) {
   llvm::legacy::PassManager PM;
   PM.add(llvm::createRewriteStatepointsForGCLegacyPass());
   TM->addPassesToEmitMC(PM, ctx, ObjStream, false);
-  ctx->bbs_info = bbs_info();
+  ctx->AI = asm_info();
   TM->setFastISel(false);
   PM.run(*mod());
 }
@@ -126,7 +128,7 @@ void LlvmCodeGen::process_object_file(const llvm::object::ObjectFile& obj_file, 
             relocator().add_float(offset, con);
             _nof_consts++;
           } else if (*SecData == ".rodata") {
-            std::unique_ptr<DebugInfo> di = DebugInfo::create(DebugInfo::id(DebugInfo::Switch), this);
+            std::unique_ptr<DebugInfo> di = std::make_unique<SwitchDebugInfo>();
             di->pc_offset = offset;
             debug_info().push_back(std::move(di));
             _nof_consts++;
@@ -139,6 +141,8 @@ void LlvmCodeGen::process_object_file(const llvm::object::ObjectFile& obj_file, 
 
 void LlvmCodeGen::fill_code_buffer(address src, uint64_t size, int& exc_offset, int& deopt_offset) {
   int vep_offset = method()->vep_offset();
+  process_asm_info(vep_offset);
+
   size_t stubs_size = CompiledStaticCall::to_interp_stub_size() * nof_to_interp_stubs() + HandlerImpl::size_exception_handler() + HandlerImpl::size_deopt_handler();
   size_t consts_size = nof_consts() * wordSize;
   size_t code_size = size + 1; // in case the last instruction is a call, a nop will be inserted in the very end
@@ -166,7 +170,6 @@ void LlvmCodeGen::fill_code_buffer(address src, uint64_t size, int& exc_offset, 
   relocator().floats_to_cb();
 
   stack().set_frame_size(method()->frame_size());
-  debug_info().reserve(sm_parser()->getNumRecords() + bbs_info()->BasicBlockSizes.size());
   unsigned record_idx = 0;
   for (RecordAccessor record: sm_parser()->records()) {
     uint64_t id = record.getID();
@@ -185,8 +188,6 @@ void LlvmCodeGen::fill_code_buffer(address src, uint64_t size, int& exc_offset, 
     debug_info().push_back(std::move(di));
   }
 
-  count_block_offsets(vep_offset);
-
   // sorted vector is convenient for patching
   std::sort(debug_info().begin(), debug_info().end(),
     [&](const std::unique_ptr<DebugInfo>& a, const std::unique_ptr<DebugInfo>& b) {
@@ -204,32 +205,37 @@ void LlvmCodeGen::fill_code_buffer(address src, uint64_t size, int& exc_offset, 
   assert(code_start() == cb()->insts()->start(), "CodeBuffer was reallocated");
 }
 
-void LlvmCodeGen::count_block_offsets(int vep_offset) {
-  block_offsets().reserve(bbs_info()->BasicBlockSizes.size());
-  auto& RelaxSizes = bbs_info()->RelaxSizes;
-  auto& AlignSizes = bbs_info()->AlignSizes;
-  std::sort(RelaxSizes.begin(), RelaxSizes.end());
-  std::sort(AlignSizes.begin(), AlignSizes.end());
-  size_t offset = vep_offset;
-  size_t rel_idx = 0, al_idx = 0;
-
-  for (auto& pair : bbs_info()->BasicBlockSizes) {
-    if (pair.second == 0) continue;
-    // these DebugInfo-s may come in handy during patching 
-    std::unique_ptr<DebugInfo> di = DebugInfo::create(DebugInfo::id(DebugInfo::BlockStart), this);
-    di->pc_offset = offset;
-    di->asBlockStart()->bb = pair.first;
+void LlvmCodeGen::process_asm_info(int vep_offset) {
+  auto& EOI = asm_info()->EOI;
+  auto& LOI = asm_info()->LOI;
+  std::sort(LOI.begin(), LOI.end(), 
+    [&](const std::unique_ptr<llvm::LateOffsetInfo>& a, const std::unique_ptr<llvm::LateOffsetInfo>& b) {
+      return a->Offset < b->Offset;
+    });
+  size_t addend = vep_offset, loi_idx = 0;
+  for (auto& info : EOI) {
+    while ((loi_idx < LOI.size()) && (info->Offset + addend >= LOI[loi_idx]->Offset + vep_offset)) {
+      addend += LOI[loi_idx++]->Addend();
+    }
+    llvm::BlockOffsetInfo* block_info;
+    llvm::ConstantOffsetInfo* constant_info;
+    std::unique_ptr<DebugInfo> di;
+    if (block_info = info->asBlock()) {
+      di = std::make_unique<BlockStartDebugInfo>();
+      if (block_info->Block) {
+        di->asBlockStart()->bb = block_info->Block;
+        block_offsets().emplace(block_info->Block, info->Offset + addend);
+      }
+    } else if (constant_info = info->asConstant()) {
+      if (!selector().consts().count(constant_info->Constant)) continue;
+      DebugInfo::Type ty = selector().consts().at(constant_info->Constant);
+      di = DebugInfo::create(DebugInfo::id(ty), this);
+      inc_nof_consts();
+    } else if (info->asPoll()) {
+      di = std::make_unique<PatchBytesDebugInfo>();
+    }
+    di->pc_offset = info->Offset + addend;
     debug_info().push_back(std::move(di));
-    if (pair.first) {
-      block_offsets().emplace(pair.first, offset); // basic block pointers are dangling at this point
-    }
-    offset += pair.second;
-    if (rel_idx < RelaxSizes.size() && offset > RelaxSizes[rel_idx].first + vep_offset) {
-      offset += RelaxSizes[rel_idx++].second - llvm::BBSInfo::JCC_SIZE;
-    }
-    if (al_idx < AlignSizes.size() && offset > AlignSizes[al_idx].first + vep_offset) {
-      offset += AlignSizes[al_idx++].second;
-    }
   }
 }
 

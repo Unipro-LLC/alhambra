@@ -17,15 +17,12 @@ std::unique_ptr<DebugInfo> DebugInfo::create(uint64_t id, LlvmCodeGen* cg) {
     case Call: return std::make_unique<CallDebugInfo>(pi);
     case StaticCall: return std::make_unique<StaticCallDebugInfo>(pi);
     case DynamicCall: return std::make_unique<DynamicCallDebugInfo>(pi);
-    case BlockStart: return std::make_unique<BlockStartDebugInfo>();
     case Rethrow: return std::make_unique<RethrowDebugInfo>(pi);
     case TailJump: return std::make_unique<TailJumpDebugInfo>(pi);
     case PatchBytes: return std::make_unique<PatchBytesDebugInfo>();
     case Oop: return std::make_unique<OopDebugInfo>();
-    case NarrowOop: return std::make_unique<NarrowOopDebugInfo>();
     case Metadata: return std::make_unique<MetadataDebugInfo>();
     case OrigPC: return std::make_unique<OrigPCDebugInfo>();
-    case Switch: return std::make_unique<SwitchDebugInfo>();
     default: ShouldNotReachHere();
   }
 }
@@ -54,6 +51,15 @@ void DebugInfo::patch(address& pos, const std::vector<byte>& inst) {
   }
 }
 
+void SafePointDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
+  assert(idx < cg->debug_info().size(), "there should be PatchBytes before");
+  PatchBytesDebugInfo* pbdi = cg->debug_info()[idx + 1]->asPatchBytes();
+  assert(pbdi, "should be PatchBytes");
+  pc_offset = pbdi->pc_offset;
+  address pos = cg->addr(pc_offset);
+}
+
+
 void OrigPCDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
   address pos = cg->addr(pc_offset);
   assert(mov(pos) && movabs(pos), "expected MOVABS REG, IMM");
@@ -71,60 +77,19 @@ void SwitchDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
   cg->relocator().add(rel);
 }
 
-address LoadConstantDebugInfo::get_con(size_t idx, LlvmCodeGen* cg, uintptr_t& con) {
-  // Constant ... MOVABS REG, IMM ... PatchBytes
-  address pos = cg->addr(pc_offset);
-  assert(mov(pos), "should be some kind of MOV");
-  if (mov_mem(pos)) return nullptr; // there should already be a relocation
-  if (!movabs(pos)) { // try looking from the other end
-    assert(mov_reg(pos), "expected MOV REG, REG");
-    assert(idx < cg->debug_info().size() - 1, "expected PatchBytes next");
-    PatchBytesDebugInfo* pbdi = cg->debug_info()[idx + 1]->asPatchBytes();
-    assert(pbdi, "probably incorrect sorting");
-    pos = cg->addr(pbdi->pc_offset - MOV_REG_SIZE);
-    assert(mov(pos) && mov_mem(pos), "expected MOV REG, [REG]");
-    pos -= NativeMovConstReg::instruction_size;
-    if (!(mov(pos) && movabs(pos))) return nullptr; // there should already be a relocation
-  }
-  con = *(uintptr_t*)(pos + NativeMovConstReg::data_offset);
-  return pos;
-}
-
 void OopDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
-  uintptr_t con;
-  address pos = get_con(idx, cg, con);
-  if (pos) {
-    OopReloc* rel = new OopReloc(pos - cg->code_start(), con, cg);
-    cg->relocator().add(rel);
-  }
+  address pos = cg->addr(pc_offset);
+  assert(mov(pos) && movabs(pos), "expected MOVABS REG, IMM");
+  uintptr_t con = *(uintptr_t*)(pos + NativeMovConstReg::data_offset);
+  Reloc* rel = new OopReloc(pc_offset, con, cg);
+  cg->relocator().add(rel);
 }
 
 void MetadataDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
-  uintptr_t con;
-  address pos = get_con(idx, cg, con);
-  if (pos) {
-    MetadataReloc* rel = new MetadataReloc(pos - cg->code_start(), con, cg);
-    cg->relocator().add(rel);
-  }
-}
-
-void NarrowOopDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
-  size_t off;
   address pos = cg->addr(pc_offset);
-  if (movl(pos)) { // MOV DWORD PTR [REG+OFF], IMM
-    off = rex(pos) ? 4 : 3;
-  } else { // CMP REG, IMM
-    if (cmp(pos, true)) {
-      pc_offset++;
-      *(pos++) = NativeInstruction::nop_instruction_code;
-    }
-    assert(cmp(pos, false), "no other choice");
-    off = cmp_rax(pos, false) ? 1 :
-    (cmp_indir(pos) ? 3 :
-    (cmp_no_rex(pos) ? 2 : 3));
-  }
-  size_t oop_index = *(uint32_t*)(pos + off) - MAGIC_NUMBER;
-  InlineOopReloc* rel = new InlineOopReloc(pc_offset, oop_index);
+  assert(mov(pos) && movabs(pos), "expected MOVABS REG, IMM");
+  uintptr_t con = *(uintptr_t*)(pos + NativeMovConstReg::data_offset);
+  Reloc* rel = new MetadataReloc(pc_offset, con, cg);
   cg->relocator().add(rel);
 }
 

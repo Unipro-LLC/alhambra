@@ -25,7 +25,6 @@ struct ExceptionDebugInfo;
 struct ConstantDebugInfo;
 struct LoadConstantDebugInfo;
 struct OopDebugInfo;
-struct NarrowOopDebugInfo;
 struct MetadataDebugInfo;
 struct OrigPCDebugInfo;
 struct SwitchDebugInfo;
@@ -45,7 +44,6 @@ struct DebugInfo {
     TailJump, 
     PatchBytes, 
     Oop, 
-    NarrowOop, 
     Metadata, 
     OrigPC, 
     Switch, 
@@ -61,6 +59,11 @@ struct DebugInfo {
   virtual void handle(size_t idx, LlvmCodeGen* cg) {}
   static void patch(address& pos, const std::vector<byte>& inst);
 
+  static bool mov(address pos) { return pos[0] == 0x48 || pos[0] == 0x49; }
+  static bool movabs(address pos) { return pos[1] >= 0xB8 && pos[1] <= 0xBF; }
+  static bool mov_mem(address pos) { return pos[1] == 0x8B; }
+  static bool mov_reg(address pos) { return pos[1] == 0x89; }
+  const static size_t MOV_REG_SIZE = 3;
   static std::vector<byte> ADD_x_RSP(byte x) { return { 0x48, 0x83, 0xC4, x }; }
   const static size_t ADD_RSP_SIZE = 4;
   static std::vector<byte> SUB_x_RSP(byte x) { return { 0x48, 0x83, 0xEC, x }; }
@@ -80,7 +83,6 @@ struct DebugInfo {
   virtual ConstantDebugInfo* asConstant() { return nullptr; }
   virtual LoadConstantDebugInfo* asLoadConstant() { return nullptr; }
   virtual OopDebugInfo* asOop() { return nullptr; }
-  virtual NarrowOopDebugInfo* asNarrowOop() { return nullptr; }
   virtual MetadataDebugInfo* asMetadata() { return nullptr; }
   virtual OrigPCDebugInfo* asOrigPC() { return nullptr; }
   virtual SwitchDebugInfo* asSwitch() { return nullptr; }
@@ -103,6 +105,7 @@ struct SafePointDebugInfo : public DebugInfo {
   SafePointDebugInfo(): DebugInfo() {}
   SafePointDebugInfo* asSafePoint() override { return this; }
   Type type() override { return SafePoint; }
+  void handle(size_t idx, LlvmCodeGen* cg) override;
   RecordAccessor record(StackMapParser* parser) const { return parser->getRecord(record_idx); }
 };
 struct CallDebugInfo : public SafePointDebugInfo {
@@ -160,52 +163,29 @@ struct PatchBytesDebugInfo : public DebugInfo {
 };
 
 struct ConstantDebugInfo : public DebugInfo {
-  static bool mov(address pos) { return pos[0] == 0x48 || pos[0] == 0x49; }
-  static bool movabs(address pos) { return pos[1] >= 0xB8 && pos[1] <= 0xBF; }
-  static bool mov_mem(address pos) { return pos[1] == 0x8B; }
-  static bool mov_reg(address pos) { return pos[1] == 0x89; }
-  const static size_t MOV_REG_SIZE = 3;
   ConstantDebugInfo(): DebugInfo() {}
   ConstantDebugInfo* asConstant() override { return this; }
   bool block_can_start() override { return true; }
 };
 
 struct LoadConstantDebugInfo : public ConstantDebugInfo {
-  LoadConstantDebugInfo(): ConstantDebugInfo() {}
+  LoadConstantDebugInfo(LlvmCodeGen* cg, size_t idx) : ConstantDebugInfo() {}
   LoadConstantDebugInfo* asLoadConstant() override { return this; }
-  address get_con(size_t idx, LlvmCodeGen* cg, uintptr_t& con);
 };
 
-struct OopDebugInfo : public LoadConstantDebugInfo {
-  OopDebugInfo(): LoadConstantDebugInfo() {}
+struct OopDebugInfo : public ConstantDebugInfo {
+  OopDebugInfo(): ConstantDebugInfo() {}
   OopDebugInfo* asOop() override { return this; }
   Type type() override { return Oop; }
   void handle(size_t idx, LlvmCodeGen* cg) override;
 };
 
-struct NarrowOopDebugInfo : public ConstantDebugInfo {
-  const static size_t MAGIC_NUMBER = 1 << 30; // addend to oopIndex so it's always 4 bytes
-  static bool rex(address pos) { return pos[0] == 0x41; }
-  static bool movl(address pos) { return pos[0] == 0xC7 || (rex(pos) && pos[1] == 0xC7); }
-  static bool cmp(address pos, bool is64bit) {
-    return cmp_no_rax(pos, is64bit) || cmp_rax(pos, is64bit);
-  }
-  static bool cmp_rax(address pos, bool is64bit) {
-    if (is64bit) return pos[0] == 0x48 && cmp_rax(pos + 1, false);
-    return pos[0] == 0x3D;
-  }
-  static bool cmp_no_rax(address pos, bool is64bit) {
-    if (is64bit) return (pos[0] == 0x48 || pos[0] == 0x49) && cmp_no_rex(pos + 1);
-    return (rex(pos) && cmp_no_rex(pos + 1)) || cmp_no_rex(pos);
-  }
-  static bool cmp_no_rex(address pos) { return pos[0] == 0x81; }
-  static bool cmp_indir(address pos) { return cmp_no_rex(pos) && pos[1] == 0x7D; }
-  NarrowOopDebugInfo(): ConstantDebugInfo() {}
-  NarrowOopDebugInfo* asNarrowOop() override { return this; }
-  Type type() override { return NarrowOop; }
+struct MetadataDebugInfo : public ConstantDebugInfo {
+  MetadataDebugInfo(): ConstantDebugInfo() {}
+  MetadataDebugInfo* asMetadata() override { return this; }
+  Type type() override { return Metadata; }
   void handle(size_t idx, LlvmCodeGen* cg) override;
 };
-
 struct OrigPCDebugInfo : public ConstantDebugInfo {
   const static uintptr_t MAGIC_NUMBER = 0xdeadbeefdeadbeef;
   OrigPCDebugInfo(): ConstantDebugInfo() {}
@@ -218,13 +198,6 @@ struct SwitchDebugInfo : public ConstantDebugInfo {
   SwitchDebugInfo(): ConstantDebugInfo() {}
   Type type() override { return Switch; }
   SwitchDebugInfo* asSwitch() override { return this; }
-  void handle(size_t idx, LlvmCodeGen* cg) override;
-};
-
-struct MetadataDebugInfo : public LoadConstantDebugInfo {
-  MetadataDebugInfo(): LoadConstantDebugInfo() {}
-  MetadataDebugInfo* asMetadata() override { return this; }
-  Type type() override { return Metadata; }
   void handle(size_t idx, LlvmCodeGen* cg) override;
 };
 

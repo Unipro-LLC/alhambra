@@ -30,7 +30,7 @@ void Selector::prolog() {
 
   _thread = call_C((void*)os::thread_local_storage_at, type(T_ADDRESS), { builder().getInt32(ThreadLocalStorage::thread_index()) });
 
-  size_t alloc_size = cg()->stack().calc_alloc();
+  size_t alloc_size = stack.calc_alloc();
   builder().CreateAlloca(type(T_BYTE), builder().getInt32(alloc_size));
 
   Block* block = C->cfg()->get_root_block();
@@ -251,48 +251,16 @@ llvm::Value* Selector::select_oper(MachOper *oper) {
   case T_ARRAY:
   case T_OBJECT: {
     assert(ty->isa_narrowoop() == NULL, "check");
-    llvm::Value* addr = get_ptr(ty->is_oopptr()->const_oop()->constant_encoding(), T_ADDRESS);
-    stackmap(DebugInfo::Oop);
-    llvm::Value* const_oop = load(addr, T_OBJECT);
-    stackmap(DebugInfo::PatchBytes);
-    cg()->inc_nof_consts();
-    return const_oop;
+    return select_oper_helper(ty, true, false);
   }
-  case T_METADATA: {
-    llvm::Value* addr;
-    if (ty->base() == Type::KlassPtr) {
-      assert(ty->is_klassptr()->klass()->is_loaded(), "klass not loaded");
-      addr = get_ptr(ty->is_klassptr()->klass()->constant_encoding(), T_ADDRESS);
-    } else {
-      addr = get_ptr(ty->is_metadataptr()->metadata()->constant_encoding(), T_ADDRESS);
-    }
-    stackmap(DebugInfo::Metadata);
-    llvm::Value* md = load(addr, T_METADATA);
-    stackmap(DebugInfo::PatchBytes);
-    cg()->inc_nof_consts();
-    return md;
-  }
+  case T_METADATA: return select_oper_helper(ty, false, false); 
   case T_NARROWOOP: {
-    llvm::Value* narrow_oop;
-    uintptr_t con = ty->is_narrowoop()->get_con();
-    if (con != 0) {
-      llvm::Value* addr = get_ptr(ty->is_narrowoop()->get_con(), T_ADDRESS);
-      stackmap(DebugInfo::Oop);
-      llvm::Value* const_oop = load(addr, T_ADDRESS);
-      stackmap(DebugInfo::PatchBytes);
-      narrow_oop = encode_heap_oop(const_oop, true);
-      cg()->inc_nof_consts();
-    } else {
-      narrow_oop = llvm::ConstantInt::get(type(T_NARROWOOP), con);
+    if (ty->is_narrowoop()->get_con() != 0) {
+      return select_oper_helper(ty, true, true);
     }
-    // mark_nptr(narrow_oop);
-    return narrow_oop;
+    return llvm::ConstantInt::getNullValue(type(T_NARROWOOP));
   }
-  case T_NARROWKLASS: {
-    uint64_t narrow_klass = ty->is_narrowklass()->get_con();
-    narrow_klass >>= Universe::narrow_klass_shift();
-    return llvm::ConstantInt::get(type(T_NARROWKLASS), narrow_klass);
-  }
+  case T_NARROWKLASS: return select_oper_helper(ty, false, true);
   case T_ADDRESS: {
     if (oper->constant() == NULL) return llvm::Constant::getNullValue(type(T_ADDRESS));
     return get_ptr(oper->constant(), T_ADDRESS);
@@ -302,6 +270,33 @@ llvm::Value* Selector::select_oper(MachOper *oper) {
     tty->print_cr("BasicType %d", bt);
     ShouldNotReachHere(); return NULL;
   }
+}
+
+llvm::Value* Selector::select_oper_helper(const Type* ty, bool oop, bool narrow) {
+  uintptr_t con = [&] {
+    if (oop) {
+      if (narrow) return (uintptr_t)ty->is_narrowoop()->get_con();
+      return (uintptr_t)ty->is_oopptr()->const_oop()->constant_encoding();
+    } else {
+      if (narrow) return (uintptr_t)ty->is_narrowklass()->get_con();
+      if (ty->base() == Type::KlassPtr) {
+        assert(ty->is_klassptr()->klass()->is_loaded(), "klass not loaded");
+        return (uintptr_t)ty->is_klassptr()->klass()->constant_encoding();
+      } else {
+        return (uintptr_t)ty->is_metadataptr()->metadata()->constant_encoding();
+      }
+    }
+  }();
+  llvm::Value* addr = get_ptr(con, T_ADDRESS);
+  consts().emplace(con, oop ? DebugInfo::Oop : DebugInfo::Metadata);
+  BasicType bt = narrow ? T_LONG : (oop ? T_OBJECT : T_METADATA);
+  llvm::Value* ret = load(addr, bt);
+  if (narrow) {
+    llvm::Value* shift = llvm::ConstantInt::get(ret->getType(), oop ? Universe::narrow_oop_shift() : Universe::narrow_klass_shift());
+    ret = builder().CreateAShr(ret, shift);
+    ret = builder().CreateTrunc(ret, type(oop ? T_NARROWOOP : T_NARROWKLASS));
+  }
+  return ret;
 }
 
 llvm::Value* Selector::get_ptr(const void* ptr, llvm::Type* ty) {
@@ -664,8 +659,8 @@ void Selector::complete_phi_nodes() {
   }
 }
 
-void Selector::stackmap(DebugInfo::Type type, size_t patch_bytes) {
-  llvm::Value* id = builder().getInt64(DebugInfo::id(type));
+void Selector::stackmap(DebugInfo::Type type, size_t idx, size_t patch_bytes) {
+  llvm::Value* id = builder().getInt64(DebugInfo::id(type, idx));
   builder().CreateIntrinsic(llvm::Intrinsic::experimental_stackmap, {}, { id, builder().getInt32(patch_bytes) });
 }
 
