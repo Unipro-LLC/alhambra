@@ -539,33 +539,9 @@ inline bool NativeInstruction::is_jump()         { return ubyte_at(0) == NativeJ
 inline bool NativeInstruction::is_cond_jump()    { return (int_at(0) & 0xF0FF) == 0x800F /* long jump */ ||
                                                           (ubyte_at(0) & 0xF0) == 0x70;  /* short jump */ }
 inline bool NativeInstruction::is_safepoint_poll() {
-#ifdef AMD64
-  if (Assembler::is_polling_page_far()) {
-    // two cases, depending on the choice of the base register in the address.
-    if (((ubyte_at(0) & NativeTstRegMem::instruction_rex_prefix_mask) == NativeTstRegMem::instruction_rex_prefix &&
-         ubyte_at(1) == NativeTstRegMem::instruction_code_memXregl &&
-         (ubyte_at(2) & NativeTstRegMem::modrm_mask) == NativeTstRegMem::modrm_reg) ||
-        ubyte_at(0) == NativeTstRegMem::instruction_code_memXregl &&
-        (ubyte_at(1) & NativeTstRegMem::modrm_mask) == NativeTstRegMem::modrm_reg) {
-      return true;
-    } else {
-      return false;
-    }
-  } else {
-    if (ubyte_at(0) == NativeTstRegMem::instruction_code_memXregl &&
-        ubyte_at(1) == 0x05) { // 00 rax 101
-      address fault = addr_at(6) + int_at(2);
-      return os::is_poll_address(fault);
-    } else {
-      return false;
-    }
-  }
-#else
-  return ( ubyte_at(0) == NativeMovRegMem::instruction_code_mem2reg ||
-           ubyte_at(0) == NativeTstRegMem::instruction_code_memXregl ) &&
-           (ubyte_at(1)&0xC7) == 0x05 && /* Mod R/M == disp32 */
-           (os::is_poll_address((address)int_at(2)));
-#endif // AMD64
+  return ubyte_at(0) == 0x8A // e.g. mov    al,BYTE PTR [rax]
+      || (ubyte_at(0) == 0x0F && ubyte_at(1) == 0xB6) // e.g. movzx  eax,BYTE PTR [rax]
+      || (ubyte_at(0) == 0x45 && ubyte_at(1) == 0x0F && ubyte_at(1) == 0xB6); // e.g. movzx  r8d,BYTE PTR [r8] 
 }
 
 inline bool NativeInstruction::is_mov_literal64() {

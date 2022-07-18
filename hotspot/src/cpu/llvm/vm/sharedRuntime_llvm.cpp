@@ -3839,6 +3839,7 @@ SafepointBlob* SharedRuntime::generate_handler_blob(address call_ptr, int poll_t
   // address of the call in order to generate an oopmap. Hence, we do all the
   // work outselves.
 
+  __ register_fix();
   __ set_last_Java_frame(noreg, noreg, NULL);
 
   // The return address must always be correct so that frame constructor never

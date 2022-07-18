@@ -1132,8 +1132,8 @@ llvm::Value* MachNullCheckNode::select(Selector *sel) {
   } else {
     assert(if_node->Opcode() == Op_IfTrue, "illegal Node type");
   }
-  Block* handler_block = sel->C->cfg()->get_block_for_node(raw_out(true_idx)->raw_out(0));
-  Block* next_block = sel->C->cfg()->get_block_for_node(raw_out(false_idx)->raw_out(0));
+  Block* handler_block = sel->C->cfg()->get_block_for_node(raw_out(true_idx)->raw_out(0))->non_connector();
+  Block* next_block = sel->C->cfg()->get_block_for_node(raw_out(false_idx)->raw_out(0))->non_connector();
   llvm::BasicBlock* handler_bb = sel->basic_block(handler_block);
   llvm::BasicBlock* next_bb = sel->basic_block(next_block);
   llvm::BasicBlock* bb_not_null = llvm::BasicBlock::Create(sel->ctx(), bb->getName() + "_not_null", sel->func());
@@ -1475,7 +1475,7 @@ llvm::Value* minI_rReg_immNode::select(Selector *sel) {
 llvm::Value* loadBNode::select(Selector* sel) {
   llvm::Value* addr = sel->select_address(this);
   llvm::Value* res = sel->load(addr, T_BYTE);
-  return sel->builder().CreateSExt(res, sel->type(T_INT));  
+  return sel->builder().CreateSExt(res, sel->type(T_INT));
 }
 
 llvm::Value* storeCNode::select(Selector *sel) {
@@ -1561,7 +1561,8 @@ llvm::Value* jumpXtndNode::select(Selector *sel) {
   sel->builder().CreateUnreachable();
   sel->builder().SetInsertPoint(bb);
   llvm::SwitchInst* switch_inst = sel->builder().CreateSwitch(addr_offset, bb_default, size);
-  SwitchInfo& switch_info = sel->switch_info()[sel->basic_block()];
+  SwitchInfo& switch_info = sel->switch_info()[bb];
+  sel->cg()->asm_info()->SwitchBBs.push_back(bb);
   switch_info.reserve(size);
 
   for (uint i = 0; i < size; ++i) {
@@ -1585,12 +1586,13 @@ llvm::Value* jumpXtndNode::select(Selector *sel) {
 
     assert(switch_case != NULL, "Some switch cases are missing");
     Block *b_dest = sel->C->cfg()->get_block_for_node(switch_case);
-    llvm::BasicBlock *bb_dest = sel->basic_block(b_dest), *bb_extra = nullptr;
-    if (b_dest->get_node(1)->is_MachGoto()) {
-      bb_extra = sel->basic_block(b_dest->non_connector_successor(0));
+    llvm::BasicBlock *bb_dest = sel->basic_block(b_dest);
+    std::vector<llvm::BasicBlock*> switch_info_i = { bb_dest };
+    while (b_dest->get_node(1)->is_MachGoto()) {
+      b_dest = b_dest->non_connector_successor(0);
+      switch_info_i.push_back(sel->basic_block(b_dest));
     }
-    switch_info.emplace_back(bb_dest, bb_extra);
-    sel->cg()->inc_nof_consts();
+    switch_info.push_back(switch_info_i);
     llvm::ConstantInt* switch_val = llvm::cast<llvm::ConstantInt>(llvm::ConstantInt::get(addr_offset->getType(), i));
     switch_inst->addCase(switch_val, bb_dest);
   }
@@ -1920,20 +1922,102 @@ llvm::Value* minI_rReg_imm_0Node::select(Selector* sel) {
   return sel->builder().CreateSelect(pred, a, b);
 }
 
-llvm::Value* convD2F_reg_regNode::select(Selector* sel){
+llvm::Value* convD2F_reg_regNode::select(Selector* sel) {
   llvm::Value* a = sel->select_node(in(1));
   return sel->builder().CreateFPCast(a, sel->type(T_FLOAT));
 }
 
-llvm::Value* loadSNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
+llvm::Value* negF_reg_regNode::select(Selector* sel) {
+  llvm::Value* val = sel->select_node(in(1));
+  return sel->builder().CreateFNeg(val);
+}
+
+llvm::Value* storeImmF0Node::select(Selector* sel) {
+  llvm::Value* addr = sel->select_address(this);
+  sel->store(sel->null(T_FLOAT), addr);
+  return NULL;
+}
+
+llvm::Value* absF_reg_regNode::select(Selector* sel) {
+  llvm::Value* val = sel->select_node(in(1));
+  return sel->builder().CreateIntrinsic(llvm::Intrinsic::fabs, val->getType(), val);
+}
+
+llvm::Value* sqrtF_regNode::select(Selector* sel) {
+  llvm::Value* val = sel->select_node(in(1));
+  return sel->builder().CreateIntrinsic(llvm::Intrinsic::sqrt, val->getType(), val);
+}
+
+llvm::Value* tanD_regNode::select(Selector* sel) {
+  llvm::Value* x = sel->select_node(in(1));
+  auto tan = static_cast<double (*) (double)>(std::tan);
+  return sel->call_C((void *)tan, sel->type(T_DOUBLE), { x });
+}
+
+llvm::Value* loadI2USNode::select(Selector* sel) {
+  llvm::Value* addr = sel->select_address(this);
+  llvm::Value* ret = sel->load(addr, T_SHORT);
+  return sel->builder().CreateZExt(ret, sel->type(T_INT));
+}
+
+llvm::Value* storeImmC0Node::select(Selector* sel) {
+  llvm::Value* addr = sel->select_address(this);
+  sel->store(sel->null(T_CHAR), addr);
+  return NULL;
+}
+
+llvm::Value* Repl2FNode::select(Selector* sel) {
+  llvm::Value* input = sel->select_node(in(1));
+  input = sel->builder().CreateBitCast(input, sel->type(T_INT));
+  input = sel->builder().CreateZExt(input, sel->type(T_LONG));
+  llvm::Value* tmp = sel->builder().CreateShl(input, 32);
+  llvm::Value* tmp2 = sel->builder().CreateLShr(tmp, 32);
+  return sel->builder().CreateAdd(tmp, tmp2);
+}
+
+
+llvm::Value* loadSNode::select(Selector* sel) {
+  llvm::Value* addr = sel->select_address(this);
+  llvm::Value* res = sel->load(addr, T_SHORT);
+  return sel->builder().CreateSExt(res, sel->type(T_INT));  
+}
+
+llvm::Value* andnL_rReg_rReg_rReg_0Node::select(Selector *sel) {
+  llvm::Value* a = sel->select_node(in(1));
+  a = sel->builder().CreateNot(a);
+  llvm::Value* b = sel->select_node(in(2));
+  return sel->builder().CreateAnd(a, b);
+}
+
+llvm::Value* mergeD_reg_regNode::select(Selector* sel) {
+  llvm::Value* pred = sel->select_node(in(1));
+  llvm::Value* v1 = sel->select_node(in(2));
+  llvm::Value* v2 = sel->select_node(in(3));
+  return sel->builder().CreateSelect(pred, v2, v1);
+}
+
+llvm::Value* powD_regNode::select(Selector* sel) {
+  llvm::Value* x = sel->select_node(in(1));
+  llvm::Value* y = sel->select_node(in(2));
+  auto pow = static_cast<double (*) (double,double)>(std::pow);
+  return sel->call_C((void *)pow, sel->type(T_DOUBLE), { x, y });
+}
+
+long vadd2f(long l1, long l2) {
+  long r;
+  float *rp = (float*)&r, *l1p = (float*)&l1, *l2p = (float*)&l2;
+  *rp++ = (*l1p++) + (*l2p++);
+  *rp++ = (*l1p) + (*l2p);
+  return r;
+}
+
+llvm::Value* vadd2FNode::select(Selector* sel) {
+  llvm::Value* src1 = sel->select_node(in(1));
+  llvm::Value* src2 = sel->select_node(in(2));
+  return sel->call_C((void *)vadd2f, sel->type(T_LONG), { src1, src2 });
 }
 
 llvm::Value* loadI2UBNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* loadI2USNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
@@ -2005,15 +2089,7 @@ llvm::Value* storeTLABendNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
-llvm::Value* storeImmC0Node::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
 llvm::Value* storeImmCM0Node::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* storeImmF0Node::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
@@ -2058,10 +2134,6 @@ llvm::Value* mergeUL_reg_regNode::select(Selector* sel){
 }
 
 llvm::Value* mergeUF_reg_regNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* mergeD_reg_regNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
@@ -2377,10 +2449,6 @@ llvm::Value* andnL_rReg_rReg_rRegNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
-llvm::Value* andnL_rReg_rReg_rReg_0Node::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
 llvm::Value* ornL_rReg_rReg_rRegNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
@@ -2449,19 +2517,11 @@ llvm::Value* sinD_regNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
-llvm::Value* tanD_regNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
 llvm::Value* log10D_regNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
 llvm::Value* logD_regNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* powD_regNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
@@ -2577,21 +2637,10 @@ llvm::Value* divF_F1_regNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
-llvm::Value* absF_reg_regNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
 llvm::Value* absD_reg_regNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
-llvm::Value* negF_reg_regNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* sqrtF_regNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
 
 llvm::Value* rsqrtF1_regNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
@@ -2637,10 +2686,6 @@ llvm::Value* Repl8BNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
-llvm::Value* Repl2FNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
 llvm::Value* vadd2INode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
@@ -2678,10 +2723,6 @@ llvm::Value* vmul2INode::select(Selector* sel){
 }
 
 llvm::Value* vmul2I_regNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* vadd2FNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 

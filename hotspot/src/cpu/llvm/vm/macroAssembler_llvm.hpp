@@ -96,6 +96,7 @@ class MacroAssembler: public Assembler {
 
   void register_fix();
   void generate_unverified_entry();
+  void generate_osr_entry();
   // Support for NULL-checks
   //
   // Generates code that causes a NULL OS exception if the content of reg is NULL.

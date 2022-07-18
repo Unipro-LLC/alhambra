@@ -23,7 +23,11 @@ LlvmMethod::LlvmMethod(Compile* C, const char* target_name) {
   llvm::object::ObjectFile& obj = *LoadedObject.get();
   address code_start;
   uint64_t code_size;
-  _vep_offset = C->has_method() && !C->method()->get_Method()->is_static() ? 24 : 0;
+  _vep_offset = [&] {
+    if (C->is_osr_compilation()) return 8;
+    if (C->has_method() && !C->method()->get_Method()->is_static()) return 24;
+    return 0;
+  }();
   code_gen.process_object_file(obj, ObjectToLoad.getBufferStart(), code_start, code_size);
 
   if (code_gen.sm_parser()) {

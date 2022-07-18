@@ -2380,9 +2380,14 @@ void Compile::Code_Gen() {
   LlvmMethod llvm_method(this, _target_name);
   _frame_slots = (has_method() ? llvm_method.frame_size() : 2 * wordSize) >> LogBytesPerInt;
   _code_offsets.set_value(CodeOffsets::Entry, 0);
-  _code_offsets.set_value(CodeOffsets::Verified_Entry, llvm_method.vep_offset());
   _code_offsets.set_value(CodeOffsets::Frame_Complete, 0);
-  _code_offsets.set_value(CodeOffsets::OSR_Entry, 0);
+  if (is_osr_compilation()) {
+    _code_offsets.set_value(CodeOffsets::Verified_Entry, 0);
+    _code_offsets.set_value(CodeOffsets::OSR_Entry, llvm_method.vep_offset());
+  } else {
+    _code_offsets.set_value(CodeOffsets::Verified_Entry, llvm_method.vep_offset());
+    _code_offsets.set_value(CodeOffsets::OSR_Entry, 0);
+  }
   _code_offsets.set_value(CodeOffsets::Exceptions, llvm_method.exc_offset());
   _code_offsets.set_value(CodeOffsets::Deopt, llvm_method.deopt_offset());
   if (has_method_handle_invokes()) { _code_offsets.set_value(CodeOffsets::DeoptMH, 0); }

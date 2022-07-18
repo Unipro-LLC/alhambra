@@ -32,7 +32,7 @@ private:
   llvm::Function* _func;
   llvm::IRBuilder<> _builder;
   llvm::Value* _thread = nullptr;
-  GrowableArray<llvm::BasicBlock*> _blocks;
+  std::vector<llvm::BasicBlock*> _blocks;
   std::vector<std::pair<PhiNode*, llvm::PHINode*>> _phiNodeMap;
   std::vector<Node*> _oops;
   std::unordered_map<Node*, Node*> _derived_base;
@@ -72,7 +72,7 @@ public:
   llvm::Function* func() { return _func; }
   Block* block() { return _block; }
   llvm::BasicBlock* basic_block() { return basic_block(block()); }
-  llvm::BasicBlock* basic_block(Block* block) { return _blocks.at(block->_pre_order - 1); }
+  llvm::BasicBlock* basic_block(Block* block) { return _blocks[block->_pre_order - 1]; }
   llvm::Value* thread() const { return _thread; }
   unsigned pointer_size() const { return _pointer_size; }
   std::unordered_map<llvm::BasicBlock*, ExceptionInfo>& exception_info() { return _exception_info; }

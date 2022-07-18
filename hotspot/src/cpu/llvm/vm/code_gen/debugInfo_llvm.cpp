@@ -56,9 +56,8 @@ void SafePointDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
   PatchBytesDebugInfo* pbdi = cg->debug_info()[idx + 1]->asPatchBytes();
   assert(pbdi, "should be PatchBytes");
   pc_offset = pbdi->pc_offset;
-  address pos = cg->addr(pc_offset);
+  cg->relocator().add(new PollReloc(pc_offset));
 }
-
 
 void OrigPCDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
   address pos = cg->addr(pc_offset);
@@ -69,11 +68,7 @@ void OrigPCDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
 }
 
 void SwitchDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
-  auto it = cg->debug_info().begin() + idx;
-  BlockStartDebugInfo* bsdi;
-  for (size_t i = idx; !(bsdi = cg->debug_info()[i]->asBlockStart()); --i);
-  SwitchInfo& si = cg->selector().switch_info().at(bsdi->bb);
-  SwitchReloc* rel = new SwitchReloc(pc_offset, si, cg);
+  SwitchReloc* rel = new SwitchReloc(pc_offset, switch_info, cg);
   cg->relocator().add(rel);
 }
 

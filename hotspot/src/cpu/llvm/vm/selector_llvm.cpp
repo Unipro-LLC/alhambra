@@ -11,7 +11,6 @@
 Selector::Selector(LlvmCodeGen* code_gen, const char* name) :
   Phase(Phase::BlockLayout),
   _cg(code_gen), _ctx(code_gen->ctx()), _mod(code_gen->mod()), _builder(ctx()),
-  _blocks(C->cfg()->number_of_blocks()),
   _pointer_size(mod()->getDataLayout().getPointerSize() * 8), _name(name),
   _is_fast_compression(Universe::narrow_oop_base() == NULL && Universe::narrow_oop_shift() == 0) {}
 
@@ -46,7 +45,7 @@ void Selector::select() {
   builder().SetInsertPoint(basic_block());
   builder().CreateBr(basic_block(block()->non_connector_successor(0)));
 
-  for (size_t i = 1; i < _blocks.length(); ++i) {
+  for (size_t i = 1; i < _blocks.size(); ++i) {
     _block = C->cfg()->get_block(i);
     builder().SetInsertPoint(basic_block());
     for (size_t j = 1; j < block()->number_of_nodes(); ++j) { // skip 0th node: Start or Region
@@ -180,8 +179,9 @@ void Selector::create_blocks() {
   llvm::BasicBlock* entry_block = llvm::BasicBlock::Create(ctx(), "B0", func());
   builder().SetInsertPoint(entry_block);
   std::string b_str = "B";
+  _blocks.reserve(C->cfg()->number_of_blocks());
   for (size_t i = 0; i < C->cfg()->number_of_blocks(); ++i) {
-    _blocks.append(llvm::BasicBlock::Create(ctx(), b_str + std::to_string(i + 1), func()));
+    _blocks.push_back(llvm::BasicBlock::Create(ctx(), b_str + std::to_string(i + 1), func()));
   }
 }
 
@@ -220,7 +220,7 @@ llvm::Value* Selector::select_address(MachNode *mem_node) {
         }
       } else if (LlvmCodeGen::cmp_ideal_Opcode(addr_node, Op_ConP)) {
         return select_oper(addr_node->as_Mach()->_opnds[1]);
-        base = llvm::Constant::getNullValue(llvm::PointerType::getUnqual(offset->getType()));
+        base = null(llvm::PointerType::getUnqual(offset->getType()));
       } else {
         return select_node(addr_node); 
       }
@@ -258,13 +258,10 @@ llvm::Value* Selector::select_oper(MachOper *oper) {
     if (ty->is_narrowoop()->get_con() != 0) {
       return select_oper_helper(ty, true, true);
     }
-    return llvm::ConstantInt::getNullValue(type(T_NARROWOOP));
+    return null(T_NARROWOOP);
   }
   case T_NARROWKLASS: return select_oper_helper(ty, false, true);
-  case T_ADDRESS: {
-    if (oper->constant() == NULL) return llvm::Constant::getNullValue(type(T_ADDRESS));
-    return get_ptr(oper->constant(), T_ADDRESS);
-  }
+  case T_ADDRESS: return get_ptr(oper->constant(), T_ADDRESS);
   case T_VOID: return NULL;
   default:
     tty->print_cr("BasicType %d", bt);
@@ -375,8 +372,8 @@ void Selector::select_if(llvm::Value *pred, Node* node) {
   } else {
     assert(if_node->Opcode() == Op_IfTrue, "illegal Node type");
   }
-  Block* target_block = C->cfg()->get_block_for_node(node->raw_out(true_idx)->raw_out(0));
-  Block* fallthr_block = C->cfg()->get_block_for_node(node->raw_out(false_idx)->raw_out(0));
+  Block* target_block = C->cfg()->get_block_for_node(node->raw_out(true_idx)->raw_out(0))->non_connector();
+  Block* fallthr_block = C->cfg()->get_block_for_node(node->raw_out(false_idx)->raw_out(0))->non_connector();
   llvm::BasicBlock* target_bb = basic_block(target_block);
   llvm::BasicBlock* fallthr_bb = basic_block(fallthr_block);
   
@@ -468,7 +465,7 @@ llvm::CallBase* Selector::call(MachCallNode* node, llvm::Type* retType, const st
     catch_info.reserve(num_succs);
     for (size_t i = 0; i < num_succs; ++i) {
       CatchProjNode* cp = catch_node->raw_out(i)->as_CatchProj();
-      Block* b = C->cfg()->get_block_for_node(cp->raw_out(0));
+      Block* b = C->cfg()->get_block_for_node(cp->raw_out(0))->non_connector();
       llvm::BasicBlock* bb = basic_block(b);
       if (cp->_con == CatchProjNode::fall_through_index) {
         next_bb = bb;
@@ -590,8 +587,8 @@ llvm::Value* Selector::decode_heap_oop(llvm::Value* narrow_oop, bool not_null) {
       oop = builder().CreateShl(narrow_oop, narrow_oop_shift_);
       oop = gep(narrow_oop_base_, oop);
     } else {
-      llvm::Value* narrow_zero = llvm::ConstantInt::getNullValue(narrow_oop->getType());
-      llvm::Value* zero = llvm::ConstantInt::getNullValue(oop->getType());
+      llvm::Value* narrow_zero = null(narrow_oop->getType());
+      llvm::Value* zero = null(oop->getType());
       llvm::Value* pred = builder().CreateICmpEQ(narrow_oop, narrow_zero);
       oop = builder().CreateShl(narrow_oop, narrow_oop_shift_);
       oop = gep(narrow_oop_base_, oop);
@@ -627,7 +624,7 @@ llvm::Value* Selector::encode_heap_oop(llvm::Value *oop, bool not_null) {
       if (not_null) {
         narrow_oop = builder().CreateSub(narrow_oop, narrow_oop_base_);
       } else {
-        llvm::Value* zero = llvm::ConstantInt::getNullValue(narrow_oop->getType());
+        llvm::Value* zero = null(narrow_oop->getType());
         llvm::Value* pred = builder().CreateICmpEQ(narrow_oop, zero);
         narrow_oop = builder().CreateSub(narrow_oop, narrow_oop_base_);
         narrow_oop = builder().CreateSelect(pred, zero, narrow_oop);

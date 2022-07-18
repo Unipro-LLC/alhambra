@@ -46,7 +46,7 @@ struct DebugInfo {
     Oop, 
     Metadata, 
     OrigPC, 
-    Switch, 
+    Switch,  
 
     Count };
   uint32_t pc_offset;
@@ -195,7 +195,8 @@ struct OrigPCDebugInfo : public ConstantDebugInfo {
 };
 
 struct SwitchDebugInfo : public ConstantDebugInfo {
-  SwitchDebugInfo(): ConstantDebugInfo() {}
+  SwitchInfo& switch_info;
+  SwitchDebugInfo(SwitchInfo& si): ConstantDebugInfo(), switch_info(si) {}
   Type type() override { return Switch; }
   SwitchDebugInfo* asSwitch() override { return this; }
   void handle(size_t idx, LlvmCodeGen* cg) override;

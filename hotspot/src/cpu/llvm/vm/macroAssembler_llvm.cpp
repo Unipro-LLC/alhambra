@@ -798,6 +798,11 @@ void MacroAssembler::generate_unverified_entry() {
   bind(hit);
 }
 
+void MacroAssembler::generate_osr_entry() {
+  call(RuntimeAddress(CAST_FROM_FN_PTR(address, MacroAssembler::debug64)));
+  align(8);
+}
+
 void MacroAssembler::set_last_Java_frame(Register last_java_sp,
                                          Register last_java_fp,
                                          address  last_java_pc) {

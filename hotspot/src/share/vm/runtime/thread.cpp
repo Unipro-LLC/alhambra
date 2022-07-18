@@ -1323,7 +1323,7 @@ void WatcherThread::run() {
       // A fatal error has happened, the error handler(VMError::report_and_die)
       // should abort JVM after creating an error log file. However in some
       // rare cases, the error handler itself might deadlock. Here we try to
-      // kill JVM if the fatal error handler fails to abort in 2 minutes.
+      // kill JVM if the fatal error handler fails to abort in 10 minutes.
       //
       // This code is in WatcherThread because WatcherThread wakes up
       // periodically so the fatal error handler doesn't need to do anything;
@@ -1334,7 +1334,7 @@ void WatcherThread::run() {
         if (!ShowMessageBoxOnError
          && (OnError == NULL || OnError[0] == '\0')
          && Arguments::abort_hook() == NULL) {
-             os::sleep(this, 2 * 60 * 1000, false);
+             os::sleep(this, 10 * 60 * 1000, false);
              fdStream err(defaultStream::output_fd());
              err.print_raw_cr("# [ timer expired, abort... ]");
              // skip atexit/vm_exit/vm_abort hooks

@@ -32,6 +32,10 @@ RelocationHolder InternalReloc::getHolder() {
   return Relocation::spec_simple(relocInfo::internal_word_type);
 }
 
+RelocationHolder PollReloc::getHolder() {
+  return Relocation::spec_simple(relocInfo::poll_type);
+}
+
 OopReloc::OopReloc(size_t offset, uintptr_t con, LlvmCodeGen* cg): ConstReloc(offset) {
   int oop_index = cg->masm()->oop_recorder()->allocate_oop_index((jobject)con);
   address con_addr = cg->masm()->address_constant((address)con);
@@ -49,9 +53,16 @@ MetadataReloc::MetadataReloc(size_t offset, uintptr_t con, LlvmCodeGen* cg): Con
 SwitchReloc::SwitchReloc(size_t offset, SwitchInfo& si, LlvmCodeGen* cg): ConstReloc(offset) {
   auto& bo = cg->block_offsets();
   address con_addr = nullptr;
-  for (const auto& pair : si) {
-    size_t case_off = bo.count(pair.first) ? bo.at(pair.first) : bo.at(pair.second);
-    address addr = cg->masm()->address_constant(cg->masm()->addr_at(case_off));
+  for (const std::vector<llvm::BasicBlock*>& bbs : si) {
+    size_t case_offset = (size_t)-1;
+    for (llvm::BasicBlock* bb : bbs) {
+      if (bo.count(bb)) {
+        case_offset = bo.at(bb);
+        break;
+      }
+    }
+    assert(case_offset != (size_t)-1, "case BasicBlock not found");
+    address addr = cg->masm()->address_constant(cg->masm()->addr_at(case_offset));
     con_addr = con_addr ? con_addr : addr;
     cg->cb()->consts()->relocate(addr, Relocation::spec_simple(relocInfo::internal_word_type));
   }

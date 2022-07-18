@@ -35,6 +35,7 @@ class LlvmCodeGen {
   unsigned nof_to_interp_stubs() const { return _nof_to_interp_stubs; }
   bool has_tail_jump() const { return _has_tail_jump; }
   unsigned nof_consts() const { return _nof_consts; }
+  unsigned nof_locs() const { return _nof_locs; }
   void inc_nof_consts() { _nof_consts++; }
   address code_start() const { return _code_start; }
   address code_end() const { return _code_end; }
@@ -69,6 +70,7 @@ class LlvmCodeGen {
   unsigned _nof_to_interp_stubs = 0;
   bool _has_tail_jump = false;
   unsigned _nof_consts = 0;
+  unsigned _nof_locs = 1;
   address _code_start;
   address _code_end;
   unsigned _nof_safepoints = 0;

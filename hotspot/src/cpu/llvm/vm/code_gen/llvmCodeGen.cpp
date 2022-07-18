@@ -119,19 +119,17 @@ void LlvmCodeGen::process_object_file(const llvm::object::ObjectFile& obj_file, 
             double con = *(double*)(Value->data() + *Addend);
             relocator().add_double(offset, con, true);
             _nof_consts += 2;
+            _nof_locs++;
           } else if (*SecData == ".rodata.cst8") {
             double con = *(double*)(Value->data() + *Addend);
             relocator().add_double(offset, con, false);
             _nof_consts++;
+            _nof_locs++;
           } else if (*SecData == ".rodata.cst4") {
             float con = *(float*)(Value->data() + *Addend);
             relocator().add_float(offset, con);
             _nof_consts++;
-          } else if (*SecData == ".rodata") {
-            std::unique_ptr<DebugInfo> di = std::make_unique<SwitchDebugInfo>();
-            di->pc_offset = offset;
-            debug_info().push_back(std::move(di));
-            _nof_consts++;
+            _nof_locs++;
           }
         }
       }
@@ -147,15 +145,18 @@ void LlvmCodeGen::fill_code_buffer(address src, uint64_t size, int& exc_offset, 
   size_t consts_size = nof_consts() * wordSize;
   size_t code_size = size + 1; // in case the last instruction is a call, a nop will be inserted in the very end
   size_t cb_size = vep_offset + code_size + stubs_size + consts_size;
-  size_t locs_size = 1 + nof_Java_calls() + (vep_offset ? 1 : 0);
-  cb()->initialize(cb_size, locs_size * sizeof(relocInfo));
+  _nof_locs += nof_Java_calls() + (vep_offset ? 1 : 0);
+  cb()->initialize(cb_size, nof_locs() * sizeof(relocInfo));
   cb()->initialize_consts_size(consts_size);
   cb()->initialize_oop_recorder(C->env()->oop_recorder());
   _code_start = cb()->insts()->start();
 
   MacroAssembler ma(cb());
   _masm = &ma;
-  if (vep_offset != 0) {
+  if (C->is_osr_compilation()) {
+    masm()->generate_osr_entry();
+    relocator().add(new CallReloc());
+  } else if (vep_offset != 0) {
     masm()->generate_unverified_entry();
   }
   address verified_entry_point = masm()->pc();
@@ -217,22 +218,26 @@ void LlvmCodeGen::process_asm_info(int vep_offset) {
     while ((loi_idx < LOI.size()) && (info->Offset + addend >= LOI[loi_idx]->Offset + vep_offset)) {
       addend += LOI[loi_idx++]->Addend();
     }
-    llvm::BlockOffsetInfo* block_info;
-    llvm::ConstantOffsetInfo* constant_info;
     std::unique_ptr<DebugInfo> di;
-    if (block_info = info->asBlock()) {
+    if (llvm::BlockOffsetInfo* block_info = info->asBlock()) {
       di = std::make_unique<BlockStartDebugInfo>();
       if (block_info->Block) {
         di->asBlockStart()->bb = block_info->Block;
         block_offsets().emplace(block_info->Block, info->Offset + addend);
       }
-    } else if (constant_info = info->asConstant()) {
+    } else if (llvm::ConstantOffsetInfo* constant_info = info->asConstant()) {
       if (!selector().consts().count(constant_info->Constant)) continue;
       DebugInfo::Type ty = selector().consts().at(constant_info->Constant);
       di = DebugInfo::create(DebugInfo::id(ty), this);
       inc_nof_consts();
+      _nof_locs++;
     } else if (info->asPoll()) {
       di = std::make_unique<PatchBytesDebugInfo>();
+    } else if (llvm::SwitchOffsetInfo* switch_info = info->asSwitch()) {
+      SwitchInfo& si = selector().switch_info().at(switch_info->BB);
+      di = std::make_unique<SwitchDebugInfo>(si);
+      _nof_consts += si.size();
+      _nof_locs += 1 + si.size();
     }
     di->pc_offset = info->Offset + addend;
     debug_info().push_back(std::move(di));
