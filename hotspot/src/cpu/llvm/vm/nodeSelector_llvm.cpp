@@ -210,11 +210,22 @@ llvm::Value* storeTLABtopNode::select(Selector* sel) {
 }
 
 llvm::Value* prefetchAllocNTANode::select(Selector* sel) {
-  llvm::Value* addr = sel->select_address(this);
-  std::vector<llvm::Value*> args {
-    addr, sel->builder().getInt32(0),
-    sel->builder().getInt32(0), sel->builder().getInt32(1) };
-  sel->builder().CreateIntrinsic(llvm::Intrinsic::prefetch, { sel->type(T_ADDRESS) }, args);
+  llvm::Value *addr = sel->select_address(this),
+    *fetch_read = sel->builder().getInt32(0),
+    *locality_none = sel->builder().getInt32(0),
+    *cache_data = sel->builder().getInt32(1);
+
+  sel->builder().CreateIntrinsic(llvm::Intrinsic::prefetch, { sel->type(T_ADDRESS) }, { addr, fetch_read, locality_none, cache_data });
+  return NULL;
+}
+
+llvm::Value* prefetchAllocNode::select(Selector* sel) {
+  llvm::Value *addr = sel->select_address(this),
+    *fetch_read = sel->builder().getInt32(0),
+    *locality_L1 = sel->builder().getInt32(1),
+    *cache_data = sel->builder().getInt32(1);
+
+  sel->builder().CreateIntrinsic(llvm::Intrinsic::prefetch, { sel->type(T_ADDRESS) }, { addr, fetch_read, locality_L1, cache_data });
   return NULL;
 }
 
@@ -2070,10 +2081,6 @@ llvm::Value* prefetchrT2Node::select(Selector* sel){
 }
 
 llvm::Value* prefetchwNTANode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* prefetchAllocNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
