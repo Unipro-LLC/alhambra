@@ -350,12 +350,17 @@ $(LD_SCRIPT): $(LIBJVM_MAPFILE)
 LD_SCRIPT_FLAG = -Wl,-T,$(LD_SCRIPT)
 endif
 
+# Used to relink libjvm.so if llvm sources change
+ifeq ($(JVM_VARIANT_ALHAMBRA), true)
+  LLVM_GENERATED_LIB_FILES := $(shell $(FIND) -L $(shell cd $(BUILD_OUTPUT)/.. && pwd)/llvm-$(LLVM_ARCH)/lib -name "*.a")
+endif
+
 # With more recent Redhat releases (or the cutting edge version Fedora), if
 # SELinux is configured to be enabled, the runtime linker will fail to apply
 # the text relocation to libjvm.so considering that it is built as a non-PIC
 # DSO. To workaround that, we run chcon to libjvm.so after it is built. See
 # details in bug 6538311.
-$(LIBJVM): $(LIBJVM.o) $(LIBJVM_MAPFILE) $(LD_SCRIPT)
+$(LIBJVM): $(LIBJVM.o) $(LIBJVM_MAPFILE) $(LD_SCRIPT) $(LLVM_GENERATED_LIB_FILES)
 	$(QUIETLY) {                                                    \
 	    echo Linking vm...;                                         \
 	    $(LINK_LIB.CXX/PRE_HOOK)                                     \

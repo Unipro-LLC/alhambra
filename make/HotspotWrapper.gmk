@@ -38,9 +38,14 @@ default: all
 # Get all files except .hg in the hotspot directory.
 HOTSPOT_FILES := $(shell $(FIND) -L $(HOTSPOT_TOPDIR) -name ".hg" -prune -o -print)
 
+# Used to relink libjvm.so if llvm sources change
+ifeq ($(JVM_VARIANT_ALHAMBRA), true)
+  LLVM_GENERATED_LIB_FILES := $(shell $(FIND) -L $(shell cd $(BUILD_OUTPUT)/.. && pwd)/llvm-$(LLVM_ARCH)/lib -name "*.a")
+endif
+
 # The old build creates hotspot output dir before calling hotspot and
 # not doing it breaks builds on msys.
-$(HOTSPOT_OUTPUTDIR)/_hotspot.timestamp: $(HOTSPOT_FILES)
+$(HOTSPOT_OUTPUTDIR)/_hotspot.timestamp: $(HOTSPOT_FILES) $(LLVM_GENERATED_LIB_FILES)
 	@$(MKDIR) -p $(HOTSPOT_OUTPUTDIR)
 	@($(CD) $(HOTSPOT_TOPDIR)/make && $(MAKE) -j1 $(HOTSPOT_MAKE_ARGS) SPEC=$(HOTSPOT_SPEC) BASE_SPEC=$(BASE_SPEC))
 	$(TOUCH) $@
