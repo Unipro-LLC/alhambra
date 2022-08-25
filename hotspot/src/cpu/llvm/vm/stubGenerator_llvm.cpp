@@ -2360,6 +2360,7 @@ class StubGenerator: public StubCodeGenerator {
 
     // ======== loop entry is here ========
     __ BIND(L_load_element);
+    __ heapbase_fix();
     __ load_heap_oop(rax_oop, from_element_addr); // load the oop
     __ testptr(rax_oop, rax_oop);
     __ jcc(Assembler::zero, L_store_element);

@@ -1,5 +1,7 @@
 #include "selector_llvm.hpp"
 
+#include <unordered_set>
+
 #include "opto/cfgnode.hpp"
 #include "opto/rootnode.hpp"
 #include "opto/addnode.hpp"
@@ -70,8 +72,8 @@ llvm::Value* Selector::gep(llvm::Value* base, int offset) {
 }
 
 llvm::Value* Selector::gep(llvm::Value* base, llvm::Value* offset) {
-  llvm::Type* ty = base->getType();
-  base = builder().CreatePointerCast(base, llvm::Type::getInt8PtrTy(ctx()));
+  llvm::PointerType* ty = llvm::cast<llvm::PointerType>(base->getType());
+  base = builder().CreatePointerCast(base, llvm::Type::getInt8PtrTy(ctx(), ty->getAddressSpace()));
   base = builder().CreateGEP(base, offset);
   return builder().CreatePointerCast(base, ty);
 }
@@ -402,6 +404,7 @@ llvm::CallInst* Selector::call_C(const void* func, llvm::Type* retType, const st
   llvm::FunctionCallee f = callee(func, retType, args);
   llvm::CallInst* call = builder().CreateCall(f, args);
   call->addAttribute(llvm::AttributeList::FunctionIndex, llvm::Attribute::get(ctx(), "statepoint-id", std::to_string(DebugInfo::id(DebugInfo::NativeCall))));
+  call->addAttribute(llvm::AttributeList::FunctionIndex, llvm::Attribute::get(ctx(), "gc-leaf-function", "true"));
   return call;
 }
 
@@ -685,18 +688,34 @@ void Selector::complete_phi_node(Block *case_block, Node* case_val, llvm::PHINod
 }
 
 void Selector::epilog() {
+  std::unordered_set<llvm::BasicBlock*> exception_blocks;
   for (auto& pair : call_info()) {
-    size_t* tmp = &pair.second->size;
+    llvm::CallBase* cb = pair.first;
+    PatchInfo* pi = pair.second;
+    size_t* tmp = &pi->size;
     size_t& patch_bytes = *tmp;
     if (max_spill()) {
-      SpillPatchInfo* spi = pair.second->asSpill();
+      SpillPatchInfo* spi = pi->asSpill();
       if (!spi || (spi->spill_size != max_spill())) {
         if (patch_bytes == 0) {
           patch_bytes += NativeCall::instruction_size;
         }
         patch_bytes += CallDebugInfo::SUB_RSP_SIZE + CallDebugInfo::ADD_RSP_SIZE;
       }
+      llvm::BasicBlock* bb = cb->getParent();
+      if (exception_info().count(bb)) {
+        ExceptionInfo& ei = exception_info().at(bb);
+        for (auto pair : ei) {
+          llvm::BasicBlock* hbb = pair.first;
+          if (exception_blocks.find(hbb) == exception_blocks.end()) {
+            builder().SetInsertPoint(hbb, hbb->getFirstInsertionPt());
+            stackmap(DebugInfo::Exception, 0, CallDebugInfo::ADD_RSP_SIZE);
+            stackmap(DebugInfo::PatchBytes);
+            exception_blocks.insert(hbb);
+          }
+        }
+      }
     }
-    pair.first->addAttribute(llvm::AttributeList::FunctionIndex, llvm::Attribute::get(ctx(), "statepoint-num-patch-bytes", std::to_string(patch_bytes)));
+    cb->addAttribute(llvm::AttributeList::FunctionIndex, llvm::Attribute::get(ctx(), "statepoint-num-patch-bytes", std::to_string(patch_bytes)));
   }
 }

@@ -7,6 +7,7 @@
 std::vector<byte> TailJumpDebugInfo::MOV_RDX = { Assembler::REX_W,  NativeMovRegMem::instruction_code_mem2reg, 0x55, -wordSize };
 std::vector<byte> TailJumpDebugInfo::MOV_R10 = { Assembler::REX_WR, NativeMovRegMem::instruction_code_mem2reg, 0x55, -2*wordSize };
 std::vector<byte> TailJumpDebugInfo::JMPQ_R10 = { 0x41, 0xFF, 0xE2 };
+std::vector<byte> SafePointDebugInfo::MOV_RAX_AL = { 0x8A, 0x00 };
 
 std::unique_ptr<DebugInfo> DebugInfo::create(uint64_t id, LlvmCodeGen* cg) {
   auto& patch_info = cg->selector().patch_info();
@@ -23,6 +24,7 @@ std::unique_ptr<DebugInfo> DebugInfo::create(uint64_t id, LlvmCodeGen* cg) {
     case Oop: return std::make_unique<OopDebugInfo>();
     case Metadata: return std::make_unique<MetadataDebugInfo>();
     case OrigPC: return std::make_unique<OrigPCDebugInfo>();
+    case Exception: return std::make_unique<ExceptionDebugInfo>();
     default: ShouldNotReachHere();
   }
 }
@@ -51,11 +53,18 @@ void DebugInfo::patch(address& pos, const std::vector<byte>& inst) {
   }
 }
 
+void SafePointDebugInfo::patch_movabs_rax(address& pos, uintptr_t x) {
+  *(pos++) = 0x48;
+  *(pos++) = 0xB8;
+  *(uintptr_t*)pos = x;
+  pos += wordSize;
+}
+
 void SafePointDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
-  assert(idx < cg->debug_info().size(), "there should be PatchBytes before");
-  PatchBytesDebugInfo* pbdi = cg->debug_info()[idx + 1]->asPatchBytes();
-  assert(pbdi, "should be PatchBytes");
-  pc_offset = pbdi->pc_offset;
+  pc_offset -= MOV_RAX_AL.size();
+  address pos = cg->addr(pc_offset - NativeMovConstReg::instruction_size);
+  patch_movabs_rax(pos, (uintptr_t)os::get_polling_page());
+  patch(pos, MOV_RAX_AL);
   cg->relocator().add(new PollReloc(pc_offset));
 }
 
@@ -68,7 +77,7 @@ void OrigPCDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
 }
 
 void SwitchDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
-  SwitchReloc* rel = new SwitchReloc(pc_offset, switch_info, cg);
+  SwitchReloc* rel = new SwitchReloc(pc_offset, Cases, cg);
   cg->relocator().add(rel);
 }
 
@@ -167,10 +176,7 @@ void CallDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
     DynamicCallDebugInfo* dcdi = asDynamicCall();
     if (dcdi) {
       ic_addr = pos = nop_end -= NativeMovConstReg::instruction_size;
-      const byte movabs = 0x48, rax = 0xb8;
-      *(pos++) = movabs;
-      *(pos++) = rax;
-      *(uintptr_t*)pos = (uintptr_t)Universe::non_oop_word();
+      patch_movabs_rax(pos, (uintptr_t)Universe::non_oop_word());
     }
 
     if (patch_spill) {
@@ -225,4 +231,15 @@ void CallDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
     InternalReloc* rel = new InternalReloc(opdi->pc_offset);
     cg->relocator().add(rel);
   }
+}
+
+void ExceptionDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
+  BlockStartDebugInfo* bsdi = cg->debug_info()[idx - 1]->asBlockStart();
+  assert(bsdi, "should be BlockStart");
+  address pos = cg->code_start() + pc_offset, bs = cg->code_start() + bsdi->pc_offset;
+  while (--pos >= bs) {
+    *(pos + CallDebugInfo::ADD_RSP_SIZE) = *pos;
+  }
+  std::vector<byte> ADD_RSP = ADD_x_RSP(cg->selector().max_spill());
+  patch(bs, ADD_RSP);
 }

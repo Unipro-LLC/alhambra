@@ -761,8 +761,12 @@ void MacroAssembler::reset_last_Java_frame(bool clear_fp) {
   movptr(Address(r15_thread, JavaThread::last_Java_pc_offset()), NULL_WORD);
 }
 
-void MacroAssembler::register_fix() {
+void MacroAssembler::heapbase_fix() {
   movptr(r12_heapbase, 0);
+}
+
+void MacroAssembler::register_fix() {
+  heapbase_fix();
   push(rax);
   push(c_rarg0);
   push(c_rarg1);

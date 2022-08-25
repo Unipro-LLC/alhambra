@@ -40,11 +40,12 @@ class LlvmCodeGen {
   address code_start() const { return _code_start; }
   address code_end() const { return _code_end; }
   address addr(size_t pc_offset) { return code_start() + pc_offset; }
-  unsigned nof_safepoints() { return _nof_safepoints; }
-  unsigned nof_exceptions() { return _nof_exceptions; }
+  unsigned nof_safepoints() const { return _nof_safepoints; }
+  unsigned nof_exceptions() const { return _nof_exceptions; }
   std::unordered_map<const llvm::BasicBlock*, size_t>& block_offsets() { return _block_offsets; }
   llvm::AsmInfo* asm_info() { return _asm_info.get(); }
   MacroAssembler* masm() { return _masm; }
+  bool has_dual_switch_block() { return _has_dual_switch_block; }
 
   void run_passes(llvm::SmallVectorImpl<char>& ObjBufferSV);
   void process_object_file(const llvm::object::ObjectFile& obj_file, const char *obj_file_start, address& code_start, uint64_t& code_size);
@@ -77,6 +78,7 @@ class LlvmCodeGen {
   unsigned _nof_exceptions = 0;
   std::unordered_map<const llvm::BasicBlock*, size_t> _block_offsets;
   MacroAssembler* _masm;
+  bool _has_dual_switch_block = false;
 
   void process_asm_info(int vep_offset);
   void add_stubs(int& exc_offset, int& deopt_offset);

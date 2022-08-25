@@ -538,11 +538,7 @@ inline bool NativeInstruction::is_jump()         { return ubyte_at(0) == NativeJ
                                                           ubyte_at(0) == 0xEB; /* short jump */ }
 inline bool NativeInstruction::is_cond_jump()    { return (int_at(0) & 0xF0FF) == 0x800F /* long jump */ ||
                                                           (ubyte_at(0) & 0xF0) == 0x70;  /* short jump */ }
-inline bool NativeInstruction::is_safepoint_poll() {
-  return ubyte_at(0) == 0x8A // e.g. mov    al,BYTE PTR [rax]
-      || (ubyte_at(0) == 0x0F && ubyte_at(1) == 0xB6) // e.g. movzx  eax,BYTE PTR [rax]
-      || (ubyte_at(0) == 0x45 && ubyte_at(1) == 0x0F && ubyte_at(1) == 0xB6); // e.g. movzx  r8d,BYTE PTR [r8] 
-}
+inline bool NativeInstruction::is_safepoint_poll() { return ubyte_at(0) == 0x8A && ubyte_at(1) == 0x00; }
 
 inline bool NativeInstruction::is_mov_literal64() {
 #ifdef AMD64

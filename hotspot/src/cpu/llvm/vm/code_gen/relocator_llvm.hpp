@@ -115,7 +115,7 @@ public:
 
 class SwitchReloc : public ConstReloc {
 public: 
-  SwitchReloc(size_t offset, SwitchInfo& si, LlvmCodeGen* cg);
+  SwitchReloc(size_t offset, std::vector<const llvm::BasicBlock*>& cases, LlvmCodeGen* cg);
 };
 
 class PollReloc : public Reloc {

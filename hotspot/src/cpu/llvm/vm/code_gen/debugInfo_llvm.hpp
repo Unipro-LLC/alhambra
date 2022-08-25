@@ -21,13 +21,13 @@ struct BlockStartDebugInfo;
 struct RethrowDebugInfo;
 struct TailJumpDebugInfo;
 struct PatchBytesDebugInfo;
-struct ExceptionDebugInfo;
 struct ConstantDebugInfo;
 struct LoadConstantDebugInfo;
 struct OopDebugInfo;
 struct MetadataDebugInfo;
 struct OrigPCDebugInfo;
 struct SwitchDebugInfo;
+struct ExceptionDebugInfo; 
 struct ScopeInfo;
 struct PatchInfo;
 struct SpillPatchInfo;
@@ -46,7 +46,8 @@ struct DebugInfo {
     Oop, 
     Metadata, 
     OrigPC, 
-    Switch,  
+    Switch, 
+    Exception, 
 
     Count };
   uint32_t pc_offset;
@@ -79,13 +80,13 @@ struct DebugInfo {
   virtual RethrowDebugInfo* asRethrow() { return nullptr; }
   virtual TailJumpDebugInfo* asTailJump() { return nullptr; }
   virtual PatchBytesDebugInfo* asPatchBytes() { return nullptr; }
-  virtual ExceptionDebugInfo* asException() { return nullptr; }
   virtual ConstantDebugInfo* asConstant() { return nullptr; }
   virtual LoadConstantDebugInfo* asLoadConstant() { return nullptr; }
   virtual OopDebugInfo* asOop() { return nullptr; }
   virtual MetadataDebugInfo* asMetadata() { return nullptr; }
   virtual OrigPCDebugInfo* asOrigPC() { return nullptr; }
   virtual SwitchDebugInfo* asSwitch() { return nullptr; }
+  virtual ExceptionDebugInfo* asException() { return nullptr; }
 
   virtual bool block_start() { return false; }
   virtual bool block_can_start() { return false; }
@@ -99,6 +100,7 @@ struct NativeCallDebugInfo : public DebugInfo {
   bool block_can_end() override { return true; }
 };
 struct SafePointDebugInfo : public DebugInfo {
+  static std::vector<byte> MOV_RAX_AL;
   ScopeInfo* scope_info;
   OopMap* oopmap;
   unsigned record_idx;
@@ -107,6 +109,7 @@ struct SafePointDebugInfo : public DebugInfo {
   Type type() override { return SafePoint; }
   void handle(size_t idx, LlvmCodeGen* cg) override;
   RecordAccessor record(StackMapParser* parser) const { return parser->getRecord(record_idx); }
+  static void patch_movabs_rax(address& pos, uintptr_t x);
 };
 struct CallDebugInfo : public SafePointDebugInfo {
   PatchInfo* patch_info;
@@ -195,11 +198,19 @@ struct OrigPCDebugInfo : public ConstantDebugInfo {
 };
 
 struct SwitchDebugInfo : public ConstantDebugInfo {
-  SwitchInfo& switch_info;
-  SwitchDebugInfo(SwitchInfo& si): ConstantDebugInfo(), switch_info(si) {}
+  std::vector<const llvm::BasicBlock*>& Cases;
+  SwitchDebugInfo(std::vector<const llvm::BasicBlock*>& cases) : ConstantDebugInfo(), Cases(cases) {}
   Type type() override { return Switch; }
   SwitchDebugInfo* asSwitch() override { return this; }
   void handle(size_t idx, LlvmCodeGen* cg) override;
+};
+
+struct ExceptionDebugInfo : public DebugInfo {
+  ExceptionDebugInfo(): DebugInfo() {}
+  Type type() override { return Exception; }
+  ExceptionDebugInfo* asException() override { return this; }
+  void handle(size_t idx, LlvmCodeGen* cg) override;
+  bool block_can_start() override { return true; }
 };
 
 struct PatchInfo {

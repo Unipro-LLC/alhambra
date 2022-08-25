@@ -41,8 +41,6 @@ LlvmCodeGen::LlvmCodeGen(LlvmMethod* method, Compile* c, const char* name) :
           if (n->is_MachCallStaticJava() && n->as_MachCallJava()->_method) {
             _nof_to_interp_stubs++;
           }
-        } else if (cmp_ideal_Opcode(n, Op_SafePoint)) {
-          asm_info()->HasPoll = true;
         }
       } else if (n->is_Catch()) {
         _nof_exceptions++;
@@ -73,7 +71,6 @@ void LlvmCodeGen::run_passes(llvm::SmallVectorImpl<char>& ObjBufferSV) {
   PM.add(llvm::createRewriteStatepointsForGCLegacyPass());
   TM->addPassesToEmitMC(PM, ctx, ObjStream, false);
   ctx->AI = asm_info();
-  TM->setFastISel(false);
   PM.run(*mod());
 }
 
@@ -172,21 +169,23 @@ void LlvmCodeGen::fill_code_buffer(address src, uint64_t size, int& exc_offset, 
 
   stack().set_frame_size(method()->frame_size());
   unsigned record_idx = 0;
-  for (RecordAccessor record: sm_parser()->records()) {
-    uint64_t id = record.getID();
-    std::unique_ptr<DebugInfo> di = DebugInfo::create(id, this);
-    di->pc_offset = vep_offset + record.getInstructionOffset();
+  if (sm_parser()) {
+    for (RecordAccessor record: sm_parser()->records()) {
+      uint64_t id = record.getID();
+      std::unique_ptr<DebugInfo> di = DebugInfo::create(id, this);
+      di->pc_offset = vep_offset + record.getInstructionOffset();
 
-    SafePointDebugInfo* spdi = di->asSafePoint();
-    if (spdi) {
-      spdi->oopmap = new OopMap(stack().frame_size() / BytesPerInt, C->has_method() ? C->method()->arg_size() : 0);
-      spdi->record_idx = record_idx;
-      spdi->scope_info = scope_descriptor().scope_info()[DebugInfo::idx(id)].get();
-      assert(spdi->scope_info->stackmap_id == id, "different ids");
+      SafePointDebugInfo* spdi = di->asSafePoint();
+      if (spdi) {
+        spdi->oopmap = new OopMap(stack().frame_size() / BytesPerInt, C->has_method() ? C->method()->arg_size() : 0);
+        spdi->record_idx = record_idx;
+        spdi->scope_info = scope_descriptor().scope_info()[DebugInfo::idx(id)].get();
+        assert(spdi->scope_info->stackmap_id == id, "different ids");
+      }
+
+      record_idx++;
+      debug_info().push_back(std::move(di));
     }
-
-    record_idx++;
-    debug_info().push_back(std::move(di));
   }
 
   // sorted vector is convenient for patching
@@ -219,11 +218,16 @@ void LlvmCodeGen::process_asm_info(int vep_offset) {
       addend += LOI[loi_idx++]->Addend();
     }
     std::unique_ptr<DebugInfo> di;
+    size_t offset = info->Offset + addend;
     if (llvm::BlockOffsetInfo* block_info = info->asBlock()) {
       di = std::make_unique<BlockStartDebugInfo>();
-      if (block_info->Block) {
-        di->asBlockStart()->bb = block_info->Block;
-        block_offsets().emplace(block_info->Block, info->Offset + addend);
+      const llvm::BasicBlock* bb = block_info->Block;
+      if (bb) {
+        di->asBlockStart()->bb = bb;
+        if (block_offsets().count(bb)) {
+          _has_dual_switch_block = true;
+        }
+        block_offsets().emplace(bb, offset);
       }
     } else if (llvm::ConstantOffsetInfo* constant_info = info->asConstant()) {
       if (!selector().consts().count(constant_info->Constant)) continue;
@@ -231,15 +235,12 @@ void LlvmCodeGen::process_asm_info(int vep_offset) {
       di = DebugInfo::create(DebugInfo::id(ty), this);
       inc_nof_consts();
       _nof_locs++;
-    } else if (info->asPoll()) {
-      di = std::make_unique<PatchBytesDebugInfo>();
     } else if (llvm::SwitchOffsetInfo* switch_info = info->asSwitch()) {
-      SwitchInfo& si = selector().switch_info().at(switch_info->BB);
-      di = std::make_unique<SwitchDebugInfo>(si);
-      _nof_consts += si.size();
-      _nof_locs += 1 + si.size();
+      di = std::make_unique<SwitchDebugInfo>(switch_info->Cases);
+      _nof_consts += switch_info->Cases.size();
+      _nof_locs += 1 + switch_info->Cases.size();
     }
-    di->pc_offset = info->Offset + addend;
+    di->pc_offset = offset;
     debug_info().push_back(std::move(di));
   }
 }

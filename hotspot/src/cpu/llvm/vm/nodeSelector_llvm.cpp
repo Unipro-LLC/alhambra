@@ -146,8 +146,8 @@ llvm::Value* loadConFNode::select(Selector* sel) {
 
 llvm::Value* tailjmpIndNode::select(Selector* sel) {
   llvm::Value* FP = sel->cg()->stack().FP();
-  llvm::Value* rdx_offset = sel->gep(FP, -1 * sizeof(intptr_t));
-  llvm::Value* r10_offset = sel->gep(FP, -2 * sizeof(intptr_t));
+  llvm::Value* rdx_offset = sel->gep(FP, -1 * wordSize);
+  llvm::Value* r10_offset = sel->gep(FP, -2 * wordSize);
 
   Node* call_node = in(TypeFunc::Parms)->in(0);
   assert(call_node->is_MachCall(), "expected call");
@@ -384,7 +384,7 @@ llvm::Value* decodeHeapOopNode::select(Selector* sel) {
   return sel->decode_heap_oop(narrow_oop, false);
 }
 
-llvm::Value* ShouldNotReachHereNode::select(Selector *sel) {
+llvm::Value* ShouldNotReachHereNode::select(Selector* sel) {
   sel->builder().CreateUnreachable();
   return NULL;
 }
@@ -777,7 +777,7 @@ llvm::Value* loadConDNode::select(Selector* sel) {
   return sel->select_oper(opnd_array(1));
 }
 
-llvm::Value* storeBNode::select(Selector *sel) {
+llvm::Value* storeBNode::select(Selector* sel) {
   int op_index = MemNode::Address + 1;
   llvm::Value* addr = sel->select_address(this);
   llvm::Value* value = sel->select_node(in(op_index++));
@@ -786,17 +786,17 @@ llvm::Value* storeBNode::select(Selector *sel) {
   return NULL;
 }
 
-llvm::Value* loadLNode::select(Selector *sel) {
+llvm::Value* loadLNode::select(Selector* sel) {
   llvm::Value* addr = sel->select_address(this);
   return sel->load(addr, T_LONG);
 }
 
-llvm::Value* loadNKlassNode::select(Selector *sel) {
+llvm::Value* loadNKlassNode::select(Selector* sel) {
   llvm::Value* addr = sel->select_address(this);
   return sel->load(addr, T_NARROWKLASS);
 }
 
-llvm::Value* castP2XNode::select(Selector *sel) {
+llvm::Value* castP2XNode::select(Selector* sel) {
   llvm::Value* res = sel->select_node(in(1));
   assert(res->getType()->isPointerTy(), "not pointer");
   return sel->builder().CreatePtrToInt(res, sel->type(T_LONG));
@@ -809,7 +809,7 @@ llvm::Value* cmpandL_reg_immNode::select(Selector* sel) {
   return sel->select_condition(this, a, b, true, false);
 }
 
-llvm::Value* storeLConditionalNode::select(Selector *sel) {
+llvm::Value* storeLConditionalNode::select(Selector* sel) {
   int op_index = MemNode::Address;
   llvm::Value* addr = sel->select_node(in(op_index));
   llvm::Value* check = sel->select_node(in(op_index+1));
@@ -939,24 +939,16 @@ llvm::Value* if_fastlockNode::select(Selector* sel) {
   sel->builder().CreateCondBr(pred, ok_bb, recr_bb);
 
   sel->builder().SetInsertPoint(recr_bb);
-  llvm::Value* sbase_offset = sel->builder().getInt64(in_bytes(Thread::stack_base_offset()));
-  llvm::Value* ssize_offset = sel->builder().getInt64(in_bytes(Thread::stack_size_offset()));
-  llvm::Value* lock_mask    = sel->builder().getInt64(~markOopDesc::lock_mask_in_place);
+  llvm::MDString* md_string = llvm::MDString::get(sel->ctx(), "rsp\00");
+  llvm::MDNode* md_node = llvm::MDNode::get(sel->ctx(), md_string);
+  llvm::Value* md = llvm::MetadataAsValue::get(sel->ctx(), md_node);
+  llvm::Value* SP = sel->builder().CreateIntrinsic(llvm::Intrinsic::read_register, { sel->type(T_LONG) }, md);
+  disp = sel->builder().CreateSub(disp, SP);
+  llvm::Value* lock_mask = sel->builder().getInt64(7 - os::vm_page_size());
   llvm::Value* mark_lock = sel->builder().CreateAnd(disp, lock_mask);
-  llvm::Value* stack_base = sel->load(sel->gep(sel->thread(), sbase_offset), T_ADDRESS);
-  llvm::Value* stack_size = sel->load(sel->gep(sel->thread(), ssize_offset), T_LONG);
-  llvm::Value* stack_top = sel->gep(stack_base, sel->builder().CreateNeg(stack_size));
-  stack_base = sel->builder().CreatePtrToInt(stack_base, sel->type(T_LONG));
-  stack_top = sel->builder().CreatePtrToInt(stack_top, sel->type(T_LONG));
-  llvm::Value* pr_base = sel->builder().CreateICmpULE(mark_lock, stack_base);
-  llvm::Value* pr_top = sel->builder().CreateICmpULE(stack_top, mark_lock);
-  llvm::Value* pr_res = sel->builder().CreateAnd(pr_top, pr_base);
-  llvm::BasicBlock* store0_bb = llvm::BasicBlock::Create(sel->ctx(), bb->getName() + "_store0", sel->func());
-  sel->builder().CreateCondBr(pr_res, store0_bb, ok_bb);
-
-  sel->builder().SetInsertPoint(store0_bb);
-  sel->store(zero, mon_header_addr);
-  sel->builder().CreateBr(slow_bb);
+  sel->store(mark_lock, mon_header_addr);
+  llvm::Value* pr_res = sel->builder().CreateICmpEQ(mark_lock, zero);
+  sel->builder().CreateCondBr(pr_res, ok_bb, slow_bb);
 
   sel->builder().SetInsertPoint(infl_bb);
   llvm::Value* unused_mark = sel->builder().getInt64(intptr_t(markOopDesc::unused_mark()));
@@ -977,7 +969,7 @@ llvm::Value* if_fastlockNode::select(Selector* sel) {
   return NULL;
 }
 
-llvm::Value* if_fastunlockNode::select(Selector *sel) {
+llvm::Value* if_fastunlockNode::select(Selector* sel) {
   BoxLockNode* box_n = in(2)->as_BoxLock();
   LlvmStack& stack = sel->cg()->stack();
   int mon_number = box_n->stack_slot() / 2;
@@ -1097,7 +1089,7 @@ llvm::Value* if_fastunlockNode::select(Selector *sel) {
   return NULL;
 }
 
-llvm::Value* BoxLockNode::select(Selector *sel) {
+llvm::Value* BoxLockNode::select(Selector* sel) {
   LlvmStack& stack = sel->cg()->stack();
   return sel->gep(stack.FP(), stack.mon_offset(stack_slot() / 2));
 }
@@ -1110,7 +1102,7 @@ llvm::Value* membar_release_lockNode::select(Selector* sel) {
   return NULL;
 }
 
-llvm::Value* MachNullCheckNode::select(Selector *sel) {
+llvm::Value* MachNullCheckNode::select(Selector* sel) {
   llvm::BasicBlock* bb = sel->builder().GetInsertBlock();
   // find the instruction (load or store) for null checking
   llvm::Instruction* last_mem = nullptr;
@@ -1191,7 +1183,7 @@ llvm::Value* decodeHeapOop_not_nullNode::select(Selector* sel) {
   return sel->decode_heap_oop(narrow_oop, true);
 }
 
-llvm::Value* storeINode::select(Selector *sel) {
+llvm::Value* storeINode::select(Selector* sel) {
   int op_index = MemNode::Address + 1;
   llvm::Value* addr = sel->select_address(this);
   llvm::Value* value = sel->select_node(in(op_index++));
@@ -1200,7 +1192,7 @@ llvm::Value* storeINode::select(Selector *sel) {
   return NULL;
 }
 
-llvm::Value* membar_acquireNode::select(Selector *sel) {
+llvm::Value* membar_acquireNode::select(Selector* sel) {
   sel->builder().CreateFence(llvm::AtomicOrdering::Acquire);
   return NULL;
 }
@@ -1210,7 +1202,7 @@ llvm::Value* membar_releaseNode::select(Selector* sel) {
   return NULL;
 }
 
-llvm::Value* membar_volatileNode::select(Selector *sel) {
+llvm::Value* membar_volatileNode::select(Selector* sel) {
   sel->builder().CreateFence(llvm::AtomicOrdering::SequentiallyConsistent);
   return NULL;
 }
@@ -1226,15 +1218,15 @@ llvm::Value* cmpandI_reg_immNode::select(Selector* sel) {
   return sel->select_condition(this, a, b, true, false);
 }
 
-llvm::Value* encodeHeapOopNode::select(Selector *sel) {
+llvm::Value* encodeHeapOopNode::select(Selector* sel) {
   return sel->encode_heap_oop(sel->select_node(in(1)), false);
 }
 
-llvm::Value* encodeHeapOop_not_nullNode::select(Selector *sel) {
+llvm::Value* encodeHeapOop_not_nullNode::select(Selector* sel) {
   return sel->encode_heap_oop(sel->select_node(in(1)), true);
 }
 
-llvm::Value* storeNNode::select(Selector *sel) {
+llvm::Value* storeNNode::select(Selector* sel) {
   assert(in(MemNode::Address)->is_BoxLock() == false, "check");
   Node* val_n = in(MemNode::Address + 1);
   llvm::Value* addr = sel->select_address(this);
@@ -1244,19 +1236,19 @@ llvm::Value* storeNNode::select(Selector *sel) {
   return NULL;
 }
 
-llvm::Value* storeImmB0Node::select(Selector *sel) {
+llvm::Value* storeImmB0Node::select(Selector* sel) {
   llvm::Value* addr = sel->select_address(this);
   llvm::Value* value = sel->builder().getInt8(CardTableModRefBS::dirty_card_val());
   sel->store(value, addr);
   return NULL;
 }
 
-llvm::Value* convI2L_z_reg_regNode::select(Selector *sel) {
+llvm::Value* convI2L_z_reg_regNode::select(Selector* sel) {
   llvm::Value* a = sel->select_node(in(1));
   return sel->builder().CreateZExt(a, sel->type(T_LONG));
 }
 
-llvm::Value* clear_memoryNode::select(Selector *sel) {
+llvm::Value* clear_memoryNode::select(Selector* sel) {
   llvm::Value* arr_size = sel->select_node(in(2));
   arr_size = sel->builder().CreateIntCast(arr_size, sel->type(T_INT), false);
   arr_size = sel->builder().CreateShl(arr_size, LogBytesPerLong);
@@ -1266,7 +1258,7 @@ llvm::Value* clear_memoryNode::select(Selector *sel) {
   return NULL;
 }
 
-llvm::Value* loadRangeNode::select(Selector *sel) {
+llvm::Value* loadRangeNode::select(Selector* sel) {
   llvm::Value* addr = sel->select_address(this);
   return sel->load(addr, T_INT);
 }
@@ -1284,7 +1276,7 @@ llvm::Value* cmpU_reg_regNode::select(Selector* sel) {
   return sel->select_condition(this, a, b, false, false);
 }
 
-llvm::Value* CallLeafNoFPDirectNode::select(Selector *sel) {
+llvm::Value* CallLeafNoFPDirectNode::select(Selector* sel) {
   BasicType ret_type = tf()->return_type();
   assert(ret_type != T_NARROWOOP, "unexpected behavior check");
   llvm::Value* ret =  sel->call_C(entry_point(), sel->type(ret_type), sel->call_args(this));
@@ -1307,7 +1299,7 @@ llvm::Value* salL_index_rReg_immNode::select(Selector* sel) {
   return sel->builder().CreateShl(a, b);
 }
 
-llvm::Value* loadConNNode::select(Selector *sel) {
+llvm::Value* loadConNNode::select(Selector* sel) {
   assert(opnd_array(1)->type()->basic_type() == T_NARROWOOP,"type check");
   llvm::Value* con = sel->select_oper(opnd_array(1));
   // sel->mark_nptr(con);
@@ -1333,30 +1325,28 @@ jboolean strequal_C(jchar *s1, jchar *s2, jint l) {
   return 0x1;
 }
 
-llvm::Value* string_equalsNode::select(Selector *sel) {
+llvm::Value* string_equalsNode::select(Selector* sel) {
   llvm::Value* s1 = sel->select_node(in(2));
   llvm::Value* s2 = sel->select_node(in(3));
   llvm::Value* length = sel->select_node(in(4));
   return sel->call_C((void *)strequal_C, sel->type(T_INT), { s1, s2, length });
 }
 
-llvm::Value* safePoint_pollNode::select(Selector *sel) {
+llvm::Value* safePoint_pollNode::select(Selector* sel) {
   ScopeDescriptor& sd = sel->cg()->scope_descriptor();
   ScopeInfo* si = sd.register_scope(this);
-  size_t patch_bytes = 1;
-  // call with be replaced with a nop (ignore address)
+  size_t patch_bytes = NativeMovConstReg::instruction_size + SafePointDebugInfo::MOV_RAX_AL.size();
+  // call is needed only for GC, will be replaced with load, target doesn't matther
   llvm::FunctionCallee f = sel->callee(os::get_polling_page(), sel->type(T_VOID), {});
   std::vector<llvm::Value*> deopt = sd.stackmap_scope(si);
   llvm::OperandBundleDef deopt_ob("deopt", deopt);
   llvm::CallInst* call = sel->builder().CreateCall(f, {}, { deopt_ob });
   call->addAttribute(llvm::AttributeList::FunctionIndex, llvm::Attribute::get(sel->ctx(), "statepoint-id", std::to_string(si->stackmap_id)));
   call->addAttribute(llvm::AttributeList::FunctionIndex, llvm::Attribute::get(sel->ctx(), "statepoint-num-patch-bytes", std::to_string(patch_bytes)));
-  llvm::Value* addr = sel->get_ptr(os::get_polling_page(), T_ADDRESS);
-  sel->builder().CreateLoad(addr, true);
   return NULL;
 }
 
-llvm::Value* loadUSNode::select(Selector *sel) {
+llvm::Value* loadUSNode::select(Selector* sel) {
   llvm::Value* addr = sel->select_address(this);
   llvm::Value* res =  sel->load(addr, T_SHORT);
   return sel->builder().CreateZExt(res, sel->type(T_INT));
@@ -1368,11 +1358,11 @@ llvm::Value* jmpLoopEndNode::select(Selector* sel) {
   return NULL;
 }
 
-llvm::Value* castIINode::select(Selector *sel) {
+llvm::Value* castIINode::select(Selector* sel) {
   return sel->select_node(in(1)); 
 }
 
-llvm::Value* xaddINode::select(Selector *sel) {
+llvm::Value* xaddINode::select(Selector* sel) {
   int op_index = MemNode::Address + 1;
   llvm::Value* addr = sel->select_address(this);
   llvm::Value* val = sel->select_node(in(op_index));
@@ -1425,7 +1415,7 @@ llvm::Value* cmpL_reg_regNode::select(Selector* sel) {
   return sel->select_condition(this, a, b, false, false);
 }
 
-llvm::Value* convI2BNode::select(Selector *sel) {
+llvm::Value* convI2BNode::select(Selector* sel) {
   llvm::Value* val = sel->select_node(in(1));
   llvm::Value* pred = sel->builder().CreateICmpEQ(val, sel->null(T_INT));
   llvm::Value* res = sel->builder().CreateSelect(pred, sel->builder().getInt32(0), sel->builder().getInt32(1));
@@ -1444,13 +1434,13 @@ llvm::Value* mergeUI_reg_regNode::select(Selector* sel) {
   return sel->builder().CreateSelect(pred, v2, v1);
 }
 
-llvm::Value* storeImmN0Node::select(Selector *sel) {
+llvm::Value* storeImmN0Node::select(Selector* sel) {
   llvm::Value* addr = sel->select_address(this);
   sel->store(sel->null(T_NARROWOOP), addr);
   return NULL;
 }
 
-llvm::Value* loadConLNode::select(Selector *sel) {
+llvm::Value* loadConLNode::select(Selector* sel) {
   return sel->select_oper(opnd_array(1));;
 }
 
@@ -1461,22 +1451,22 @@ llvm::Value* maxI_rReg_imm_0Node::select(Selector* sel) {
   return sel->builder().CreateSelect(pred, b, a);
 }
 
-llvm::Value* loadKlassNode::select(Selector *sel) {
+llvm::Value* loadKlassNode::select(Selector* sel) {
   llvm::Value* addr = sel->select_address(this);
   return sel->load(addr, T_METADATA);
 }
 
-llvm::Value* loadFNode::select(Selector *sel) {
+llvm::Value* loadFNode::select(Selector* sel) {
   llvm::Value* addr = sel->select_address(this);
   return sel->load(addr, T_FLOAT);
 }
 
-llvm::Value* convD2I_reg_regNode::select(Selector *sel) {
+llvm::Value* convD2I_reg_regNode::select(Selector* sel) {
   llvm::Value* val = sel->select_node(in(1));
   return sel->builder().CreateFPToSI(val, sel->type(T_INT));
 }
 
-llvm::Value* minI_rReg_immNode::select(Selector *sel) {
+llvm::Value* minI_rReg_immNode::select(Selector* sel) {
   llvm::Value* a = sel->select_node(in(1));
   llvm::Value* b = sel->select_oper(opnd_array(2));
   llvm::Value* pred = sel->builder().CreateICmpSLE(a, b);
@@ -1489,7 +1479,7 @@ llvm::Value* loadBNode::select(Selector* sel) {
   return sel->builder().CreateSExt(res, sel->type(T_INT));
 }
 
-llvm::Value* storeCNode::select(Selector *sel) {
+llvm::Value* storeCNode::select(Selector* sel) {
   int op_index = MemNode::Address + 1;
   llvm::Value* addr = sel->select_address(this);
   llvm::Value* value = sel->select_node(in(op_index++));
@@ -1498,7 +1488,7 @@ llvm::Value* storeCNode::select(Selector *sel) {
   return NULL;
 }
 
-llvm::Value* minI_rRegNode::select(Selector *sel) {
+llvm::Value* minI_rRegNode::select(Selector* sel) {
   llvm::Value* a = sel->select_node(in(1));
   llvm::Value* b = sel->select_node(in(2));
 
@@ -1517,12 +1507,12 @@ llvm::Value* cmpN_reg_immNode::select(Selector* sel) {
   return sel->select_condition(this, a, b, false, false);
 }
 
-llvm::Value* loadV8Node::select(Selector *sel) {
+llvm::Value* loadV8Node::select(Selector* sel) {
   llvm::Value* addr = sel->select_address(this);
   return sel->load(addr, T_LONG);
 }
 
-llvm::Value* storeV8Node::select(Selector *sel) {
+llvm::Value* storeV8Node::select(Selector* sel) {
   int op_index = MemNode::Address + 1;
   llvm::Value* addr = sel->select_address(this);
   llvm::Value* value = sel->select_node(in(op_index++));
@@ -1531,7 +1521,7 @@ llvm::Value* storeV8Node::select(Selector *sel) {
   return NULL;
 }
 
-llvm::Value* compareAndSwapINode::select(Selector *sel) {
+llvm::Value* compareAndSwapINode::select(Selector* sel) {
   int op_index = MemNode::Address + 1;
   llvm::Value* addr = sel->select_address(this);
   llvm::Value* check = sel->select_node(in(op_index++));
@@ -1560,7 +1550,7 @@ llvm::Value* compareAndSwapLNode::select(Selector* sel) {
   return res;
 }
 
-llvm::Value* jumpXtndNode::select(Selector *sel) {
+llvm::Value* jumpXtndNode::select(Selector* sel) {
   uint size = outcnt();
 
   llvm::Value* addr_offset = sel->select_node(in(1));
@@ -1572,9 +1562,6 @@ llvm::Value* jumpXtndNode::select(Selector *sel) {
   sel->builder().CreateUnreachable();
   sel->builder().SetInsertPoint(bb);
   llvm::SwitchInst* switch_inst = sel->builder().CreateSwitch(addr_offset, bb_default, size);
-  SwitchInfo& switch_info = sel->switch_info()[bb];
-  sel->cg()->asm_info()->SwitchBBs.push_back(bb);
-  switch_info.reserve(size);
 
   for (uint i = 0; i < size; ++i) {
     Node* switch_case = NULL;
@@ -1598,12 +1585,6 @@ llvm::Value* jumpXtndNode::select(Selector *sel) {
     assert(switch_case != NULL, "Some switch cases are missing");
     Block *b_dest = sel->C->cfg()->get_block_for_node(switch_case);
     llvm::BasicBlock *bb_dest = sel->basic_block(b_dest);
-    std::vector<llvm::BasicBlock*> switch_info_i = { bb_dest };
-    while (b_dest->get_node(1)->is_MachGoto()) {
-      b_dest = b_dest->non_connector_successor(0);
-      switch_info_i.push_back(sel->basic_block(b_dest));
-    }
-    switch_info.push_back(switch_info_i);
     llvm::ConstantInt* switch_val = llvm::cast<llvm::ConstantInt>(llvm::ConstantInt::get(addr_offset->getType(), i));
     switch_inst->addCase(switch_val, bb_dest);
   }
@@ -1614,7 +1595,7 @@ llvm::Value* castPPNode::select(Selector* sel) {
   return sel->select_node(in(1));
 }
 
-llvm::Value* subI_rReg_imm0Node::select(Selector *sel) {
+llvm::Value* subI_rReg_imm0Node::select(Selector* sel) {
   llvm::Value* a = sel->select_node(in(1));
   return sel->builder().CreateNeg(a);
 }
@@ -1634,7 +1615,7 @@ jint strcmp_C(jchar *s1, jchar *s2, jint l1, jint l2) {
   return l1 - l2;
 }
 
-llvm::Value* string_compareNode::select(Selector *sel) {
+llvm::Value* string_compareNode::select(Selector* sel) {
   llvm::Value* str1_ptr = sel->select_node(in(2));
   llvm::Value* str1_length = sel->select_node(in(3));
   llvm::Value* str2_ptr = sel->select_node(in(4));
@@ -1648,7 +1629,7 @@ llvm::Value* cmpF_reg_regNode::select(Selector* sel) {
   return sel->select_condition(this, a, b, false, true);
 }
 
-llvm::Value* convF2I_reg_regNode::select(Selector *sel) {
+llvm::Value* convF2I_reg_regNode::select(Selector* sel) {
   llvm::Value* value = sel->select_node(in(1));
   return sel->builder().CreateFPToSI(value, sel->type(T_INT));
 }
@@ -1708,6 +1689,17 @@ llvm::Value* string_indexof_conNode::select(Selector* sel) {
   { str1, sel->null(T_INT), cnt1, str2, sel->null(T_INT), cnt2, sel->null(T_INT) });
 }
 
+llvm::Value* string_indexofNode::select(Selector* sel) {
+  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
+  llvm::Value* str1 = sel->select_node(in(2));
+  llvm::Value* str2 = sel->select_node(in(4));
+  llvm::Value* cnt1 = sel->select_node(in(3));
+  llvm::Value* cnt2 = sel->select_node(in(5));
+
+  return sel->call_C((void*)indexOf_C, sel->type(T_INT), 
+  { str1, sel->null(T_INT), cnt1, str2, sel->null(T_INT), cnt2, sel->null(T_INT) });
+}
+
 llvm::Value* cmpandL_reg_regNode::select(Selector* sel) {
   llvm::Value* a = sel->select_node(in(1));
   llvm::Value* b = sel->select_node(in(2));
@@ -1719,7 +1711,7 @@ bool is_subtype_of_C(Klass* check_klass, Klass* object_klass) {
   return object_klass->is_subtype_of(check_klass);
 }
 
-llvm::Value* partialSubtypeCheckNode::select(Selector *sel) {
+llvm::Value* partialSubtypeCheckNode::select(Selector* sel) {
   // this node has not been tested yet
   llvm::Value* subklass = sel->select_node(in(1));
   llvm::Value* superklass = sel->select_node(in(2));
@@ -1727,7 +1719,7 @@ llvm::Value* partialSubtypeCheckNode::select(Selector *sel) {
   return sel->builder().CreateSelect(is_subtype_of, sel->null(T_METADATA), subklass);
 }
 
-llvm::Value* castX2PNode::select(Selector *sel) {
+llvm::Value* castX2PNode::select(Selector* sel) {
   llvm::Value* res = sel->select_node(in(1));
   assert(res->getType()->isIntegerTy(), "not integer");
   res = sel->builder().CreateIntToPtr(res, sel->type(T_OBJECT));
@@ -1737,7 +1729,7 @@ llvm::Value* castX2PNode::select(Selector *sel) {
   return res;
 }
 
-llvm::Value* storeFNode::select(Selector *sel) {
+llvm::Value* storeFNode::select(Selector* sel) {
   int op_index = MemNode::Address + 1;
   llvm::Value* addr = sel->select_address(this);
   llvm::Value* value = sel->select_node(in(op_index++));
@@ -1746,7 +1738,7 @@ llvm::Value* storeFNode::select(Selector *sel) {
   return NULL;
 }
 
-llvm::Value* MoveF2I_reg_regNode::select(Selector *sel) {
+llvm::Value* MoveF2I_reg_regNode::select(Selector* sel) {
   llvm::Value* val = sel->select_node(in(1));
   return sel->builder().CreateBitCast(val, sel->type(T_INT));
 }
@@ -1758,7 +1750,7 @@ llvm::Value* mergeF_reg_regNode::select(Selector* sel) {
   return sel->builder().CreateSelect(pred, v2, v1);
 }
 
-llvm::Value* maxI_rRegNode::select(Selector *sel) {
+llvm::Value* maxI_rRegNode::select(Selector* sel) {
   llvm::Value* a = sel->select_node(in(1));
   llvm::Value* b = sel->select_node(in(2));
   llvm::Value* pred = sel->builder().CreateICmpSLE(a, b);
@@ -1993,7 +1985,7 @@ llvm::Value* loadSNode::select(Selector* sel) {
   return sel->builder().CreateSExt(res, sel->type(T_INT));  
 }
 
-llvm::Value* andnL_rReg_rReg_rReg_0Node::select(Selector *sel) {
+llvm::Value* andnL_rReg_rReg_rReg_0Node::select(Selector* sel) {
   llvm::Value* a = sel->select_node(in(1));
   a = sel->builder().CreateNot(a);
   llvm::Value* b = sel->select_node(in(2));
@@ -2026,6 +2018,34 @@ llvm::Value* vadd2FNode::select(Selector* sel) {
   llvm::Value* src1 = sel->select_node(in(1));
   llvm::Value* src2 = sel->select_node(in(2));
   return sel->call_C((void *)vadd2f, sel->type(T_LONG), { src1, src2 });
+}
+
+llvm::Value* MoveI2F_reg_regNode::select(Selector* sel) {
+  llvm::Value* val = sel->select_node(in(1));
+  return sel->builder().CreateBitCast(val, sel->type(T_FLOAT));
+}
+
+llvm::Value* andnI_rReg_rReg_rRegNode::select(Selector* sel) {
+  llvm::Value* a = sel->select_node(in(1));
+  llvm::Value* b = sel->select_node(in(2));
+  b = sel->builder().CreateNot(b);
+  return sel->builder().CreateAnd(a, b);
+}
+
+llvm::Value* storeImmD0Node::select(Selector* sel) {
+  llvm::Value* addr = sel->select_address(this);
+  sel->store(sel->null(T_DOUBLE), addr);
+  return NULL;
+}
+
+llvm::Value* convD2L_reg_regNode::select(Selector* sel) {
+  llvm::Value* val = sel->select_node(in(1));
+  return sel->builder().CreateFPToSI(val, sel->type(T_LONG));
+}
+
+llvm::Value* convF2L_reg_regNode::select(Selector* sel) {
+  llvm::Value* val = sel->select_node(in(1));
+  return sel->builder().CreateFPToSI(val, sel->type(T_LONG));
 }
 
 llvm::Value* loadI2UBNode::select(Selector* sel){
@@ -2097,10 +2117,6 @@ llvm::Value* storeTLABendNode::select(Selector* sel){
 }
 
 llvm::Value* storeImmCM0Node::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* storeImmD0Node::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
@@ -2428,10 +2444,6 @@ llvm::Value* andI2L_rReg_imm65535Node::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
-llvm::Value* andnI_rReg_rReg_rRegNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
 llvm::Value* andnI_rReg_rReg_rReg_0Node::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
@@ -2544,14 +2556,6 @@ llvm::Value* roundDouble_nopNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
-llvm::Value* convF2L_reg_regNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* convD2L_reg_regNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
 llvm::Value* convL2F_reg_regNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
@@ -2561,14 +2565,6 @@ llvm::Value* dummy_convI2L2INode::select(Selector* sel){
 }
 
 llvm::Value* convL2I2LNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* MoveI2F_reg_regNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* string_indexofNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 

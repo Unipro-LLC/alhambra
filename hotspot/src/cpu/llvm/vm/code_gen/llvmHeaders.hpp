@@ -79,7 +79,6 @@ using LocationAccessor = StackMapParser::LocationAccessor;
 using ConstantAccessor = StackMapParser::ConstantAccessor;
 using LocationKind = StackMapParser::LocationKind;
 using ExceptionInfo = std::vector<std::pair<llvm::BasicBlock*, int>>;
-using SwitchInfo = std::vector<std::vector<llvm::BasicBlock*>>;
 
 #ifdef assert
   #undef assert

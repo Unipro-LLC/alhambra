@@ -50,18 +50,12 @@ MetadataReloc::MetadataReloc(size_t offset, uintptr_t con, LlvmCodeGen* cg): Con
   set_con_addr(con_addr);
 }
 
-SwitchReloc::SwitchReloc(size_t offset, SwitchInfo& si, LlvmCodeGen* cg): ConstReloc(offset) {
+
+SwitchReloc::SwitchReloc(size_t offset, std::vector<const llvm::BasicBlock*>& cases, LlvmCodeGen* cg): ConstReloc(offset) {
   auto& bo = cg->block_offsets();
   address con_addr = nullptr;
-  for (const std::vector<llvm::BasicBlock*>& bbs : si) {
-    size_t case_offset = (size_t)-1;
-    for (llvm::BasicBlock* bb : bbs) {
-      if (bo.count(bb)) {
-        case_offset = bo.at(bb);
-        break;
-      }
-    }
-    assert(case_offset != (size_t)-1, "case BasicBlock not found");
+  for (const llvm::BasicBlock* bb : cases) {
+    size_t case_offset = bo.count(bb) ? bo.at(bb) : 0;
     address addr = cg->masm()->address_constant(cg->masm()->addr_at(case_offset));
     con_addr = con_addr ? con_addr : addr;
     cg->cb()->consts()->relocate(addr, Relocation::spec_simple(relocInfo::internal_word_type));

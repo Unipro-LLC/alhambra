@@ -1028,6 +1028,8 @@ address InterpreterGenerator::generate_native_entry(bool synchronized) {
   // _do_not_unlock_if_synchronized to true. The remove_activation will
   // check this flag.
 
+  __ register_fix();
+
   const Address do_not_unlock_if_synchronized(r15_thread,
         in_bytes(JavaThread::do_not_unlock_if_synchronized_offset()));
   __ movbool(do_not_unlock_if_synchronized, true);
