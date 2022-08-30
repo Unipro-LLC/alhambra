@@ -1720,6 +1720,7 @@ void TemplateInterpreterGenerator::generate_throw_exception() {
   __ restore_bcp();    // r13 points to call/send
   __ restore_locals();
   __ reinit_heapbase();  // restore r12 as heapbase.
+  __ register_fix();
   // Entry point for exceptions thrown within interpreter code
   Interpreter::_throw_exception_entry = __ pc();
   // expression stack is undefined here

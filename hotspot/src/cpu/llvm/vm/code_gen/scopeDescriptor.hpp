@@ -6,9 +6,7 @@
 
 #include "scopeInfo_llvm.hpp"
 
-namespace llvm {
-  class Value;
-}
+#include "llvmHeaders.hpp"
 
 class LlvmCodeGen;
 class DebugInfo;
@@ -50,6 +48,7 @@ private:
   void add_statepoint_arg(std::vector<llvm::Value*>& args, NodeInfo* ni);
   bool empty_loc(Node* n) const;
   bool con_loc(Node* n) const;
+  int stack_offset(LocationAccessor la);
 };
 
 #endif //CPU_LLVM_VM_CODE_GEN_SCOPEDESCRIPTOR_HPP

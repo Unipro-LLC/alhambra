@@ -22,7 +22,6 @@ struct RethrowDebugInfo;
 struct TailJumpDebugInfo;
 struct PatchBytesDebugInfo;
 struct ConstantDebugInfo;
-struct LoadConstantDebugInfo;
 struct OopDebugInfo;
 struct MetadataDebugInfo;
 struct OrigPCDebugInfo;
@@ -81,7 +80,6 @@ struct DebugInfo {
   virtual TailJumpDebugInfo* asTailJump() { return nullptr; }
   virtual PatchBytesDebugInfo* asPatchBytes() { return nullptr; }
   virtual ConstantDebugInfo* asConstant() { return nullptr; }
-  virtual LoadConstantDebugInfo* asLoadConstant() { return nullptr; }
   virtual OopDebugInfo* asOop() { return nullptr; }
   virtual MetadataDebugInfo* asMetadata() { return nullptr; }
   virtual OrigPCDebugInfo* asOrigPC() { return nullptr; }
@@ -166,14 +164,12 @@ struct PatchBytesDebugInfo : public DebugInfo {
 };
 
 struct ConstantDebugInfo : public DebugInfo {
+  const static uintptr_t MAGIC_NUMBER = (1UL << 32) - 1;
   ConstantDebugInfo(): DebugInfo() {}
   ConstantDebugInfo* asConstant() override { return this; }
   bool block_can_start() override { return true; }
-};
-
-struct LoadConstantDebugInfo : public ConstantDebugInfo {
-  LoadConstantDebugInfo(LlvmCodeGen* cg, size_t idx) : ConstantDebugInfo() {}
-  LoadConstantDebugInfo* asLoadConstant() override { return this; }
+  static uintptr_t encode(uintptr_t con) { return con + ((con & MAGIC_NUMBER) << 32); }
+  static uintptr_t decode(uintptr_t con) { return con - ((con & MAGIC_NUMBER) << 32); }
 };
 
 struct OopDebugInfo : public ConstantDebugInfo {

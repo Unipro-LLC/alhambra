@@ -85,6 +85,7 @@ void OopDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
   address pos = cg->addr(pc_offset);
   assert(mov(pos) && movabs(pos), "expected MOVABS REG, IMM");
   uintptr_t con = *(uintptr_t*)(pos + NativeMovConstReg::data_offset);
+  con = decode(con);
   Reloc* rel = new OopReloc(pc_offset, con, cg);
   cg->relocator().add(rel);
 }
@@ -93,6 +94,7 @@ void MetadataDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
   address pos = cg->addr(pc_offset);
   assert(mov(pos) && movabs(pos), "expected MOVABS REG, IMM");
   uintptr_t con = *(uintptr_t*)(pos + NativeMovConstReg::data_offset);
+  con = decode(con);
   Reloc* rel = new MetadataReloc(pc_offset, con, cg);
   cg->relocator().add(rel);
 }

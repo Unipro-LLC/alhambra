@@ -35,6 +35,7 @@ private:
   std::vector<llvm::BasicBlock*> _blocks;
   std::vector<std::pair<PhiNode*, llvm::PHINode*>> _phiNodeMap;
   std::vector<Node*> _oops;
+  std::vector<llvm::Instruction*> _narrow_oops;
   std::unordered_map<Node*, Node*> _derived_base;
   llvm::SmallVector<std::unique_ptr<CacheEntry>, 256> _cache;
   Block* _block;
@@ -64,7 +65,6 @@ public:
   void run();
 
   LlvmCodeGen* cg() { return _cg; }
-  const char* name() { return _name; }
   bool is_fast_compression() { return _is_fast_compression; }
   llvm::LLVMContext& ctx() { return _ctx; }
   llvm::Module* mod() { return _mod; }
@@ -95,6 +95,7 @@ public:
   llvm::Value* load(llvm::Value* addr, llvm::Type* ty);
   void store(llvm::Value* value, llvm::Value* addr);
   llvm::AtomicCmpXchgInst* cmpxchg(llvm::Value* addr, llvm::Value* cmp, llvm::Value* val);
+  llvm::Value* left_circular_shift(llvm::Value* arg, llvm::Value* shift, unsigned capacity);
   void replace_return_address(llvm::Value* new_addr);
   void stackmap(DebugInfo::Type type, size_t idx = 0, size_t patch_bytes = 0);
 
@@ -119,6 +120,8 @@ public:
   llvm::Value* decode_heap_oop(llvm::Value* narrow_oop, bool not_null);
   llvm::Value* encode_heap_oop(llvm::Value *oop, bool not_null);
   std::vector<Node*>& oops() { return _oops; }
+  std::vector<llvm::Instruction*>& narrow_oops() { return _narrow_oops; }
+  void locs_for_narrow_oops();
 
   void map_phi_nodes(PhiNode* opto_node, llvm::PHINode* llvm_node);
 };

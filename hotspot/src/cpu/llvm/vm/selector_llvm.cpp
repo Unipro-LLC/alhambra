@@ -21,6 +21,7 @@ void Selector::run() {
   prolog();
   select();
   complete_phi_nodes();
+  locs_for_narrow_oops();
   epilog();
 }
 
@@ -286,13 +287,14 @@ llvm::Value* Selector::select_oper_helper(const Type* ty, bool oop, bool narrow)
       }
     }
   }();
+  con = ConstantDebugInfo::encode(con);
   llvm::Value* addr = get_ptr(con, T_ADDRESS);
   consts().emplace(con, oop ? DebugInfo::Oop : DebugInfo::Metadata);
   BasicType bt = narrow ? T_LONG : (oop ? T_OBJECT : T_METADATA);
   llvm::Value* ret = load(addr, bt);
   if (narrow) {
     llvm::Value* shift = llvm::ConstantInt::get(ret->getType(), oop ? Universe::narrow_oop_shift() : Universe::narrow_klass_shift());
-    ret = builder().CreateAShr(ret, shift);
+    ret = builder().CreateLShr(ret, shift);
     ret = builder().CreateTrunc(ret, type(oop ? T_NARROWOOP : T_NARROWKLASS));
   }
   return ret;
@@ -541,6 +543,14 @@ llvm::AtomicCmpXchgInst* Selector::cmpxchg(llvm::Value* addr, llvm::Value* cmp, 
   return builder().CreateAtomicCmpXchg(addr, cmp, val, succ_ord, fail_ord);
 }
 
+llvm::Value* Selector::left_circular_shift(llvm::Value* arg, llvm::Value* shift, unsigned capacity) {
+  llvm::Value* size = builder().getIntN(capacity, capacity);
+  llvm::Value* shift2 = builder().CreateSub(size, shift);
+  llvm::Value* addend1 = builder().CreateShl(arg, shift);
+  llvm::Value* addend2 = builder().CreateLShr(arg, shift2);
+  return builder().CreateOr(addend1, addend2);
+}
+
 llvm::Value* Selector::loadKlass_not_null(llvm::Value* obj) {
   llvm::Value* klass_offset = builder().getInt64(oopDesc::klass_offset_in_bytes());
   llvm::Value* addr = gep(obj, klass_offset);
@@ -637,6 +647,91 @@ llvm::Value* Selector::encode_heap_oop(llvm::Value *oop, bool not_null) {
     narrow_oop = builder().CreateTrunc(narrow_oop, type(T_NARROWOOP));
     // mark_nptr(narrow_oop);
     return narrow_oop;
+  }
+}
+
+void Selector::locs_for_narrow_oops() {
+  llvm::DominatorTree DT(*func());
+  std::vector<llvm::Instruction*> narrow_oops_to_transform;
+  std::vector<std::vector<llvm::User*>> users_to_transform;
+  for (llvm::Instruction* narrow_oop : narrow_oops()) {
+    std::unordered_set<llvm::BasicBlock*> visited;
+    std::deque<llvm::BasicBlock*> to_visit;
+    bool to_transform = false;
+    for (llvm::User* user : narrow_oop->users()) {
+      bool found = false;
+      llvm::Instruction* inst = llvm::cast<llvm::Instruction>(user);
+      llvm::BasicBlock* bb = inst->getParent();
+      auto check_statepoint = [&](llvm::Instruction& inst) {
+        llvm::CallBase* call = llvm::dyn_cast<llvm::CallBase>(&inst);
+        found = call && !call->hasFnAttr("gc-leaf-function");
+        if (found) {
+          if (!to_transform) {
+            narrow_oops_to_transform.push_back(narrow_oop);
+            users_to_transform.emplace_back();
+            to_transform = true;
+          }
+          users_to_transform.back().push_back(user);
+        }
+      };
+      auto end_it = [&] {
+        if (bb == narrow_oop->getParent()) return narrow_oop->getReverseIterator();
+        if (llvm::PHINode* phi = llvm::dyn_cast<llvm::PHINode>(inst)) {
+          llvm::Value* val = llvm::cast<llvm::Value>(narrow_oop);
+          for (size_t i = 0; i < phi->getNumIncomingValues(); ++i) {
+            if (phi->getIncomingValue(i) == val) {
+              to_visit.push_back(phi->getIncomingBlock(i));
+            }
+          }
+          return inst->getReverseIterator();
+        }
+        for (llvm::BasicBlock* pred : llvm::predecessors(bb)) {
+          to_visit.push_back(pred);
+        }
+        return bb->rend();
+      } ();
+      for (auto it = inst->getReverseIterator(); !found && it != end_it; ++it) {
+        check_statepoint(*it);
+      }
+      while (!found && !to_visit.empty()) {
+        llvm::BasicBlock* bb = *(to_visit.rbegin());
+        to_visit.pop_back();
+        if (visited.count(bb)) continue;
+        if (!DT.dominates(narrow_oop, bb) && (bb != narrow_oop->getParent())) continue;
+        for (auto it = bb->rbegin(); !found && it != bb->rend(); ++it) {
+          check_statepoint(*it);
+        }
+        if (found) break;
+        visited.insert(bb);
+        for (llvm::BasicBlock* pred : llvm::predecessors(bb)) {
+          to_visit.push_back(pred);
+        }
+      }
+    }
+  }
+
+  for (size_t i = 0; i < narrow_oops_to_transform.size(); ++i) {
+    llvm::Instruction* narrow_oop = narrow_oops_to_transform[i];
+    llvm::BasicBlock* bb = narrow_oop->getParent();
+    auto insert_pt = llvm::isa<llvm::PHINode>(narrow_oop) ? bb->getFirstInsertionPt() : ++narrow_oop->getIterator();
+    builder().SetInsertPoint(bb, insert_pt);
+    llvm::Value* oop = decode_heap_oop(narrow_oop, false);
+    for (llvm::User* user : users_to_transform[i]) {
+      llvm::Instruction* inst = llvm::cast<llvm::Instruction>(user);
+      if (llvm::PHINode* phi = llvm::dyn_cast<llvm::PHINode>(inst)) {
+        for (size_t j = 0; j < phi->getNumIncomingValues(); ++j) {
+          if (llvm::cast<llvm::Instruction>(phi->getIncomingValue(j)) == narrow_oop) {
+            builder().SetInsertPoint(phi->getIncomingBlock(j)->getTerminator());
+            llvm::Value* new_use = encode_heap_oop(oop, false);
+            phi->setOperand(j, new_use);
+          }
+        }
+      } else {
+        builder().SetInsertPoint(inst);
+        llvm::Value* new_use = encode_heap_oop(oop, false);
+        user->replaceUsesOfWith(narrow_oop, new_use);
+      }
+    }
   }
 }
 

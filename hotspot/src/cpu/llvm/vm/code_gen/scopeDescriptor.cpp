@@ -16,7 +16,7 @@ void ScopeDescriptor::describe_scopes() {
     uint32_t gc_idx = deopt_cnt.getSmallConstant() + DEOPT_OFFSET;
     int la_idx = describe_scope(di);
     if (!C->has_method()) continue;
-    assert(la_idx == gc_idx, "gc locs start after deopt ones");
+    assert(la_idx == gc_idx, "sanity check");
     for (uint16_t i = gc_idx; i < record.getNumLocations(); i += 2) {
       int off[2];
       bool skip = false;
@@ -28,18 +28,20 @@ void ScopeDescriptor::describe_scopes() {
           break;
         }
         assert(la.getSizeInBytes() == cg()->selector().pointer_size() >> LogBytesPerWord, "only support singular locations");
-        if (la.getDwarfRegNum() == RSP) {
-          off[j] = la.getOffset();
-        } else {
-          assert(la.getDwarfRegNum() == RBP, "no other choice");
-          off[j] = la.getOffset() + cg()->stack().unext_offset();
-        }
+        off[j] = stack_offset(la);
       }
       if (skip) continue;
       // set_oop is called if arguments are equal
       di->oopmap->set_derived_oop(VMRegImpl::stack2reg(off[1] / BytesPerInt), VMRegImpl::stack2reg(off[0] / BytesPerInt));
     }
   }
+}
+
+int ScopeDescriptor::stack_offset(LocationAccessor la) {
+  assert(la.getKind() == LocationKind::Indirect, "these are values located on stack");
+  if (la.getDwarfRegNum() == RSP) return la.getOffset();
+  if (la.getDwarfRegNum() == RBP) return la.getOffset() + cg()->stack().unext_offset();
+  Unimplemented();
 }
 
 void ScopeDescriptor::fill_loc_array(GrowableArray<ScopeValue*> *array, const std::vector<std::unique_ptr<NodeInfo>>& src, SafePointDebugInfo* di, int& la_idx) {
@@ -102,15 +104,14 @@ bool ScopeDescriptor::fill_loc_array_helper(GrowableArray<ScopeValue*> *array, N
               return it != oops.end() ? Location::oop : Location::normal;
           }
         } ();
-        if (la.getDwarfRegNum() == RSP) {
-          Location loc = Location::new_stk_loc(type, la.getOffset());
-          return (ScopeValue*)new LocationValue(loc);
-        }
-        if (la.getDwarfRegNum() == RBP) {
-          Location loc = Location::new_stk_loc(type, la.getOffset() + cg()->stack().unext_offset());
-          return (ScopeValue*)new LocationValue(loc);
-        }
-        Unimplemented();
+        int offset = stack_offset(la);
+        // std::vector<Node*>& narrow_oops = cg()->selector().narrow_oops();
+        // if (std::find(narrow_oops.begin(), narrow_oops.end(), n) != narrow_oops.end()) {
+        //   assert(type == Location::narrowoop, "sanity check");
+        //   di->oopmap->set_narrowoop(VMRegImpl::stack2reg(offset / BytesPerInt));
+        // }
+        Location loc = Location::new_stk_loc(type, offset);
+        return (ScopeValue*)new LocationValue(loc); 
       } else if (lk == LocationKind::Constant || lk == LocationKind::ConstantIndex) {
         return con_value(t, largeType);
       }

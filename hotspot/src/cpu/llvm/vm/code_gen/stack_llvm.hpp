@@ -9,10 +9,10 @@ namespace llvm {
 
 class LlvmCodeGen;
 
-//                                                                                      SP
-//                                                                                      v
-// prev sp|arg spills(?)|ret_addr|FP|tail jump(optional)|orig_pc|mon0|...|mon_n-1|spills|
-//        |                                  frame_size                                 |
+//                                                                        SP
+//                                                                        v
+// prev sp|ret_addr|FP|tail jump(optional)|orig_pc|mon0|...|mon_n-1|spills|
+//        |                                  frame_size                   |
 
 
 class LlvmStack {

@@ -4289,6 +4289,7 @@ void OptoRuntime::generate_exception_blob() {
   // handle_exception call, since we do not want to make any assumption
   // about the size of the frame where the exception happened in.
   // c_rarg0 is either rdi (Linux) or rcx (Windows).
+  __ register_fix();
   __ movptr(Address(r15_thread, JavaThread::exception_oop_offset()),rax);
   __ movptr(Address(r15_thread, JavaThread::exception_pc_offset()), rdx);
 

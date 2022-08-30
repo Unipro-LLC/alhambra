@@ -413,7 +413,7 @@ static Node *transform_long_divide( PhaseGVN *phase, Node *dividend, jlong divis
     //   "Division by Invariant Integers using Multiplication"
     //     by Granlund and Montgomery
     // See also "Hacker's Delight", chapter 10 by Warren.
-
+#ifndef LLVM
     jlong magic_const;
     jint shift_const;
     if (magic_long_divide_constants(d, magic_const, shift_const)) {
@@ -447,8 +447,8 @@ static Node *transform_long_divide( PhaseGVN *phase, Node *dividend, jlong divis
       // from the mul_hi.
       q = new (phase->C) SubLNode(addend0, addend1);
     }
+#endif
   }
-
   return q;
 }
 

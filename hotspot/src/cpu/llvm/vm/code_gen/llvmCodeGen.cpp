@@ -224,9 +224,6 @@ void LlvmCodeGen::process_asm_info(int vep_offset) {
       const llvm::BasicBlock* bb = block_info->Block;
       if (bb) {
         di->asBlockStart()->bb = bb;
-        if (block_offsets().count(bb)) {
-          _has_dual_switch_block = true;
-        }
         block_offsets().emplace(bb, offset);
       }
     } else if (llvm::ConstantOffsetInfo* constant_info = info->asConstant()) {

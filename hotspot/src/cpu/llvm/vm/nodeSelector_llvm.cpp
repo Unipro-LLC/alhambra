@@ -308,17 +308,13 @@ llvm::Value* PhiNode::select(Selector* sel) {
   llvm::Type* data_type = sel->type(bt);
   llvm::PHINode* phi = sel->builder().CreatePHI(data_type, sel->block()->num_preds());
   sel->map_phi_nodes(this, phi);
-  ///TODO: this might need to be fixed when the time for gc implementation comes
+  
   if (type()->isa_oopptr() != NULL) {
     if (type()->is_oopptr()->offset() == 0) {
       sel->oops().push_back(this);
-    } else {
-      // Node* base = sel->find_derived_base(this);
-      // llvm::Value* base_op = base == this ? phi : sel->select_node(base);
-      // sel->mark_dptr(phi, base_op);
     }
   } else if (is_narrow_oop) {
-    // sel->mark_nptr(phi);
+    sel->narrow_oops().push_back(llvm::cast<llvm::Instruction>(phi));
   }
   return phi;
 }
@@ -370,10 +366,7 @@ llvm::Value* storeImmL0Node::select(Selector* sel) {
 llvm::Value* loadNNode::select(Selector* sel) {
   llvm::Value* addr = sel->select_address(this);
   llvm::Value* res = sel->load(addr, T_NARROWOOP);
-  assert(bottom_type()->isa_narrowoop(), "check");
-  if (bottom_type()->isa_narrowoop() != NULL) {
-    // sel->mark_nptr(res);
-  }
+  sel->narrow_oops().push_back(llvm::cast<llvm::Instruction>(res));
   return res;
 }
 
@@ -1302,7 +1295,9 @@ llvm::Value* salL_index_rReg_immNode::select(Selector* sel) {
 llvm::Value* loadConNNode::select(Selector* sel) {
   assert(opnd_array(1)->type()->basic_type() == T_NARROWOOP,"type check");
   llvm::Value* con = sel->select_oper(opnd_array(1));
-  // sel->mark_nptr(con);
+  if (opnd_array(1)->type()->is_narrowoop()->get_con() != 0) {
+    sel->narrow_oops().push_back(llvm::cast<llvm::Instruction>(con));
+  }
   return con;
 }
 
@@ -1407,7 +1402,6 @@ llvm::Value* compareAndSwapNNode::select(Selector* sel) {
   res = sel->builder().CreateZExt(res, sel->type(T_INT));
   return res;
 }
-
 
 llvm::Value* cmpL_reg_regNode::select(Selector* sel) {
   llvm::Value* a = sel->select_node(in(1));
@@ -1678,7 +1672,6 @@ jint indexOf_C(jchar* source, jint sourceOffset, jint sourceCount,
     return -1;
 }
 
-
 llvm::Value* string_indexof_conNode::select(Selector* sel) {
   llvm::Value* str1 = sel->select_node(in(2));
   llvm::Value* str2 = sel->select_node(in(4));
@@ -1690,7 +1683,6 @@ llvm::Value* string_indexof_conNode::select(Selector* sel) {
 }
 
 llvm::Value* string_indexofNode::select(Selector* sel) {
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
   llvm::Value* str1 = sel->select_node(in(2));
   llvm::Value* str2 = sel->select_node(in(4));
   llvm::Value* cnt1 = sel->select_node(in(3));
@@ -1769,8 +1761,8 @@ llvm::Value* mergeP_reg_regNode::select(Selector* sel) {
   unsigned as1 = llvm::cast<llvm::PointerType>(v1->getType())->getAddressSpace();
   llvm::Value* v2 = sel->select_node(in(3));
   unsigned as2 = llvm::cast<llvm::PointerType>(v2->getType())->getAddressSpace();
-  // as = 1 if gc pointer, 0 raw pointer
-  // we cast rawptr to gcptr, otherwise gcptr may die here
+  // as = 1 if oop, 0 raw pointer
+  // we cast rawptr to oop, otherwise oop may die here
   if (as2 < as1) {
     v2 = sel->builder().CreatePointerCast(v2, v1->getType());
   } else {
@@ -1781,8 +1773,6 @@ llvm::Value* mergeP_reg_regNode::select(Selector* sel) {
   if (bottom_type()->isa_oopptr() != NULL) {
     if (bottom_type()->isa_oopptr()->offset() == 0) {
       sel->oops().push_back(this);
-    } else {
-      // TODO:: DERIVED OOP
     }
   }
 
@@ -1886,7 +1876,6 @@ llvm::Value* MoveL2D_reg_regNode::select(Selector* sel) {
   return sel->builder().CreateBitCast(val, sel->type(T_DOUBLE));
 }
 
-
 llvm::Value* sarL_rReg_CLNode::select(Selector* sel) {
   llvm::Value* a = sel->select_node(in(1));
   llvm::Value* b = sel->select_node(in(2));
@@ -1896,7 +1885,6 @@ llvm::Value* sarL_rReg_CLNode::select(Selector* sel) {
   }
   return sel->builder().CreateAShr(a, b);
 }
-
 
 llvm::Value* divL_rRegNode::select(Selector* sel) {
   llvm::Value* a = sel->select_node(in(1));
@@ -1978,7 +1966,6 @@ llvm::Value* Repl2FNode::select(Selector* sel) {
   return sel->builder().CreateAdd(tmp, tmp2);
 }
 
-
 llvm::Value* loadSNode::select(Selector* sel) {
   llvm::Value* addr = sel->select_address(this);
   llvm::Value* res = sel->load(addr, T_SHORT);
@@ -2010,7 +1997,7 @@ long vadd2f(long l1, long l2) {
   long r;
   float *rp = (float*)&r, *l1p = (float*)&l1, *l2p = (float*)&l2;
   *rp++ = (*l1p++) + (*l2p++);
-  *rp++ = (*l1p) + (*l2p);
+  *rp = (*l1p) + (*l2p);
   return r;
 }
 
@@ -2046,6 +2033,71 @@ llvm::Value* convD2L_reg_regNode::select(Selector* sel) {
 llvm::Value* convF2L_reg_regNode::select(Selector* sel) {
   llvm::Value* val = sel->select_node(in(1));
   return sel->builder().CreateFPToSI(val, sel->type(T_LONG));
+}
+
+llvm::Value* divL_rReg_immNode::select(Selector* sel) {
+  llvm::Value* a = sel->select_node(in(1));
+  llvm::Value* b = sel->select_oper(opnd_array(2));
+  return sel->builder().CreateSDiv(a, b);
+}
+
+llvm::Value* cmpL3_reg_regNode::select(Selector* sel) {
+  llvm::Value* left = sel->select_node(in(1));
+  llvm::Value* right = sel->select_node(in(2));
+  llvm::Value* eq = sel->builder().CreateICmpEQ(left, right);
+  llvm::Value* less = sel->builder().CreateICmpSLT(left, right);
+  llvm::Value* merge = sel->builder().CreateSelect(eq, sel->null(T_INT), sel->builder().getInt32(1));
+  return sel->builder().CreateSelect(eq, sel->builder().getInt32(-1), merge);
+}
+
+llvm::Value* cmpF3_regNode::select(Selector* sel) {
+  llvm::Value* left = sel->select_node(in(1));
+  llvm::Value* right = sel->select_node(in(2));
+  llvm::Value* eq = sel->builder().CreateFCmpUEQ(left, right);
+  llvm::Value* less = sel->builder().CreateFCmpULT(left, right);
+  llvm::Value* merge = sel->builder().CreateSelect(eq, sel->null(T_INT), sel->builder().getInt32(1));
+  return sel->builder().CreateSelect(eq, sel->builder().getInt32(-1), merge);
+}
+
+llvm::Value* cmpF3_immNode::select(Selector* sel) {
+  llvm::Value* left = sel->select_node(in(1));
+  llvm::Value* right = sel->select_oper(opnd_array(2));
+  llvm::Value* eq = sel->builder().CreateFCmpUEQ(left, right);
+  llvm::Value* less = sel->builder().CreateFCmpULT(left, right);
+  llvm::Value* merge = sel->builder().CreateSelect(eq, sel->null(T_INT), sel->builder().getInt32(1));
+  return sel->builder().CreateSelect(eq, sel->builder().getInt32(-1), merge);
+}
+
+llvm::Value* rolI_rReg_i8_0Node::select(Selector* sel) {
+  llvm::Value* arg = sel->select_node(in(1));
+  llvm::Value* shift = sel->select_oper(opnd_array(3));
+  return sel->left_circular_shift(arg, shift, 32);
+}
+
+llvm::Value* rolI_rReg_i8Node::select(Selector* sel) {
+  llvm::Value* arg = sel->select_node(in(1));
+  llvm::Value* shift = sel->select_oper(opnd_array(2));
+  return sel->left_circular_shift(arg, shift, 32);
+}
+
+llvm::Value* andnI_rReg_rReg_rReg_0Node::select(Selector* sel) {
+  llvm::Value* a = sel->select_node(in(1));
+  a = sel->builder().CreateNot(a);
+  llvm::Value* b = sel->select_node(in(2));
+  return sel->builder().CreateAnd(a, b);
+}
+
+llvm::Value* loadV4Node::select(Selector* sel) {
+  llvm::Value* addr = sel->select_address(this);
+  return sel->load(addr, T_LONG);
+}
+
+llvm::Value* storeV4Node::select(Selector* sel) {
+  int op_index = MemNode::Address + 1;
+  llvm::Value* addr = sel->select_address(this);
+  llvm::Value* value = sel->select_node(in(op_index++));
+  sel->store(value, addr);
+  return NULL;
 }
 
 llvm::Value* loadI2UBNode::select(Selector* sel){
@@ -2232,10 +2284,6 @@ llvm::Value* divI_rReg_immNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
-llvm::Value* divL_rReg_immNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
 llvm::Value* modI_rReg_immNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
@@ -2249,14 +2297,6 @@ llvm::Value* rolI_rReg_i1Node::select(Selector* sel){
 }
 
 llvm::Value* rolI_rReg_i1_0Node::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* rolI_rReg_i8Node::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* rolI_rReg_i8_0Node::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
@@ -2444,10 +2484,6 @@ llvm::Value* andI2L_rReg_imm65535Node::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
-llvm::Value* andnI_rReg_rReg_rReg_0Node::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
 llvm::Value* ornI_rReg_rReg_rRegNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
@@ -2509,14 +2545,6 @@ llvm::Value* cadd_cmpLTMask_2Node::select(Selector* sel){
 }
 
 llvm::Value* and_cmpLTMask_0Node::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* cmpF3_regNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* cmpF3_immNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
@@ -2612,10 +2640,6 @@ llvm::Value* overflowNegL_rRegNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
-llvm::Value* cmpL3_reg_regNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
 llvm::Value* maxI_rReg_immNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
@@ -2662,14 +2686,6 @@ llvm::Value* sqrtD_regNode::select(Selector* sel){
 }
 
 llvm::Value* sqrtD_immNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* loadV4Node::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* storeV4Node::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
