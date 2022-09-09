@@ -2100,6 +2100,12 @@ llvm::Value* storeV4Node::select(Selector* sel) {
   return NULL;
 }
 
+llvm::Value* logD_regNode::select(Selector* sel) {
+  llvm::Value* x = sel->select_node(in(1));
+  auto log = static_cast<double (*) (double)>(std::log);
+  return sel->call_C((void *)log, sel->type(T_DOUBLE), { x });
+}
+
 llvm::Value* loadI2UBNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
@@ -2565,10 +2571,6 @@ llvm::Value* sinD_regNode::select(Selector* sel){
 }
 
 llvm::Value* log10D_regNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* logD_regNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
