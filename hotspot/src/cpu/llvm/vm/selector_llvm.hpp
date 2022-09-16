@@ -31,7 +31,6 @@ private:
   llvm::Module* _mod;
   llvm::Function* _func;
   llvm::IRBuilder<> _builder;
-  llvm::Value* _thread = nullptr;
   std::vector<llvm::BasicBlock*> _blocks;
   std::vector<std::pair<PhiNode*, llvm::PHINode*>> _phiNodeMap;
   std::vector<Node*> _oops;
@@ -73,7 +72,7 @@ public:
   Block* block() { return _block; }
   llvm::BasicBlock* basic_block() { return basic_block(block()); }
   llvm::BasicBlock* basic_block(Block* block) { return _blocks[block->_pre_order - 1]; }
-  llvm::Value* thread() const { return _thread; }
+  llvm::Value* thread();
   unsigned pointer_size() const { return _pointer_size; }
   std::unordered_map<llvm::BasicBlock*, ExceptionInfo>& exception_info() { return _exception_info; }
   std::unordered_map<uintptr_t, DebugInfo::Type>& consts() { return _consts; }

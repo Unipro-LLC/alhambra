@@ -105,9 +105,10 @@ void LlvmCodeGen::process_object_file(const llvm::object::ObjectFile& obj_file, 
           llvm::object::symbol_iterator SI = Reloc.getSymbol();
           llvm::Expected<llvm::object::section_iterator> SymSI = SI->getSection();
           assert(SymSI, "section not found");
-          llvm::Expected<llvm::StringRef> SecData = (*SymSI)->getName();
+          llvm::object::section_iterator& SecIt = *SymSI;
+          llvm::Expected<llvm::StringRef> SecData = SecIt->getName();
           assert(SecData, "invalid section name");
-          llvm::Expected<llvm::StringRef> Value = (*SymSI)->getContents();
+          llvm::Expected<llvm::StringRef> Value = SecIt->getContents();
           assert(Value, "invalid section contents");
           llvm::Expected<int64_t> Addend = Reloc.getAddend();
           assert(Addend, "addend not found");

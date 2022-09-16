@@ -94,8 +94,6 @@ class MacroAssembler: public Assembler {
  public:
   MacroAssembler(CodeBuffer* code) : Assembler(code) {}
 
-  void register_fix();
-  void heapbase_fix();
   void generate_unverified_entry();
   void generate_osr_entry();
   // Support for NULL-checks

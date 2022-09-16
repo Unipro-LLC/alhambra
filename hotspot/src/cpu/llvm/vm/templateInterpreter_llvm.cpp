@@ -168,7 +168,6 @@ address TemplateInterpreterGenerator::generate_continuation_for(TosState state) 
 
 address TemplateInterpreterGenerator::generate_return_entry_for(TosState state, int step, size_t index_size) {
   address entry = __ pc();
-  __ register_fix();
   // Restore stack bottom in case i2c adjusted stack
   __ movptr(rsp, Address(rbp, frame::interpreter_frame_last_sp_offset * wordSize));
   // and NULL it as marker that esp is now tos until next java call
@@ -1028,8 +1027,6 @@ address InterpreterGenerator::generate_native_entry(bool synchronized) {
   // _do_not_unlock_if_synchronized to true. The remove_activation will
   // check this flag.
 
-  __ register_fix();
-
   const Address do_not_unlock_if_synchronized(r15_thread,
         in_bytes(JavaThread::do_not_unlock_if_synchronized_offset()));
   __ movbool(do_not_unlock_if_synchronized, true);
@@ -1423,8 +1420,6 @@ address InterpreterGenerator::generate_normal_entry(bool synchronized) {
                                    ConstMethod::size_of_parameters_offset());
   const Address size_of_locals(rdx, ConstMethod::size_of_locals_offset());
 
-  __ register_fix();
-
   // get parameter size (always needed)
   __ movptr(rdx, constMethod);
   __ load_unsigned_short(rcx, size_of_parameters);
@@ -1720,7 +1715,6 @@ void TemplateInterpreterGenerator::generate_throw_exception() {
   __ restore_bcp();    // r13 points to call/send
   __ restore_locals();
   __ reinit_heapbase();  // restore r12 as heapbase.
-  __ register_fix();
   // Entry point for exceptions thrown within interpreter code
   Interpreter::_throw_exception_entry = __ pc();
   // expression stack is undefined here

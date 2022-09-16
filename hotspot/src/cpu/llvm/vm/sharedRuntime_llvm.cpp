@@ -2048,8 +2048,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
                                        oop_handle_offset, oop_maps, in_regs, in_sig_bt);
   }
 
-  __ register_fix();
-
   //
   // We immediately shuffle the arguments so that any vm call we have to
   // make from here on out (sync slow path, jvmti, etc.) we will have
@@ -3646,7 +3644,6 @@ void SharedRuntime::generate_uncommon_trap_blob() {
   // runtime expects it.
   __ movl(c_rarg1, j_rarg0);
 
-  __ register_fix();
   __ set_last_Java_frame(noreg, noreg, NULL);
 
   // Call C code.  Need thread but NOT official VM entry
@@ -3839,7 +3836,6 @@ SafepointBlob* SharedRuntime::generate_handler_blob(address call_ptr, int poll_t
   // address of the call in order to generate an oopmap. Hence, we do all the
   // work outselves.
 
-  __ register_fix();
   __ set_last_Java_frame(noreg, noreg, NULL);
 
   // The return address must always be correct so that frame constructor never
@@ -3915,8 +3911,6 @@ RuntimeStub* SharedRuntime::generate_resolve_blob(address destination, const cha
   int start = __ offset();
 
   map = RegisterSaver::save_live_registers(masm, 0, &frame_size_in_words);
-  
-  __ register_fix();
 
   int frame_complete = __ offset();
 
@@ -4289,7 +4283,6 @@ void OptoRuntime::generate_exception_blob() {
   // handle_exception call, since we do not want to make any assumption
   // about the size of the frame where the exception happened in.
   // c_rarg0 is either rdi (Linux) or rcx (Windows).
-  __ register_fix();
   __ movptr(Address(r15_thread, JavaThread::exception_oop_offset()),rax);
   __ movptr(Address(r15_thread, JavaThread::exception_pc_offset()), rdx);
 

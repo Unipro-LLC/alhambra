@@ -30,13 +30,16 @@ void Selector::prolog() {
   llvm::Value* FP = builder().CreateIntrinsic(llvm::Intrinsic::frameaddress, { type(T_ADDRESS) }, { null(T_INT) });
   stack.set_FP(FP);
 
-  _thread = call_C((void*)os::thread_local_storage_at, type(T_ADDRESS), { builder().getInt32(ThreadLocalStorage::thread_index()) });
-
   size_t alloc_size = stack.calc_alloc();
   builder().CreateAlloca(type(T_BYTE), builder().getInt32(alloc_size));
 
   Block* block = C->cfg()->get_root_block();
   builder().CreateBr(basic_block(block));
+}
+
+llvm::Value* Selector::thread() {
+  llvm::Value* thread = builder().CreateIntrinsic(llvm::Intrinsic::alhm_get_global_var_thread, type(T_LONG), {});
+  return builder().CreateIntToPtr(thread, type(T_ADDRESS));
 }
 
 void Selector::select() {
