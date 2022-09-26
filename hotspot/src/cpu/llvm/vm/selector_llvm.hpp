@@ -95,7 +95,6 @@ public:
   void store(llvm::Value* value, llvm::Value* addr);
   llvm::AtomicCmpXchgInst* cmpxchg(llvm::Value* addr, llvm::Value* cmp, llvm::Value* val);
   llvm::Value* left_circular_shift(llvm::Value* arg, llvm::Value* shift, unsigned capacity);
-  void replace_return_address(llvm::Value* new_addr);
   void stackmap(DebugInfo::Type type, size_t idx = 0, size_t patch_bytes = 0);
 
   llvm::Value* select_node(Node* node);

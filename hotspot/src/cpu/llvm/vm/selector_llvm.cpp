@@ -391,11 +391,6 @@ void Selector::select_if(llvm::Value *pred, Node* node) {
   builder().CreateCondBr(pred, target_bb, fallthr_bb/*, Weights*/);
 }
 
-void Selector::replace_return_address(llvm::Value* new_addr) {
-  llvm::Value* addr = builder().CreateIntrinsic(llvm::Intrinsic::addressofreturnaddress, { type(T_ADDRESS) }, {});
-  store(new_addr, addr);
-}
-
 std::vector<llvm::Type*> Selector::types(const std::vector<llvm::Value*>& v) const {
   std::vector<llvm::Type*> ret;
   ret.reserve(v.size());

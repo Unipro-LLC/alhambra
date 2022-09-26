@@ -19,6 +19,7 @@ std::unique_ptr<DebugInfo> DebugInfo::create(uint64_t id, LlvmCodeGen* cg) {
     case StaticCall: return std::make_unique<StaticCallDebugInfo>(pi);
     case DynamicCall: return std::make_unique<DynamicCallDebugInfo>(pi);
     case Rethrow: return std::make_unique<RethrowDebugInfo>(pi);
+    case TailCall: return std::make_unique<TailCallDebugInfo>(pi);
     case TailJump: return std::make_unique<TailJumpDebugInfo>(pi);
     case PatchBytes: return std::make_unique<PatchBytesDebugInfo>();
     case Oop: return std::make_unique<OopDebugInfo>();
@@ -128,7 +129,7 @@ void TailJumpDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
   patch(pos, JMPQ_R10);
 }
 
-void RethrowDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
+void SimpleTailJumpDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
   // [nop*4|add rsp, pop rbp, etc. |retq|
   // [add rsp, pop rbp, etc.| jmpq dest |
   size_t pb = patch_info->size;
@@ -148,7 +149,7 @@ void RethrowDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
   } while (++pos != (retq_addr - pb));
   size_t rel_off = pos - code_start;
   *(pos++) = NativeJump::instruction_code;
-  *(uint32_t*)pos = OptoRuntime::rethrow_stub() - (pos + sizeof(uint32_t));
+  *(uint32_t*)pos = target - (pos + sizeof(uint32_t));
 
   CallReloc* rel = new CallReloc(rel_off, this);
   cg->relocator().add(rel);

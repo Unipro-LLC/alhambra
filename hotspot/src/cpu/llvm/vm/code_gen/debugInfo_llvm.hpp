@@ -5,6 +5,7 @@
 #include <memory>
 
 #include "opto/compile.hpp"
+#include "opto/runtime.hpp"
 
 #include "llvmHeaders.hpp"
 
@@ -18,8 +19,10 @@ struct JavaCallDebugInfo;
 struct StaticCallDebugInfo;
 struct DynamicCallDebugInfo;
 struct BlockStartDebugInfo;
+struct SimpleTailJumpDebugInfo;
 struct RethrowDebugInfo;
 struct TailJumpDebugInfo;
+struct TailCallDebugInfo;
 struct PatchBytesDebugInfo;
 struct ConstantDebugInfo;
 struct OopDebugInfo;
@@ -41,6 +44,7 @@ struct DebugInfo {
     BlockStart, 
     Rethrow, 
     TailJump, 
+    TailCall, 
     PatchBytes, 
     Oop, 
     Metadata, 
@@ -76,8 +80,10 @@ struct DebugInfo {
   virtual StaticCallDebugInfo* asStaticCall() { return nullptr; }
   virtual DynamicCallDebugInfo* asDynamicCall() { return nullptr; }
   virtual BlockStartDebugInfo* asBlockStart() { return nullptr; }
+  virtual SimpleTailJumpDebugInfo* asSimpleTailJump() { return nullptr; }
   virtual RethrowDebugInfo* asRethrow() { return nullptr; }
   virtual TailJumpDebugInfo* asTailJump() { return nullptr; }
+  virtual TailCallDebugInfo* asTailCall() { return nullptr; }
   virtual PatchBytesDebugInfo* asPatchBytes() { return nullptr; }
   virtual ConstantDebugInfo* asConstant() { return nullptr; }
   virtual OopDebugInfo* asOop() { return nullptr; }
@@ -139,13 +145,20 @@ struct BlockStartDebugInfo : public DebugInfo {
   Type type() override { return BlockStart; }
   bool block_start() override { return true; }
 };
-struct RethrowDebugInfo : public DebugInfo {
+struct SimpleTailJumpDebugInfo : public DebugInfo {
   PatchInfo* patch_info;
-  RethrowDebugInfo(PatchInfo* pi): DebugInfo(), patch_info(pi) {}
-  RethrowDebugInfo* asRethrow() override { return this; }
-  Type type() override { return Rethrow; }
+  address target;
+  SimpleTailJumpDebugInfo(PatchInfo* pi, address dest): DebugInfo(), patch_info(pi), target(dest) {}
+  SimpleTailJumpDebugInfo* asSimpleTailJump() { return this; }
   void handle(size_t idx, LlvmCodeGen* cg) override;
 };
+
+struct RethrowDebugInfo : public SimpleTailJumpDebugInfo {
+  RethrowDebugInfo(PatchInfo* pi): SimpleTailJumpDebugInfo(pi, OptoRuntime::rethrow_stub()) {}
+  RethrowDebugInfo* asRethrow() override { return this; }
+  Type type() override { return Rethrow; }
+};
+
 struct TailJumpDebugInfo : public DebugInfo {
   PatchInfo* patch_info;
   static std::vector<byte> MOV_RDX;
@@ -156,6 +169,13 @@ struct TailJumpDebugInfo : public DebugInfo {
   Type type() override { return TailJump; }
   void handle(size_t idx, LlvmCodeGen* cg) override;
 };
+
+struct TailCallDebugInfo : public SimpleTailJumpDebugInfo {
+  TailCallDebugInfo(PatchInfo* pi): SimpleTailJumpDebugInfo(pi, StubRoutines::forward_exception_entry()) {}
+  TailCallDebugInfo* asTailCall() override { return this; }
+  Type type() override { return TailCall; }
+};
+
 struct PatchBytesDebugInfo : public DebugInfo {
   PatchBytesDebugInfo(): DebugInfo() {}
   PatchBytesDebugInfo* asPatchBytes() override { return this; }
@@ -185,6 +205,7 @@ struct MetadataDebugInfo : public ConstantDebugInfo {
   Type type() override { return Metadata; }
   void handle(size_t idx, LlvmCodeGen* cg) override;
 };
+
 struct OrigPCDebugInfo : public ConstantDebugInfo {
   const static uintptr_t MAGIC_NUMBER = 0xdeadbeefdeadbeef;
   OrigPCDebugInfo(): ConstantDebugInfo() {}

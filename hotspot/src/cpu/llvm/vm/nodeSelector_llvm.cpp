@@ -108,18 +108,20 @@ llvm::Value* loadConPNode::select(Selector* sel) {
 }
 
 llvm::Value* TailCalljmpIndNode::select(Selector* sel) {
-  llvm::Value* target_pc = sel->select_node(in(TypeFunc::Parms));
-  sel->replace_return_address(target_pc);
-  ///TODO: there should be jump instead of return, as the return address should be preserved on stack
+  uint32_t patch_bytes = NativeJump::instruction_size - NativeReturn::instruction_size;
+  sel->stackmap(DebugInfo::PatchBytes, 0, patch_bytes);
+  sel->patch_info().emplace(DebugInfo::id(DebugInfo::TailCall), std::make_unique<PatchInfo>(patch_bytes));
+  sel->stackmap(DebugInfo::TailCall);
+  // return will be patched to jump
+  // we need it for emulating x86 behavior of this node 
   llvm::Type* retType = sel->func()->getReturnType();
   if (retType->isVoidTy()) { 
     sel->builder().CreateRetVoid(); 
-  }
-  else { 
+  } else { 
     sel->builder().CreateRet(sel->null(retType)); 
   }
   return NULL;
- }
+}
 
 llvm::Value* RetNode::select(Selector* sel) {
   llvm::Type* retType = sel->func()->getReturnType();
@@ -149,9 +151,7 @@ llvm::Value* tailjmpIndNode::select(Selector* sel) {
   llvm::Value* rdx_offset = sel->gep(FP, -1 * wordSize);
   llvm::Value* r10_offset = sel->gep(FP, -2 * wordSize);
 
-  Node* call_node = in(TypeFunc::Parms)->in(0);
-  assert(call_node->is_MachCall(), "expected call");
-  llvm::Value* ret_addr = sel->select_node(call_node->in(TypeFunc::Parms + 2));
+  llvm::Value* ret_addr = sel->builder().CreateIntrinsic(llvm::Intrinsic::returnaddress, {}, sel->builder().getInt32(0));
   sel->store(ret_addr, rdx_offset);
   llvm::Value* target_pc = sel->select_node(in(TypeFunc::Parms));
   sel->store(target_pc, r10_offset);
@@ -344,7 +344,7 @@ llvm::Value* RethrowExceptionNode::select(Selector* sel) {
   llvm::FunctionCallee f = sel->callee(OptoRuntime::rethrow_stub(), sel->type(T_VOID), args);
   llvm::Value* callee = f.getCallee();
   llvm::Optional<llvm::ArrayRef<llvm::Value*>> deopt({});
-  sel->builder().CreateGCStatepointCall(id, patch_bytes, callee, args, deopt, {});
+  llvm::CallInst* call = sel->builder().CreateGCStatepointCall(id, patch_bytes, callee, args, deopt, {});
   // return will be patched to jump
   // we need it for emulating x86 behavior of this node 
   llvm::Type* retType = sel->func()->getReturnType();
