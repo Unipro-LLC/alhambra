@@ -24,7 +24,11 @@ llvm::Value* MachProjNode::select(Selector* sel) {
   }
   if (in(0)->is_Start()) {
     if (_con == TypeFunc::FramePtr) {
-      return sel->gep(sel->cg()->stack().FP(), -wordSize);
+      // In this case the node is used in stubs to set last_Java_sp
+      // which should satisfy JavaFrameAnchor::capture_last_Java_pc
+      LlvmStack& stack = sel->cg()->stack();
+      int sp_offset = -2 * wordSize;
+      return sel->gep(stack.FP(), sp_offset);
     }
     if (_con == TypeFunc::ReturnAdr) {
       LlvmStack& stack = sel->cg()->stack();
@@ -49,14 +53,6 @@ llvm::Value* MachProjNode::select(Selector* sel) {
 }
 
 llvm::Value* CallRuntimeDirectNode::select(Selector* sel) {
-  if (!sel->C->has_method()) {
-    LlvmStack& stack = sel->cg()->stack();
-    llvm::Value* val = sel->builder().getInt64(OrigPCDebugInfo::MAGIC_NUMBER);
-    llvm::Value* addr = sel->gep(stack.FP(), stack.orig_pc_offset());
-    sel->stackmap(DebugInfo::OrigPC);
-    sel->store(val, addr);
-    sel->cg()->inc_nof_consts();
-  }
   llvm::Type* retType = sel->type(tf()->return_type());
   return sel->call(this, retType, sel->call_args(this));
 }

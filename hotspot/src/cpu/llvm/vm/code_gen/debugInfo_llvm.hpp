@@ -27,7 +27,6 @@ struct PatchBytesDebugInfo;
 struct ConstantDebugInfo;
 struct OopDebugInfo;
 struct MetadataDebugInfo;
-struct OrigPCDebugInfo;
 struct SwitchDebugInfo;
 struct ExceptionDebugInfo; 
 struct ScopeInfo;
@@ -48,7 +47,6 @@ struct DebugInfo {
     PatchBytes, 
     Oop, 
     Metadata, 
-    OrigPC, 
     Switch, 
     Exception, 
 
@@ -88,7 +86,6 @@ struct DebugInfo {
   virtual ConstantDebugInfo* asConstant() { return nullptr; }
   virtual OopDebugInfo* asOop() { return nullptr; }
   virtual MetadataDebugInfo* asMetadata() { return nullptr; }
-  virtual OrigPCDebugInfo* asOrigPC() { return nullptr; }
   virtual SwitchDebugInfo* asSwitch() { return nullptr; }
   virtual ExceptionDebugInfo* asException() { return nullptr; }
 
@@ -203,14 +200,6 @@ struct MetadataDebugInfo : public ConstantDebugInfo {
   MetadataDebugInfo(): ConstantDebugInfo() {}
   MetadataDebugInfo* asMetadata() override { return this; }
   Type type() override { return Metadata; }
-  void handle(size_t idx, LlvmCodeGen* cg) override;
-};
-
-struct OrigPCDebugInfo : public ConstantDebugInfo {
-  const static uintptr_t MAGIC_NUMBER = 0xdeadbeefdeadbeef;
-  OrigPCDebugInfo(): ConstantDebugInfo() {}
-  Type type() override { return OrigPC; }
-  OrigPCDebugInfo* asOrigPC() override { return this; }
   void handle(size_t idx, LlvmCodeGen* cg) override;
 };
 

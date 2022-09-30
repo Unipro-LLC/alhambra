@@ -9,10 +9,10 @@ namespace llvm {
 
 class LlvmCodeGen;
 
-//                                                                        SP
-//                                                                        v
-// prev sp|ret_addr|FP|tail jump(optional)|orig_pc|mon0|...|mon_n-1|spills|
-//        |                                  frame_size                   |
+//                                                     SP(stub)              SP(method)
+//                                                        v                       v
+// prev sp|ret_addr(x86)|FP|ret_addr(llvm)|orig_pc(method)|mon0|...|mon_n-1|spills|
+//        |                          frame_size                                   |
 
 
 class LlvmStack {
@@ -51,8 +51,6 @@ public:
   int32_t unextended_mon_offset(int idx) const { return unext_offset() + mon_offset(idx); }
 
   int32_t unextended_mon_obj_offset(int idx) const;
-
-  int32_t orig_pc_offset() { return _orig_pc_offset; }
 
   int32_t unext_orig_pc_offset() { return unext_offset() + _orig_pc_offset; }
 

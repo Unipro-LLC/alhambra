@@ -760,15 +760,6 @@ void Selector::stackmap(DebugInfo::Type type, size_t idx, size_t patch_bytes) {
 }
 
 void Selector::complete_phi_node(Block *case_block, Node* case_val, llvm::PHINode *phi_inst) {
-  if (case_block->is_connector()) {
-    tty->print_cr("Connector");
-    for (uint i=1; i< case_block->num_preds(); i++) {
-      Block *p = C->cfg()->get_block_for_node(case_block->pred(i));
-      complete_phi_node(p, case_val, phi_inst);
-    }
-    return;
-  }
-
   llvm::BasicBlock* case_bb = basic_block(case_block);
   llvm::Value* phi_case = select_node(case_val);
   llvm::Type* phiTy = phi_inst->getType();

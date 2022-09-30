@@ -30,8 +30,13 @@ LlvmMethod::LlvmMethod(Compile* C, const char* target_name) {
   }();
   code_gen.process_object_file(obj, ObjectToLoad.getBufferStart(), code_start, code_size);
 
-  if (code_gen.sm_parser()) {
-    _frame_size = wordSize + code_gen.sm_parser()->getFunction(0).getStackSize() + sel.max_spill();
+  if (C->has_method()) {
+    _frame_size += sel.max_spill();
+    if (code_gen.sm_parser()) {
+      _frame_size += code_gen.sm_parser()->getFunction(0).getStackSize();
+    }
+  } else {
+    _frame_size += 3 * wordSize;
   }
   code_gen.fill_code_buffer(code_start, code_size, _exc_offset, _deopt_offset);
   _orig_pc_offset = code_gen.stack().unext_orig_pc_offset();

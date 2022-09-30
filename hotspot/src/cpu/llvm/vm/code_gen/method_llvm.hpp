@@ -15,7 +15,7 @@ public:
   int exc_offset() { return _exc_offset; }
   int orig_pc_offset() { return _orig_pc_offset; }
 private:
-  size_t _frame_size = 0;
+  size_t _frame_size = wordSize;
   int _vep_offset = 0;
   int _deopt_offset = 0;
   int _exc_offset = 0;

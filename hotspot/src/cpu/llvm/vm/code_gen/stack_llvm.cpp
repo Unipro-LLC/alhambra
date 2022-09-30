@@ -5,7 +5,9 @@
 size_t LlvmStack::calc_alloc() {
   size_t extra_alloc = 0;
   _ret_addr_offset = -(extra_alloc += wordSize);
-  _orig_pc_offset = -(extra_alloc += wordSize);
+  if (cg()->C->has_method()) {
+    _orig_pc_offset = -(extra_alloc += wordSize);
+  }
   _mon_offset = -extra_alloc;
   return cg()->nof_monitors() * monitor_size() + extra_alloc;
 }

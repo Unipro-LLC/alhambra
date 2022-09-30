@@ -24,7 +24,6 @@ std::unique_ptr<DebugInfo> DebugInfo::create(uint64_t id, LlvmCodeGen* cg) {
     case PatchBytes: return std::make_unique<PatchBytesDebugInfo>();
     case Oop: return std::make_unique<OopDebugInfo>();
     case Metadata: return std::make_unique<MetadataDebugInfo>();
-    case OrigPC: return std::make_unique<OrigPCDebugInfo>();
     case Exception: return std::make_unique<ExceptionDebugInfo>();
     default: ShouldNotReachHere();
   }
@@ -67,14 +66,6 @@ void SafePointDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
   patch_movabs_rax(pos, (uintptr_t)os::get_polling_page());
   patch(pos, MOV_RAX_AL);
   cg->relocator().add(new PollReloc(pc_offset));
-}
-
-void OrigPCDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
-  address pos = cg->addr(pc_offset);
-  assert(mov(pos) && movabs(pos), "expected MOVABS REG, IMM");
-  pos += NativeMovConstReg::data_offset;
-  assert(*(uintptr_t*)pos == MAGIC_NUMBER, "expected magic number");
-  // patching and adding a relocation happens in CallDebugInfo::handle
 }
 
 void SwitchDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
@@ -224,15 +215,6 @@ void CallDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
       }
       cg->C->handler_table()->add_subtable(pc_offset, &handler_bcis, NULL, &handler_pcos);
     }
-  }
-
-  if (!cg->C->has_method()) {
-    assert(idx > 0, "expect OrigPC");
-    OrigPCDebugInfo* opdi = cg->debug_info()[idx - 1]->asOrigPC();
-    assert(opdi, "sanity check");
-    *(uintptr_t*)(code_start + opdi->pc_offset + NativeMovConstReg::data_offset) = (uintptr_t)code_start + pc_offset;
-    InternalReloc* rel = new InternalReloc(opdi->pc_offset);
-    cg->relocator().add(rel);
   }
 }
 
