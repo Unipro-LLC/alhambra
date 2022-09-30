@@ -33,7 +33,6 @@ class LlvmCodeGen {
   bool has_exceptions() const { return _nof_exceptions > 0; }
   unsigned nof_Java_calls() const { return _nof_Java_calls; }
   unsigned nof_to_interp_stubs() const { return _nof_to_interp_stubs; }
-  bool has_tail_jump() const { return _has_tail_jump; }
   unsigned nof_consts() const { return _nof_consts; }
   unsigned nof_locs() const { return _nof_locs; }
   void inc_nof_consts() { _nof_consts++; }
@@ -68,7 +67,6 @@ class LlvmCodeGen {
   unsigned _nof_monitors = 0;
   unsigned _nof_Java_calls = 0;
   unsigned _nof_to_interp_stubs = 0;
-  bool _has_tail_jump = false;
   unsigned _nof_consts = 0;
   unsigned _nof_locs = 1;
   address _code_start;

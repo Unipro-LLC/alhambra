@@ -22,6 +22,7 @@ private:
   unsigned _nof_monitors;
   size_t _frame_size;
   int32_t _orig_pc_offset;
+  int32_t _ret_addr_offset;
   int32_t _mon_offset;
 
   LlvmCodeGen* _cg;
@@ -54,6 +55,8 @@ public:
   int32_t orig_pc_offset() { return _orig_pc_offset; }
 
   int32_t unext_orig_pc_offset() { return unext_offset() + _orig_pc_offset; }
+
+  int32_t ret_addr_offset() { return _ret_addr_offset; }
 };
 
 #endif // CPU_LLVM_VM_CODE_GEN_STACK_LLVM_HPP

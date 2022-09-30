@@ -44,8 +44,6 @@ LlvmCodeGen::LlvmCodeGen(LlvmMethod* method, Compile* c, const char* name) :
         }
       } else if (n->is_Catch()) {
         _nof_exceptions++;
-      } else if (cmp_ideal_Opcode(n, Op_TailJump)) {
-        _has_tail_jump = true;
       }
     }
   }

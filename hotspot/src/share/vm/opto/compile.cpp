@@ -2378,7 +2378,12 @@ void Compile::Code_Gen() {
 #ifdef LLVM
   _oop_map_set = new OopMapSet();
   LlvmMethod llvm_method(this, _target_name);
-  _frame_slots = (has_method() ? llvm_method.frame_size() : 2 * wordSize) >> LogBytesPerInt;
+  // for stubs frame looks like |[-1]prev_sp|[0]ret_addr(x86 call)|[1]FP|[2]ret_addr(llvm)|[3]orig_pc|...
+  // last_Java_sp points to [2] as return address from call that's in this stub is expected to be at [3]
+  // so the range between [2] and [-1] is 3 * wordSize
+  ///TODO: get rid of allocating [3] since there should be no spills in a small stub
+  // so if [3] isn't allocated the call will place its return address there anyway
+  _frame_slots = (has_method() ? llvm_method.frame_size() : 3 * wordSize) >> LogBytesPerInt;
   _code_offsets.set_value(CodeOffsets::Entry, 0);
   _code_offsets.set_value(CodeOffsets::Frame_Complete, 0);
   if (is_osr_compilation()) {

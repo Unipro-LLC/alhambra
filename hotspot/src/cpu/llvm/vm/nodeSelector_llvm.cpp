@@ -24,11 +24,12 @@ llvm::Value* MachProjNode::select(Selector* sel) {
   }
   if (in(0)->is_Start()) {
     if (_con == TypeFunc::FramePtr) {
-      return sel->cg()->stack().FP();
+      return sel->gep(sel->cg()->stack().FP(), -wordSize);
     }
     if (_con == TypeFunc::ReturnAdr) {
-      std::vector<llvm::Value*> args { sel->builder().getInt32(0) };
-      return sel->builder().CreateIntrinsic(llvm::Intrinsic::returnaddress, {}, args);
+      LlvmStack& stack = sel->cg()->stack();
+      llvm::Value* ret_addr_slot = sel->gep(stack.FP(), stack.ret_addr_offset());
+      return sel->load(ret_addr_slot, T_ADDRESS);
     }
     if (_con < TypeFunc::Parms) {
       return NULL;
@@ -49,9 +50,9 @@ llvm::Value* MachProjNode::select(Selector* sel) {
 
 llvm::Value* CallRuntimeDirectNode::select(Selector* sel) {
   if (!sel->C->has_method()) {
-    LlvmStack& st = sel->cg()->stack();
+    LlvmStack& stack = sel->cg()->stack();
     llvm::Value* val = sel->builder().getInt64(OrigPCDebugInfo::MAGIC_NUMBER);
-    llvm::Value* addr = sel->gep(st.FP(), st.orig_pc_offset());
+    llvm::Value* addr = sel->gep(stack.FP(), stack.orig_pc_offset());
     sel->stackmap(DebugInfo::OrigPC);
     sel->store(val, addr);
     sel->cg()->inc_nof_consts();
@@ -148,13 +149,10 @@ llvm::Value* loadConFNode::select(Selector* sel) {
 
 llvm::Value* tailjmpIndNode::select(Selector* sel) {
   llvm::Value* FP = sel->cg()->stack().FP();
-  llvm::Value* rdx_offset = sel->gep(FP, -1 * wordSize);
-  llvm::Value* r10_offset = sel->gep(FP, -2 * wordSize);
+  llvm::Value* target_pc_slot = sel->gep(FP, -2 * wordSize);
 
-  llvm::Value* ret_addr = sel->builder().CreateIntrinsic(llvm::Intrinsic::returnaddress, {}, sel->builder().getInt32(0));
-  sel->store(ret_addr, rdx_offset);
   llvm::Value* target_pc = sel->select_node(in(TypeFunc::Parms));
-  sel->store(target_pc, r10_offset);
+  sel->store(target_pc, target_pc_slot);
 
   uint32_t patch_bytes = 2 * NativeMovRegMem::instruction_size + TailJumpDebugInfo::ADD_RSP_SIZE + TailJumpDebugInfo::JMPQ_R10.size() - NativeReturn::instruction_size;
   sel->stackmap(DebugInfo::PatchBytes, 0, patch_bytes);

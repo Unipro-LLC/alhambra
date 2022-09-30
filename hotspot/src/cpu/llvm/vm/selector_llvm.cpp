@@ -29,9 +29,11 @@ void Selector::prolog() {
   LlvmStack& stack = cg()->stack();
   llvm::Value* FP = builder().CreateIntrinsic(llvm::Intrinsic::frameaddress, { type(T_ADDRESS) }, { null(T_INT) });
   stack.set_FP(FP);
-
   size_t alloc_size = stack.calc_alloc();
   builder().CreateAlloca(type(T_BYTE), builder().getInt32(alloc_size));
+  llvm::Value* ret_addr = builder().CreateIntrinsic(llvm::Intrinsic::returnaddress, {}, builder().getInt32(0));
+  llvm::Value* ret_addr_slot = gep(FP, stack.ret_addr_offset());
+  store(ret_addr, ret_addr_slot);
 
   Block* block = C->cfg()->get_root_block();
   builder().CreateBr(basic_block(block));
@@ -759,6 +761,7 @@ void Selector::stackmap(DebugInfo::Type type, size_t idx, size_t patch_bytes) {
 
 void Selector::complete_phi_node(Block *case_block, Node* case_val, llvm::PHINode *phi_inst) {
   if (case_block->is_connector()) {
+    tty->print_cr("Connector");
     for (uint i=1; i< case_block->num_preds(); i++) {
       Block *p = C->cfg()->get_block_for_node(case_block->pred(i));
       complete_phi_node(p, case_val, phi_inst);
@@ -771,7 +774,7 @@ void Selector::complete_phi_node(Block *case_block, Node* case_val, llvm::PHINod
   llvm::Type* phiTy = phi_inst->getType();
   if (phi_case->getType()->isIntegerTy() && phiTy->isPointerTy()) {
     phi_case = builder().CreateIntToPtr(phi_case, phiTy);
-    }
+  }
   else if (phi_case->getType() != phiTy) {
     llvm::BasicBlock* bb = basic_block(C->cfg()->get_block_for_node(case_val));
     phi_case = llvm::CastInst::CreatePointerCast(phi_case, phiTy);
