@@ -935,7 +935,11 @@ void Parse::catch_inline_exceptions(SafePointNode* ex_map) {
                     OptoRuntime::rethrow_Type(),
                     OptoRuntime::rethrow_stub(),
                     NULL, NULL,
+#ifdef LLVM
+                    ex_node, returnadr());
+#else
                     ex_node);
+#endif
 
   // Rethrow is a pure call, no side effects, only a result.
   // The result cannot be allocated, so we use I_O

@@ -64,9 +64,7 @@ SwitchReloc::SwitchReloc(size_t offset, std::vector<const llvm::BasicBlock*>& ca
 }
 
 CallReloc::CallReloc(size_t offset, DebugInfo* di): Reloc(offset) {
-  if (di->asSimpleTailJump()) {
-    _kind = HotspotRelocInfo::RelocRuntimeCall;
-  } else if (di->asDynamicCall()) {
+  if (di->asDynamicCall()) {
     _kind = HotspotRelocInfo::RelocVirtualCall;
   } else {
     ciMethod* method = di->asCall()->scope_info->cjn->_method;

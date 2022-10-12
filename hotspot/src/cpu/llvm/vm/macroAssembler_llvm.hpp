@@ -96,6 +96,11 @@ class MacroAssembler: public Assembler {
 
   void generate_unverified_entry();
   void generate_osr_entry();
+  static const int32_t COMPILER_CC = 0x1234;
+  static const int32_t INTERPRETER_CC = 0;
+  void rethrow_epilog();
+  void rethrow_cc();
+  void set_rethrow_cc();
   // Support for NULL-checks
   //
   // Generates code that causes a NULL OS exception if the content of reg is NULL.

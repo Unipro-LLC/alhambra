@@ -36,6 +36,12 @@ enum platform_dependent_constants {
   code_size2 = 23000           // simply increase if too small (assembler will crash if too small)
 };
 
+static address _forward_exception_compiler_entry;
+static address _forward_exception_compiler_rethrow_entry;
+public:
+static address forward_exception_compiler_entry()                 { return _forward_exception_compiler_entry; }
+static address forward_exception_compiler_rethrow_entry()         { return _forward_exception_compiler_rethrow_entry; }
+
 class x86 {
  friend class StubGenerator;
 

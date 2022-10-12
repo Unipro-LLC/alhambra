@@ -4,23 +4,16 @@
 #include "opto/runtime.hpp"
 #include "llvmCodeGen.hpp"
 
-std::vector<byte> TailJumpDebugInfo::MOV_RDX = { Assembler::REX_W,  NativeMovRegMem::instruction_code_mem2reg, 0x55, -wordSize };
-std::vector<byte> TailJumpDebugInfo::MOV_R10 = { Assembler::REX_WR, NativeMovRegMem::instruction_code_mem2reg, 0x55, -2*wordSize };
-std::vector<byte> TailJumpDebugInfo::JMPQ_R10 = { 0x41, 0xFF, 0xE2 };
 std::vector<byte> SafePointDebugInfo::MOV_RAX_AL = { 0x8A, 0x00 };
 
 std::unique_ptr<DebugInfo> DebugInfo::create(uint64_t id, LlvmCodeGen* cg) {
   auto& patch_info = cg->selector().patch_info();
   PatchInfo* pi = patch_info.count(id) ? patch_info[id].get() : nullptr;
   switch (type(id)) {
-    case NativeCall: return std::make_unique<NativeCallDebugInfo>();
     case SafePoint: return std::make_unique<SafePointDebugInfo>();
     case Call: return std::make_unique<CallDebugInfo>(pi);
     case StaticCall: return std::make_unique<StaticCallDebugInfo>(pi);
     case DynamicCall: return std::make_unique<DynamicCallDebugInfo>(pi);
-    case Rethrow: return std::make_unique<RethrowDebugInfo>(pi);
-    case TailCall: return std::make_unique<TailCallDebugInfo>(pi);
-    case TailJump: return std::make_unique<TailJumpDebugInfo>(pi);
     case PatchBytes: return std::make_unique<PatchBytesDebugInfo>();
     case Oop: return std::make_unique<OopDebugInfo>();
     case Metadata: return std::make_unique<MetadataDebugInfo>();
@@ -88,61 +81,6 @@ void MetadataDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
   uintptr_t con = *(uintptr_t*)(pos + NativeMovConstReg::data_offset);
   con = decode(con);
   Reloc* rel = new MetadataReloc(pc_offset, con, cg);
-  cg->relocator().add(rel);
-}
-
-void TailJumpDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
-  // |                  nop*8                 |   nop*6   |  add rsp, pop rbp, etc.   |retq|
-  // |mov rdx,[rbp - 0x8]|mov r10,[rbp - 0x10]|add rsp, pop rbp, etc.|add rsp, 0x8|jmpq r10|
-  size_t pb = patch_info->size;
-  assert(idx > 0, "there should be PatchBytes before");
-  PatchBytesDebugInfo* pbdi = cg->debug_info()[idx - 1]->asPatchBytes();
-  assert(pbdi && pc_offset - pbdi->pc_offset == pb, "wrong distance");
-
-  address pos = cg->addr(pbdi->pc_offset), start_pos = pos;
-  patch(pos, MOV_RDX);
-  patch(pos, MOV_R10);
-
-  address next_addr = cg->code_end();
-  if (idx < cg->debug_info().size() - 1) {
-    BlockStartDebugInfo* bsdi = cg->debug_info()[idx + 1]->asBlockStart();
-    assert(bsdi, "should be BlockStart");
-    next_addr = cg->addr(bsdi->pc_offset);
-  }
-  assert(next_addr[-NativeReturn::instruction_size] == NativeReturn::instruction_code, "not retq");
-
-  std::vector<byte> ADD_0x8_RSP = ADD_x_RSP(0x8);
-  size_t offset = pb - (pos - start_pos), footer_size = ADD_0x8_RSP.size() + JMPQ_R10.size();
-  do {
-    pos[0] = pos[offset];
-  } while (++pos != next_addr - footer_size);
-  patch(pos, ADD_0x8_RSP);
-  patch(pos, JMPQ_R10);
-}
-
-void SimpleTailJumpDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
-  // [nop*4|add rsp, pop rbp, etc. |retq|
-  // [add rsp, pop rbp, etc.| jmpq dest |
-  size_t pb = patch_info->size;
-
-  address retq_addr = cg->code_end(), code_start = cg->code_start();
-  if (idx < cg->debug_info().size() - 1) {
-    BlockStartDebugInfo* bsdi = cg->debug_info()[idx + 1]->asBlockStart();
-    assert(bsdi, "should be BlockStart");
-    retq_addr = code_start + bsdi->pc_offset;
-  }
-  retq_addr -= NativeReturn::instruction_size;
-  assert(*retq_addr == NativeReturn::instruction_code, "not retq");
-
-  address pos = code_start + pc_offset - pb;
-  do {
-    pos[0] = pos[pb];
-  } while (++pos != (retq_addr - pb));
-  size_t rel_off = pos - code_start;
-  *(pos++) = NativeJump::instruction_code;
-  *(uint32_t*)pos = target - (pos + sizeof(uint32_t));
-
-  CallReloc* rel = new CallReloc(rel_off, this);
   cg->relocator().add(rel);
 }
 

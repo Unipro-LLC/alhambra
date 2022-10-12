@@ -113,6 +113,12 @@ void GraphKit::gen_stub(address C_function,
 
   //-----------------------------
   // Compute signature for C call.  Varies from the Java signature!
+#ifdef LLVM
+  // return_pc means rethrow_Java
+  // We add return_pc as an argument to this stub but we don't want it to be a C call argument because of that.
+  if( return_pc )
+    parm_cnt--;
+#endif
   const Type **fields = TypeTuple::fields(2*parm_cnt+2);
   uint cnt = TypeFunc::Parms;
   // The C routines gets the base of thread-local storage passed in as an

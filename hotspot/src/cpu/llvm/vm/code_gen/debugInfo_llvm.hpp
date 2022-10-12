@@ -19,10 +19,6 @@ struct JavaCallDebugInfo;
 struct StaticCallDebugInfo;
 struct DynamicCallDebugInfo;
 struct BlockStartDebugInfo;
-struct SimpleTailJumpDebugInfo;
-struct RethrowDebugInfo;
-struct TailJumpDebugInfo;
-struct TailCallDebugInfo;
 struct PatchBytesDebugInfo;
 struct ConstantDebugInfo;
 struct OopDebugInfo;
@@ -34,16 +30,12 @@ struct PatchInfo;
 struct SpillPatchInfo;
 
 struct DebugInfo {
-  enum Type { 
-    NativeCall, 
+  enum Type {
     SafePoint, 
     Call, 
     StaticCall, 
     DynamicCall, 
     BlockStart, 
-    Rethrow, 
-    TailJump, 
-    TailCall, 
     PatchBytes, 
     Oop, 
     Metadata, 
@@ -71,17 +63,12 @@ struct DebugInfo {
   static std::vector<byte> SUB_x_RSP(byte x) { return { 0x48, 0x83, 0xEC, x }; }
   const static size_t SUB_RSP_SIZE = 4;
 
-  virtual NativeCallDebugInfo* asNativeCall() { return nullptr; }
   virtual SafePointDebugInfo* asSafePoint() { return nullptr; }
   virtual CallDebugInfo* asCall() { return nullptr; }
   virtual JavaCallDebugInfo* asJavaCall() { return nullptr; }
   virtual StaticCallDebugInfo* asStaticCall() { return nullptr; }
   virtual DynamicCallDebugInfo* asDynamicCall() { return nullptr; }
   virtual BlockStartDebugInfo* asBlockStart() { return nullptr; }
-  virtual SimpleTailJumpDebugInfo* asSimpleTailJump() { return nullptr; }
-  virtual RethrowDebugInfo* asRethrow() { return nullptr; }
-  virtual TailJumpDebugInfo* asTailJump() { return nullptr; }
-  virtual TailCallDebugInfo* asTailCall() { return nullptr; }
   virtual PatchBytesDebugInfo* asPatchBytes() { return nullptr; }
   virtual ConstantDebugInfo* asConstant() { return nullptr; }
   virtual OopDebugInfo* asOop() { return nullptr; }
@@ -94,12 +81,7 @@ struct DebugInfo {
   virtual bool block_can_end() { return false; }
   bool less(DebugInfo* other);
 };
-struct NativeCallDebugInfo : public DebugInfo {
-  NativeCallDebugInfo(): DebugInfo() {}
-  NativeCallDebugInfo* asNativeCall() override { return this; }
-  Type type() override { return NativeCall; }
-  bool block_can_end() override { return true; }
-};
+
 struct SafePointDebugInfo : public DebugInfo {
   static std::vector<byte> MOV_RAX_AL;
   ScopeInfo* scope_info;
@@ -141,36 +123,6 @@ struct BlockStartDebugInfo : public DebugInfo {
   BlockStartDebugInfo* asBlockStart() override { return this; }
   Type type() override { return BlockStart; }
   bool block_start() override { return true; }
-};
-struct SimpleTailJumpDebugInfo : public DebugInfo {
-  PatchInfo* patch_info;
-  address target;
-  SimpleTailJumpDebugInfo(PatchInfo* pi, address dest): DebugInfo(), patch_info(pi), target(dest) {}
-  SimpleTailJumpDebugInfo* asSimpleTailJump() { return this; }
-  void handle(size_t idx, LlvmCodeGen* cg) override;
-};
-
-struct RethrowDebugInfo : public SimpleTailJumpDebugInfo {
-  RethrowDebugInfo(PatchInfo* pi): SimpleTailJumpDebugInfo(pi, OptoRuntime::rethrow_stub()) {}
-  RethrowDebugInfo* asRethrow() override { return this; }
-  Type type() override { return Rethrow; }
-};
-
-struct TailJumpDebugInfo : public DebugInfo {
-  PatchInfo* patch_info;
-  static std::vector<byte> MOV_RDX;
-  static std::vector<byte> MOV_R10;
-  static std::vector<byte> JMPQ_R10;
-  TailJumpDebugInfo(PatchInfo* pi): DebugInfo(), patch_info(pi) {}
-  TailJumpDebugInfo* asTailJump() override { return this; }
-  Type type() override { return TailJump; }
-  void handle(size_t idx, LlvmCodeGen* cg) override;
-};
-
-struct TailCallDebugInfo : public SimpleTailJumpDebugInfo {
-  TailCallDebugInfo(PatchInfo* pi): SimpleTailJumpDebugInfo(pi, StubRoutines::forward_exception_entry()) {}
-  TailCallDebugInfo* asTailCall() override { return this; }
-  Type type() override { return TailCall; }
 };
 
 struct PatchBytesDebugInfo : public DebugInfo {

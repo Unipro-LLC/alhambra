@@ -784,6 +784,26 @@ void MacroAssembler::generate_osr_entry() {
   align(8);
 }
 
+void MacroAssembler::rethrow_epilog() {
+  addptr(rsp, 24);
+  pop(rbp);
+}
+
+void MacroAssembler::rethrow_cc() {
+  Label end;
+  cmpptr(c_rarg0, COMPILER_CC);
+  jcc(Assembler::notEqual, end);
+
+  mov(rax, rsi);
+  rethrow_epilog();
+  
+  bind(end);
+}
+
+void MacroAssembler::set_rethrow_cc() {
+  movptr(c_rarg0, INTERPRETER_CC);
+}
+
 void MacroAssembler::set_last_Java_frame(Register last_java_sp,
                                          Register last_java_fp,
                                          address  last_java_pc) {

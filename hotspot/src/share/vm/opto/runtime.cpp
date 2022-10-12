@@ -1353,10 +1353,16 @@ address OptoRuntime::rethrow_C(oopDesc* exception, JavaThread* thread, address r
 
 const TypeFunc *OptoRuntime::rethrow_Type() {
   // create input type (domain)
+#ifdef LLVM
+  const Type **fields = TypeTuple::fields(2);
+  fields[TypeFunc::Parms+0] = TypeInstPtr::NOTNULL; // Exception oop
+  fields[TypeFunc::Parms+1] = TypeRawPtr::NOTNULL;  // return address
+  const TypeTuple *domain = TypeTuple::make(TypeFunc::Parms+2,fields);
+#else
   const Type **fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms+0] = TypeInstPtr::NOTNULL; // Exception oop
   const TypeTuple *domain = TypeTuple::make(TypeFunc::Parms+1,fields);
-
+#endif
   // create result type (range)
   fields = TypeTuple::fields(1);
   fields[TypeFunc::Parms+0] = TypeInstPtr::NOTNULL; // Exception oop

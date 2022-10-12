@@ -31,9 +31,7 @@ llvm::Value* MachProjNode::select(Selector* sel) {
       return sel->gep(stack.FP(), sp_offset);
     }
     if (_con == TypeFunc::ReturnAdr) {
-      LlvmStack& stack = sel->cg()->stack();
-      llvm::Value* ret_addr_slot = sel->gep(stack.FP(), stack.ret_addr_offset());
-      return sel->load(ret_addr_slot, T_ADDRESS);
+      return sel->ret_addr(sel->cg()->is_rethrow_stub());
     }
     if (_con < TypeFunc::Parms) {
       return NULL;
@@ -105,18 +103,9 @@ llvm::Value* loadConPNode::select(Selector* sel) {
 }
 
 llvm::Value* TailCalljmpIndNode::select(Selector* sel) {
-  uint32_t patch_bytes = NativeJump::instruction_size - NativeReturn::instruction_size;
-  sel->stackmap(DebugInfo::PatchBytes, 0, patch_bytes);
-  sel->patch_info().emplace(DebugInfo::id(DebugInfo::TailCall), std::make_unique<PatchInfo>(patch_bytes));
-  sel->stackmap(DebugInfo::TailCall);
-  // return will be patched to jump
-  // we need it for emulating x86 behavior of this node 
-  llvm::Type* retType = sel->func()->getReturnType();
-  if (retType->isVoidTy()) { 
-    sel->builder().CreateRetVoid(); 
-  } else { 
-    sel->builder().CreateRet(sel->null(retType)); 
-  }
+  address target = sel->cg()->is_rethrow_stub() ? StubRoutines::forward_exception_compiler_rethrow_entry() : StubRoutines::forward_exception_compiler_entry();
+  llvm::Value* jump_target = sel->get_ptr(target, T_ADDRESS);
+  sel->builder().CreateIndirectBr(jump_target);
   return NULL;
 }
 
@@ -144,26 +133,18 @@ llvm::Value* loadConFNode::select(Selector* sel) {
 }
 
 llvm::Value* tailjmpIndNode::select(Selector* sel) {
-  llvm::Value* FP = sel->cg()->stack().FP();
-  llvm::Value* target_pc_slot = sel->gep(FP, -2 * wordSize);
-
-  llvm::Value* target_pc = sel->select_node(in(TypeFunc::Parms));
-  sel->store(target_pc, target_pc_slot);
-
-  uint32_t patch_bytes = 2 * NativeMovRegMem::instruction_size + TailJumpDebugInfo::ADD_RSP_SIZE + TailJumpDebugInfo::JMPQ_R10.size() - NativeReturn::instruction_size;
-  sel->stackmap(DebugInfo::PatchBytes, 0, patch_bytes);
-  sel->patch_info().emplace(DebugInfo::id(DebugInfo::TailJump), std::make_unique<PatchInfo>(patch_bytes));
-  sel->stackmap(DebugInfo::TailJump);
-
   llvm::Type* retType = sel->func()->getReturnType();
-  if (retType->isVoidTy()) {
-    sel->builder().CreateRetVoid();
-  }
-  else {
-    llvm::Value* exc_oop = sel->select_node(in(TypeFunc::Parms + 1));
-    exc_oop = sel->builder().CreatePointerCast(exc_oop, retType); 
-    sel->builder().CreateRet(exc_oop);
-  }
+  std::vector<llvm::Value*> args = {
+    sel->builder().getInt64(MacroAssembler::COMPILER_CC),
+    retType->isVoidTy() ? sel->null(T_ADDRESS) : sel->select_node(in(TypeFunc::Parms + 1)), // exception oop
+    sel->ret_addr(true),
+  };
+  uint64_t id = DebugInfo::id(DebugInfo::PatchBytes);
+  // fake call to pass arguments to exception handler
+  llvm::FunctionCallee callee = sel->callee(OptoRuntime::exception_blob(), sel->type(T_VOID), args);
+  sel->builder().CreateGCStatepointCall(id, 1, callee.getCallee(), args, llvm::None, {});
+  llvm::Value* target_pc = sel->select_node(in(TypeFunc::Parms));
+  sel->builder().CreateIndirectBr(target_pc);
   return NULL;
 }
 
@@ -176,18 +157,9 @@ llvm::Value* loadTLABendNode::select(Selector* sel) {
 }
 
 llvm::Value* addP_rReg_immNode::select(Selector* sel) {
-  bool is_managed = bottom_type()->isa_oopptr() != NULL;
-
-  llvm::Value* op = sel->gep(sel->select_node(in(2)), sel->select_oper(opnd_array(2)));
-  llvm::Value* base_op = NULL;
-  if (is_managed) {
-    // Node* base = sel->find_derived_base(this);
-    // base_op = base == this ? op : sel->select_node(base);
-    // assert(base_op != NULL, "check");
-    // sel->mark_dptr(op, base_op);
-  }
-
-  return op;
+  llvm::Value* base = sel->select_node(in(2));
+  llvm::Value* offset = sel->select_oper(opnd_array(2));
+  return sel->gep(base, offset);
 }
 
 
@@ -328,19 +300,15 @@ llvm::Value* CreateExceptionNode::select(Selector* sel) {
 
 llvm::Value* RethrowExceptionNode::select(Selector* sel) {
   llvm::Value* exc_oop = sel->select_node(in(TypeFunc::Parms));
-  // insert statepoint for nops and passing an argument to rethrow stub
-  std::vector<llvm::Value*> args = { exc_oop };
+  std::vector<llvm::Value*> args = { exc_oop, sel->ret_addr() };
   sel->callconv_adjust(args);
-  uint64_t id = DebugInfo::id(DebugInfo::Rethrow);
-  uint32_t patch_bytes = NativeJump::instruction_size - NativeReturn::instruction_size;
-  sel->patch_info().emplace(id, std::make_unique<PatchInfo>(patch_bytes));
-  // dummy function (ignore address), takes exc_oop as the sole argument
-  llvm::FunctionCallee f = sel->callee(OptoRuntime::rethrow_stub(), sel->type(T_VOID), args);
-  llvm::Value* callee = f.getCallee();
-  llvm::Optional<llvm::ArrayRef<llvm::Value*>> deopt({});
-  llvm::CallInst* call = sel->builder().CreateGCStatepointCall(id, patch_bytes, callee, args, deopt, {});
-  // return will be patched to jump
-  // we need it for emulating x86 behavior of this node 
+  uint64_t id = DebugInfo::id(DebugInfo::PatchBytes);
+  // fake call to pass arguments to rethrow_Java
+  llvm::FunctionCallee callee = sel->callee(OptoRuntime::rethrow_stub(), sel->type(T_VOID), args);
+  sel->builder().CreateGCStatepointCall(id, 1, callee.getCallee(), args, llvm::None, {});
+  llvm::Value* jump_target = sel->builder().getInt64((uintptr_t)OptoRuntime::rethrow_stub());
+  llvm::Value* ret_addr_slot = sel->builder().CreateIntrinsic(llvm::Intrinsic::addressofreturnaddress, { sel->type(T_ADDRESS) }, {});
+  sel->store(jump_target, ret_addr_slot);
   llvm::Type* retType = sel->func()->getReturnType();
   if (!retType->isVoidTy()) {
     sel->builder().CreateRet(sel->null(retType));

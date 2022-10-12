@@ -152,6 +152,7 @@ address TemplateInterpreterGenerator::generate_exception_handler_common(
                c_rarg1, c_rarg2);
   }
   // throw exception
+  __ set_rethrow_cc();
   __ jump(ExternalAddress(Interpreter::throw_exception_entry()));
   return entry;
 }
@@ -1707,6 +1708,7 @@ void TemplateInterpreterGenerator::generate_throw_exception() {
   // Entry point in previous activation (i.e., if the caller was
   // interpreted)
   Interpreter::_rethrow_exception_entry = __ pc();
+  __ rethrow_cc();
   // Restore sp to interpreter_frame_last_sp even though we are going
   // to empty the expression stack for the exception processing.
   __ movptr(Address(rbp, frame::interpreter_frame_last_sp_offset * wordSize), (int32_t)NULL_WORD);
@@ -1905,6 +1907,7 @@ void TemplateInterpreterGenerator::generate_throw_exception() {
   __ pop(rdx);                                   // restore return address
   __ pop(rax);                                   // restore exception
   // Note that an "issuing PC" is actually the next PC after the call
+  __ set_rethrow_cc();
   __ jmp(rbx);                                   // jump to exception
                                                  // handler of caller
 }

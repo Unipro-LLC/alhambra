@@ -96,6 +96,7 @@ public:
   llvm::AtomicCmpXchgInst* cmpxchg(llvm::Value* addr, llvm::Value* cmp, llvm::Value* val);
   llvm::Value* left_circular_shift(llvm::Value* arg, llvm::Value* shift, unsigned capacity);
   void stackmap(DebugInfo::Type type, size_t idx = 0, size_t patch_bytes = 0);
+  llvm::Value* ret_addr(bool rethrow = false);
 
   llvm::Value* select_node(Node* node);
   llvm::Value* select_oper(MachOper *oper);

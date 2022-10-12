@@ -3644,6 +3644,7 @@ void TemplateTable::_breakpoint() {
 void TemplateTable::athrow() {
   transition(atos, vtos);
   __ null_check(rax);
+  __ set_rethrow_cc();
   __ jump(ExternalAddress(Interpreter::throw_exception_entry()));
 }
 

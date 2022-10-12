@@ -4268,6 +4268,7 @@ void OptoRuntime::generate_exception_blob() {
   address start = __ pc();
 
   // Exception pc is 'return address' for stack walker
+  __ rethrow_cc();
   __ push(rdx);
   __ subptr(rsp, SimpleRuntimeFrame::return_off << LogBytesPerInt); // Prolog
 
@@ -4339,9 +4340,11 @@ void OptoRuntime::generate_exception_blob() {
   __ movptr(Address(r15_thread, JavaThread::exception_pc_offset()), (int)NULL_WORD);
 #endif
 
-  // We cannot do it now yet because we need to load exception oop later in the exception handler
-  // Even though we'll clear in the handler, postponing doing it may result in problems with GC
-  /// TODO: find a solution to this problem 
+  // We can return only one value (handler address)
+  // So we have to get the exception oop from the thread
+  // We will clear it later in the handler (CreateExceptionNode)
+  // which is entered right after this blob
+  /// TODO: what happens during deoptimization?
 /*
   // Clear the exception oop so GC no longer processes it as a root.
   __ movptr(Address(r15_thread, JavaThread::exception_oop_offset()), (int)NULL_WORD);

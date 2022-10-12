@@ -26,15 +26,14 @@ void Selector::run() {
 }
 
 void Selector::prolog() {
+  if (cg()->is_rethrow_stub()) {
+    func()->addFnAttr("stackrealign");
+  }
   LlvmStack& stack = cg()->stack();
   llvm::Value* FP = builder().CreateIntrinsic(llvm::Intrinsic::frameaddress, { type(T_ADDRESS) }, { null(T_INT) });
   stack.set_FP(FP);
   size_t alloc_size = stack.calc_alloc();
   builder().CreateAlloca(type(T_BYTE), builder().getInt32(alloc_size));
-  llvm::Value* ret_addr = builder().CreateIntrinsic(llvm::Intrinsic::returnaddress, {}, builder().getInt32(0));
-  llvm::Value* ret_addr_slot = gep(FP, stack.ret_addr_offset());
-  store(ret_addr, ret_addr_slot);
-
   Block* block = C->cfg()->get_root_block();
   builder().CreateBr(basic_block(block));
 }
@@ -405,8 +404,7 @@ std::vector<llvm::Type*> Selector::types(const std::vector<llvm::Value*>& v) con
 llvm::CallInst* Selector::call_C(const void* func, llvm::Type* retType, const std::vector<llvm::Value*>& args) {
   llvm::FunctionCallee f = callee(func, retType, args);
   llvm::CallInst* call = builder().CreateCall(f, args);
-  call->addAttribute(llvm::AttributeList::FunctionIndex, llvm::Attribute::get(ctx(), "statepoint-id", std::to_string(DebugInfo::id(DebugInfo::NativeCall))));
-  call->addAttribute(llvm::AttributeList::FunctionIndex, llvm::Attribute::get(ctx(), "gc-leaf-function", "true"));
+  call->addAttribute(llvm::AttributeList::FunctionIndex, llvm::Attribute::get(ctx(), "gc-leaf-function"));
   return call;
 }
 
@@ -651,6 +649,9 @@ llvm::Value* Selector::encode_heap_oop(llvm::Value *oop, bool not_null) {
 }
 
 void Selector::locs_for_narrow_oops() {
+  if (narrow_oops().empty())
+    return;
+
   llvm::DominatorTree DT(*func());
   std::vector<llvm::Instruction*> narrow_oops_to_transform;
   std::vector<std::vector<llvm::User*>> users_to_transform;
@@ -674,23 +675,23 @@ void Selector::locs_for_narrow_oops() {
           users_to_transform.back().push_back(user);
         }
       };
+      auto begin_it = inst->getReverseIterator();
       auto end_it = [&] {
         if (bb == narrow_oop->getParent()) return narrow_oop->getReverseIterator();
         if (llvm::PHINode* phi = llvm::dyn_cast<llvm::PHINode>(inst)) {
-          llvm::Value* val = llvm::cast<llvm::Value>(narrow_oop);
           for (size_t i = 0; i < phi->getNumIncomingValues(); ++i) {
-            if (phi->getIncomingValue(i) == val) {
+            if (phi->getIncomingValue(i) == narrow_oop) {
               to_visit.push_back(phi->getIncomingBlock(i));
             }
           }
-          return inst->getReverseIterator();
+          return begin_it;
         }
         for (llvm::BasicBlock* pred : llvm::predecessors(bb)) {
           to_visit.push_back(pred);
         }
         return bb->rend();
       } ();
-      for (auto it = inst->getReverseIterator(); !found && it != end_it; ++it) {
+      for (auto it = begin_it; !found && it != end_it; ++it) {
         check_statepoint(*it);
       }
       while (!found && !to_visit.empty()) {
@@ -757,6 +758,12 @@ void Selector::complete_phi_nodes() {
 void Selector::stackmap(DebugInfo::Type type, size_t idx, size_t patch_bytes) {
   llvm::Value* id = builder().getInt64(DebugInfo::id(type, idx));
   builder().CreateIntrinsic(llvm::Intrinsic::experimental_stackmap, {}, { id, builder().getInt32(patch_bytes) });
+}
+
+llvm::Value* Selector::ret_addr(bool rethrow) {
+  if (!rethrow)
+    return builder().CreateIntrinsic(llvm::Intrinsic::returnaddress, {}, builder().getInt32(0));
+  return func()->arg_end() - 1;
 }
 
 void Selector::complete_phi_node(Block *case_block, Node* case_val, llvm::PHINode *phi_inst) {

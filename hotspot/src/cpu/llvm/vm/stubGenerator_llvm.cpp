@@ -474,6 +474,14 @@ class StubGenerator: public StubCodeGenerator {
 
   address generate_forward_exception() {
     StubCodeMark mark(this, "StubRoutines", "forward exception");
+    Label entry;
+    StubRoutines::_forward_exception_compiler_rethrow_entry = __ pc();
+    __ rethrow_epilog();
+    __ jmp(entry);
+    StubRoutines::_forward_exception_compiler_entry = __ pc();
+    __ addptr(rsp, 16);
+    __ pop(rbp);
+    __ bind(entry);
     address start = __ pc();
 
     // Upon entry, the sp points to the return address returning into

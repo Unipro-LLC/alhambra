@@ -30,7 +30,7 @@ class LlvmCodeGen {
   LlvmStack& stack() { return _stack; }
   StackMapParser* sm_parser() { return _sm_parser.get(); }
   unsigned nof_monitors() const { return _nof_monitors; }
-  bool has_exceptions() const { return _nof_exceptions > 0; }
+  bool has_exceptions() const { return _has_exceptions; }
   unsigned nof_Java_calls() const { return _nof_Java_calls; }
   unsigned nof_to_interp_stubs() const { return _nof_to_interp_stubs; }
   unsigned nof_consts() const { return _nof_consts; }
@@ -40,10 +40,10 @@ class LlvmCodeGen {
   address code_end() const { return _code_end; }
   address addr(size_t pc_offset) { return code_start() + pc_offset; }
   unsigned nof_safepoints() const { return _nof_safepoints; }
-  unsigned nof_exceptions() const { return _nof_exceptions; }
   std::unordered_map<const llvm::BasicBlock*, size_t>& block_offsets() { return _block_offsets; }
   llvm::AsmInfo* asm_info() { return _asm_info.get(); }
   MacroAssembler* masm() { return _masm; }
+  bool is_rethrow_stub() const { return _is_rethrow_stub; }
 
   void run_passes(llvm::SmallVectorImpl<char>& ObjBufferSV);
   void process_object_file(const llvm::object::ObjectFile& obj_file, const char *obj_file_start, address& code_start, uint64_t& code_size);
@@ -72,9 +72,10 @@ class LlvmCodeGen {
   address _code_start;
   address _code_end;
   unsigned _nof_safepoints = 0;
-  unsigned _nof_exceptions = 0;
+  bool _has_exceptions = false;
   std::unordered_map<const llvm::BasicBlock*, size_t> _block_offsets;
   MacroAssembler* _masm;
+  bool _is_rethrow_stub = false;
 
   void process_asm_info(int vep_offset);
   void add_stubs(int& exc_offset, int& deopt_offset);

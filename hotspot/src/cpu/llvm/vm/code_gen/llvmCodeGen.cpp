@@ -43,7 +43,9 @@ LlvmCodeGen::LlvmCodeGen(LlvmMethod* method, Compile* c, const char* name) :
           }
         }
       } else if (n->is_Catch()) {
-        _nof_exceptions++;
+        _has_exceptions = true;
+      } else if (cmp_ideal_Opcode(n, Op_TailJump)) {
+        _is_rethrow_stub = true;
       }
     }
   }
