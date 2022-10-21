@@ -349,7 +349,11 @@ JVM_handle_linux_signal(int sig,
       // a fault inside compiled code, the interpreter, or a stub
 
       if (sig == SIGSEGV && os::is_poll_address((address)info->si_addr)) {
-        stub = SharedRuntime::get_poll_stub(pc);
+        address real_pc = pc;
+        if (real_pc == StubRoutines::poll_stub_entry()) {
+          real_pc = *(address*)os::Linux::ucontext_get_sp(uc);
+        }
+        stub = SharedRuntime::get_poll_stub(real_pc);
       } else if (sig == SIGBUS /* && info->si_code == BUS_OBJERR */) {
         // BugId 4454115: A read from a MappedByteBuffer can fault
         // here if the underlying file has been truncated.
@@ -511,8 +515,15 @@ JVM_handle_linux_signal(int sig,
 
   if (stub != NULL) {
     // save all thread context in case we need to restore it
-    if (thread != NULL) thread->set_saved_exception_pc(pc);
-
+    if (thread != NULL) {
+      address real_pc = pc;
+      if (real_pc == StubRoutines::poll_stub_entry()) {
+        greg_t& sp = uc->uc_mcontext.gregs[REG_SP];
+        real_pc = *(address*)sp;
+        sp += wordSize;
+      }
+      thread->set_saved_exception_pc(real_pc);
+    }
     uc->uc_mcontext.gregs[REG_PC] = (greg_t)stub;
     return true;
   }

@@ -38,9 +38,11 @@ enum platform_dependent_constants {
 
 static address _forward_exception_compiler_entry;
 static address _forward_exception_compiler_rethrow_entry;
+static address _poll_stub_entry;
 public:
 static address forward_exception_compiler_entry()                 { return _forward_exception_compiler_entry; }
 static address forward_exception_compiler_rethrow_entry()         { return _forward_exception_compiler_rethrow_entry; }
+static address poll_stub_entry() { return _poll_stub_entry; }
 
 class x86 {
  friend class StubGenerator;

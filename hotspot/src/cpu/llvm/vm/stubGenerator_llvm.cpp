@@ -538,6 +538,16 @@ class StubGenerator: public StubCodeGenerator {
     return start;
   }
 
+  address generate_poll_stub() {
+    StubCodeMark mark(this, "StubRoutines", "poll stub");
+    address start = __ pc();
+    AddressLiteral addr(os::get_polling_page(), relocInfo::external_word_type);
+    __ testl(rax, addr);
+    __ ret(0);
+
+    return start;
+  }
+
   // Support for jint atomic::xchg(jint exchange_value, volatile jint* dest)
   //
   // Arguments :
@@ -3994,6 +4004,8 @@ class StubGenerator: public StubCodeGenerator {
     // stubRoutines.hpp.
 
     StubRoutines::_forward_exception_entry = generate_forward_exception();
+
+    StubRoutines::_poll_stub_entry = generate_poll_stub();
 
     StubRoutines::_call_stub_entry =
       generate_call_stub(StubRoutines::_call_stub_return_address);

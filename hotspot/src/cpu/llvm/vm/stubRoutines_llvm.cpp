@@ -33,6 +33,7 @@
 
 address StubRoutines::_forward_exception_compiler_entry         = NULL;
 address StubRoutines::_forward_exception_compiler_rethrow_entry = NULL;
+address StubRoutines::_poll_stub_entry = NULL;
 
 address StubRoutines::x86::_get_previous_fp_entry = NULL;
 address StubRoutines::x86::_get_previous_sp_entry = NULL;

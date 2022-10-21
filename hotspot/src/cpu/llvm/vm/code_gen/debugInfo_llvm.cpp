@@ -4,8 +4,6 @@
 #include "opto/runtime.hpp"
 #include "llvmCodeGen.hpp"
 
-std::vector<byte> SafePointDebugInfo::MOV_RAX_AL = { 0x8A, 0x00 };
-
 std::unique_ptr<DebugInfo> DebugInfo::create(uint64_t id, LlvmCodeGen* cg) {
   auto& patch_info = cg->selector().patch_info();
   PatchInfo* pi = patch_info.count(id) ? patch_info[id].get() : nullptr;
@@ -54,10 +52,6 @@ void SafePointDebugInfo::patch_movabs_rax(address& pos, uintptr_t x) {
 }
 
 void SafePointDebugInfo::handle(size_t idx, LlvmCodeGen* cg) {
-  pc_offset -= MOV_RAX_AL.size();
-  address pos = cg->addr(pc_offset - NativeMovConstReg::instruction_size);
-  patch_movabs_rax(pos, (uintptr_t)os::get_polling_page());
-  patch(pos, MOV_RAX_AL);
   cg->relocator().add(new PollReloc(pc_offset));
 }
 

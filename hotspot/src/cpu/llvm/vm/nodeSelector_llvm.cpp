@@ -1292,14 +1292,11 @@ llvm::Value* string_equalsNode::select(Selector* sel) {
 llvm::Value* safePoint_pollNode::select(Selector* sel) {
   ScopeDescriptor& sd = sel->cg()->scope_descriptor();
   ScopeInfo* si = sd.register_scope(this);
-  size_t patch_bytes = NativeMovConstReg::instruction_size + SafePointDebugInfo::MOV_RAX_AL.size();
-  // call is needed only for GC, will be replaced with load, target doesn't matther
-  llvm::FunctionCallee f = sel->callee(os::get_polling_page(), sel->type(T_VOID), {});
+  llvm::FunctionCallee f = sel->callee(StubRoutines::poll_stub_entry(), sel->type(T_VOID), {});
   std::vector<llvm::Value*> deopt = sd.stackmap_scope(si);
   llvm::OperandBundleDef deopt_ob("deopt", deopt);
   llvm::CallInst* call = sel->builder().CreateCall(f, {}, { deopt_ob });
   call->addAttribute(llvm::AttributeList::FunctionIndex, llvm::Attribute::get(sel->ctx(), "statepoint-id", std::to_string(si->stackmap_id)));
-  call->addAttribute(llvm::AttributeList::FunctionIndex, llvm::Attribute::get(sel->ctx(), "statepoint-num-patch-bytes", std::to_string(patch_bytes)));
   return NULL;
 }
 
