@@ -54,6 +54,7 @@ void Selector::select() {
 
   for (size_t i = 1; i < _blocks.size(); ++i) {
     _block = C->cfg()->get_block(i);
+    if (block()->is_connector()) continue;
     builder().SetInsertPoint(basic_block());
     for (size_t j = 1; j < block()->number_of_nodes(); ++j) { // skip 0th node: Start or Region
       Node* node = block()->get_node(j);
@@ -186,9 +187,11 @@ void Selector::create_blocks() {
   llvm::BasicBlock* entry_block = llvm::BasicBlock::Create(ctx(), "B0", func());
   builder().SetInsertPoint(entry_block);
   std::string b_str = "B";
-  _blocks.reserve(C->cfg()->number_of_blocks());
+  _blocks.resize(C->cfg()->number_of_blocks());
   for (size_t i = 0; i < C->cfg()->number_of_blocks(); ++i) {
-    _blocks.push_back(llvm::BasicBlock::Create(ctx(), b_str + std::to_string(i + 1), func()));
+    Block* b = C->cfg()->get_block(i);
+    if (b->is_connector()) continue;
+    _blocks[b->_pre_order - 1] = llvm::BasicBlock::Create(ctx(), b_str + std::to_string(b->_pre_order), func());
   }
 }
 
@@ -487,17 +490,10 @@ llvm::CallBase* Selector::call(MachCallNode* node, llvm::Type* retType, const st
       ret = builder().CreateInvoke(f, next_bb, handler_bb, args, ob);
     } else {
       ret = builder().CreateCall(f, args, ob);
-      // a faux comparison just to attach blocks to the CFG
-      llvm::BasicBlock* right_bb = catch_info[1].first;
-      for (auto it = catch_info.rbegin() + 1; it != catch_info.rend() - 1; ++it) {
-        right_bb = llvm::BasicBlock::Create(ctx(), basic_block()->getName() + "_handler" + std::to_string(std::distance(catch_info.rbegin(), it - 1)), func());
-        builder().SetInsertPoint(right_bb);
-        llvm::Value* pred = builder().CreateICmpEQ(thread(), null(thread()->getType()));
-        builder().CreateCondBr(pred, it->first, (it - 1)->first);
+      llvm::IndirectBrInst* ib = builder().CreateIndirectBr(thread(), catch_info.size());
+      for (const auto& ci: catch_info) {
+        ib->addDestination(ci.first);
       }
-      builder().SetInsertPoint(basic_block());
-      llvm::Value* pred = builder().CreateICmpEQ(thread(), null(thread()->getType()));
-      builder().CreateCondBr(pred, catch_info[0].first, right_bb);
     }
   } else {
     ret = builder().CreateCall(f, args, ob);

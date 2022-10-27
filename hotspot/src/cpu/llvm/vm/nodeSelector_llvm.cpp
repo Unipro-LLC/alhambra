@@ -1536,7 +1536,7 @@ llvm::Value* jumpXtndNode::select(Selector* sel) {
     }
 
     assert(switch_case != NULL, "Some switch cases are missing");
-    Block *b_dest = sel->C->cfg()->get_block_for_node(switch_case);
+    Block *b_dest = sel->C->cfg()->get_block_for_node(switch_case)->non_connector();
     llvm::BasicBlock *bb_dest = sel->basic_block(b_dest);
     llvm::ConstantInt* switch_val = llvm::cast<llvm::ConstantInt>(llvm::ConstantInt::get(addr_offset->getType(), i));
     switch_inst->addCase(switch_val, bb_dest);
@@ -2065,6 +2065,61 @@ llvm::Value* logD_regNode::select(Selector* sel) {
   return sel->call_C((void *)log, sel->type(T_DOUBLE), { x });
 }
 
+llvm::Value* mergeUP_reg_regNode::select(Selector* sel) {
+  llvm::Value* pred = sel->select_node(in(1));
+  llvm::Value* v1 = sel->select_node(in(2));
+  llvm::Value* v2 = sel->select_node(in(3));
+  return sel->builder().CreateSelect(pred, v2, v1);
+}
+
+llvm::Value* andI2L_rReg_imm65535Node::select(Selector* sel) {
+  llvm::Value* i_op = sel->select_node(in(1));
+  return sel->builder().CreateZExt(i_op, sel->type(T_LONG));
+}
+
+llvm::Value* mergeUN_reg_regNode::select(Selector* sel) {
+  llvm::Value* pred = sel->select_node(in(1));
+  llvm::Value* v1 = sel->select_node(in(2));
+  llvm::Value* v2 = sel->select_node(in(3));
+  return sel->builder().CreateSelect(pred, v2, v1);
+}
+
+long vsub2f(long l1, long l2) {
+  long r;
+  float *rp = (float*)&r, *l1p = (float*)&l1, *l2p = (float*)&l2;
+  *rp++ = (*l1p++) - (*l2p++);
+  *rp = (*l1p) - (*l2p);
+  return r;
+}
+
+llvm::Value* vsub2FNode::select(Selector* sel) {
+  llvm::Value* src1 = sel->select_node(in(1));
+  llvm::Value* src2 = sel->select_node(in(2));
+  return sel->call_C((void *)vsub2f, sel->type(T_LONG), { src1, src2 });
+}
+
+long vmul2f(long l1, long l2) {
+  long r;
+  float *rp = (float*)&r, *l1p = (float*)&l1, *l2p = (float*)&l2;
+  *rp++ = (*l1p++) * (*l2p++);
+  *rp = (*l1p) * (*l2p);
+  return r;
+}
+
+llvm::Value* vmul2FNode::select(Selector* sel) {
+  llvm::Value* src1 = sel->select_node(in(1));
+  llvm::Value* src2 = sel->select_node(in(2));
+  return sel->call_C((void *)vmul2f, sel->type(T_LONG), { src1, src2 });
+}
+
+llvm::Value* mergeN_reg_regNode::select(Selector* sel) {
+  llvm::Value* pred = sel->select_node(in(1));
+  llvm::Value* v1 = sel->select_node(in(2));
+  llvm::Value* v2 = sel->select_node(in(3));
+  return sel->builder().CreateSelect(pred, v2, v1);
+}
+
+
 llvm::Value* loadI2UBNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
@@ -2178,18 +2233,6 @@ llvm::Value* mergeUF_reg_regNode::select(Selector* sel){
 }
 
 llvm::Value* mergeUD_reg_regNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* mergeUP_reg_regNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* mergeN_reg_regNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* mergeUN_reg_regNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
@@ -2442,10 +2485,6 @@ llvm::Value* rorL_rReg_Var_C64_0Node::select(Selector* sel){
 }
 
 llvm::Value* andI2L_rReg_imm255Node::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* andI2L_rReg_imm65535Node::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
@@ -2710,15 +2749,7 @@ llvm::Value* vadd2F_regNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 
-llvm::Value* vsub2FNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
 llvm::Value* vsub2F_regNode::select(Selector* sel){
-  NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
-}
-
-llvm::Value* vmul2FNode::select(Selector* sel){
   NOT_PRODUCT(tty->print_cr("SELECT ME %s", Name())); Unimplemented(); return NULL;
 }
 

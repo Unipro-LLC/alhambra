@@ -17,6 +17,7 @@ void ScopeDescriptor::describe_scopes() {
     int la_idx = describe_scope(di);
     if (!C->has_method()) continue;
     assert(la_idx == gc_idx, "sanity check");
+    std::unordered_map<int, bool> oop_map;
     for (uint16_t i = gc_idx; i < record.getNumLocations(); i += 2) {
       int off[2];
       bool skip = false;
@@ -31,8 +32,19 @@ void ScopeDescriptor::describe_scopes() {
         off[j] = stack_offset(la);
       }
       if (skip) continue;
+      if (off[0] == off[1]) {
+        oop_map[off[0]] = true;
+      } else if (!oop_map.count(off[0])) {
+        oop_map.insert({ off[0], false });
+      }
       // set_oop is called if arguments are equal
       di->oopmap->set_derived_oop(VMRegImpl::stack2reg(off[1] / BytesPerInt), VMRegImpl::stack2reg(off[0] / BytesPerInt));
+    }
+    for (const auto& pair : oop_map) {
+      if (!pair.second) {
+        VMReg oop_reg = VMRegImpl::stack2reg(pair.first / BytesPerInt);
+        di->oopmap->set_derived_oop(oop_reg, oop_reg);
+      }
     }
   }
 }

@@ -26,8 +26,11 @@ LlvmCodeGen::LlvmCodeGen(LlvmMethod* method, Compile* c, const char* name) :
   _relocator(this),
   _stack(this)
 {
-  for (size_t i = 0; i < C->cfg()->number_of_blocks(); ++i) {
+  for (size_t i = 1; i < C->cfg()->number_of_blocks(); ++i) {
     Block* b = C->cfg()->get_block(i);
+    if (b->get_node(1)->is_MachGoto() && b->num_preds() == 2 && !b->non_connector_successor(0)->get_node(1)->is_Phi()) {
+      b->set_connector();
+    }
     for (size_t j = 0; j < b->number_of_nodes(); ++j) {
       Node* n = b->get_node(j);
       if (n->is_MachSafePoint()) {
