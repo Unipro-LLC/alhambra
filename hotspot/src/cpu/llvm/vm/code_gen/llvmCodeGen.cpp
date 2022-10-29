@@ -195,14 +195,27 @@ void LlvmCodeGen::fill_code_buffer(address src, uint64_t size, int& exc_offset, 
   // sorted vector is convenient for patching
   std::sort(debug_info().begin(), debug_info().end(),
     [&](const std::unique_ptr<DebugInfo>& a, const std::unique_ptr<DebugInfo>& b) {
-      return a->pc_offset == b->pc_offset ? a->less(b.get()) : a->pc_offset < b->pc_offset;
+      return a->pc_offset < b->pc_offset;
     });
   
-  for (size_t i = 0; i < debug_info().size(); ++i) {
-    debug_info()[i]->handle(i, this);
+  for (std::unique_ptr<DebugInfo>& di : debug_info()) {
+    di->handle(this);
   }
 
-  scope_descriptor().describe_scopes();
+  C->env()->debug_info()->set_oopmaps(C->oop_map_set());
+  for (std::unique_ptr<DebugInfo>& di : debug_info()) {
+    SafePointDebugInfo* spdi = di->asSafePoint();
+    if (!spdi) continue;
+    RecordAccessor record = spdi->record(sm_parser());
+    const int DEOPT_CNT_OFFSET = 2, DEOPT_OFFSET = 3;
+    int la_idx = DEOPT_OFFSET;
+    scope_descriptor().describe_scope(spdi, la_idx);
+    if (!C->has_method()) continue;
+    LocationAccessor deopt_cnt = record.getLocation(DEOPT_CNT_OFFSET);
+    assert(la_idx == deopt_cnt.getSmallConstant() + DEOPT_OFFSET, "sanity check");
+    fill_oopmap(spdi, record, la_idx);
+  }
+
   relocator().apply_relocs();
   cb()->initialize_stubs_size(stubs_size);
   add_stubs(exc_offset, deopt_offset);
@@ -224,11 +237,8 @@ void LlvmCodeGen::process_asm_info(int vep_offset) {
     std::unique_ptr<DebugInfo> di;
     size_t offset = info->Offset + addend;
     if (llvm::BlockOffsetInfo* block_info = info->asBlock()) {
-      di = std::make_unique<BlockStartDebugInfo>();
-      const llvm::BasicBlock* bb = block_info->Block;
-      if (bb) {
-        di->asBlockStart()->bb = bb;
-        block_offsets().emplace(bb, offset);
+      if (block_info->Block) {
+        block_offsets().emplace(block_info->Block, offset);
       }
     } else if (llvm::ConstantOffsetInfo* constant_info = info->asConstant()) {
       if (!selector().consts().count(constant_info->Constant)) continue;
@@ -241,8 +251,10 @@ void LlvmCodeGen::process_asm_info(int vep_offset) {
       _nof_consts += switch_info->Cases.size();
       _nof_locs += 1 + switch_info->Cases.size();
     }
-    di->pc_offset = offset;
-    debug_info().push_back(std::move(di));
+    if (di) {
+      di->pc_offset = offset;
+      debug_info().push_back(std::move(di));
+    }
   }
 }
 
@@ -261,5 +273,38 @@ void LlvmCodeGen::add_stubs(int& exc_offset, int& deopt_offset) {
     }
     exc_offset = HandlerImpl::emit_exception_handler(*cb());
     deopt_offset = HandlerImpl::emit_deopt_handler(*cb());
+  }
+}
+
+void LlvmCodeGen::fill_oopmap(SafePointDebugInfo* di, RecordAccessor record, uint32_t idx) {
+  std::unordered_map<int, bool> oop_map;
+  MachSafePointNode* sfn = di->scope_info->sfn;
+  for (uint16_t i = idx; i < record.getNumLocations(); i += 2) {
+    int off[2];
+    bool skip = false;
+    for (size_t j = 0; j < 2; ++j) {
+      LocationAccessor la = record.getLocation(i + j);
+      if (la.getKind() != LocationKind::Indirect) {
+        assert(la.getKind() == LocationKind::Constant && la.getSmallConstant() == 0, "no other choice");
+        skip = true;
+        break;
+      }
+      assert(la.getSizeInBytes() == selector().pointer_size() >> LogBytesPerWord, "only support singular locations");
+      off[j] = stack().offset(sfn, la);
+    }
+    if (skip) continue;
+    if (off[0] == off[1]) {
+      oop_map[off[0]] = true;
+    } else if (!oop_map.count(off[0])) {
+      oop_map.insert({ off[0], false });
+    }
+    // set_oop is called if arguments are equal
+    di->oopmap->set_derived_oop(VMRegImpl::stack2reg(off[1] / BytesPerInt), VMRegImpl::stack2reg(off[0] / BytesPerInt));
+  }
+  for (const auto& pair : oop_map) {
+    if (!pair.second) {
+      VMReg oop_reg = VMRegImpl::stack2reg(pair.first / BytesPerInt);
+      di->oopmap->set_derived_oop(oop_reg, oop_reg);
+    }
   }
 }

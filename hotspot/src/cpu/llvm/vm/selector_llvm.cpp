@@ -22,7 +22,6 @@ void Selector::run() {
   select();
   complete_phi_nodes();
   locs_for_narrow_oops();
-  epilog();
 }
 
 void Selector::prolog() {
@@ -261,16 +260,16 @@ llvm::Value* Selector::select_oper(MachOper *oper) {
   case T_ARRAY:
   case T_OBJECT: {
     assert(ty->isa_narrowoop() == NULL, "check");
-    return select_oper_helper(ty, true, false);
+    return select_oop_or_klass(ty, true, false);
   }
-  case T_METADATA: return select_oper_helper(ty, false, false); 
+  case T_METADATA: return select_oop_or_klass(ty, false, false); 
   case T_NARROWOOP: {
     if (ty->is_narrowoop()->get_con() != 0) {
-      return select_oper_helper(ty, true, true);
+      return select_oop_or_klass(ty, true, true);
     }
     return null(T_NARROWOOP);
   }
-  case T_NARROWKLASS: return select_oper_helper(ty, false, true);
+  case T_NARROWKLASS: return select_oop_or_klass(ty, false, true);
   case T_ADDRESS: return get_ptr(oper->constant(), T_ADDRESS);
   case T_VOID: return NULL;
   default:
@@ -279,7 +278,7 @@ llvm::Value* Selector::select_oper(MachOper *oper) {
   }
 }
 
-llvm::Value* Selector::select_oper_helper(const Type* ty, bool oop, bool narrow) {
+llvm::Value* Selector::select_oop_or_klass(const Type* ty, bool oop, bool narrow) {
   uintptr_t con = [&] {
     if (oop) {
       if (narrow) return (uintptr_t)ty->is_narrowoop()->get_con();
@@ -424,7 +423,7 @@ llvm::CallBase* Selector::call(MachCallNode* node, llvm::Type* retType, const st
   ScopeDescriptor& sd = cg()->scope_descriptor();
   Node* block_end = block()->end();
   CatchNode* catch_node = block_end->isa_Catch();
-  ScopeInfo* si = sd.register_scope(node, catch_node);
+  ScopeInfo* si = sd.register_scope(node);
   std::vector<llvm::Value*> deopt = sd.stackmap_scope(si);
   std::vector<llvm::OperandBundleDef> ob = { llvm::OperandBundleDef("deopt", deopt) };
 
@@ -435,33 +434,8 @@ llvm::CallBase* Selector::call(MachCallNode* node, llvm::Type* retType, const st
       patch_bytes += NativeMovConstReg::instruction_size;
     }
   }
-  unsigned nf_cnt = 0;
-  size_t spill_size = 0, first_spill_size = 0;
-  for (llvm::Value* val : args) {
-    llvm::Type* ty = val->getType();
-    if (ty->isFloatingPointTy()) continue;
-    nf_cnt++;
-    if (nf_cnt > NF_REGS) {
-      size_t size = ty->isPointerTy() 
-      ? mod()->getDataLayout().getIndexTypeSizeInBits(val->getType())
-      : ty->getScalarSizeInBits();
-      size >>= 3;
-      spill_size += size == 8 ? 8 : 4;
-      first_spill_size = first_spill_size ? first_spill_size : spill_size;
-    }
-  }
-  if (spill_size == first_spill_size) {
-    spill_size = 0;
-  } else {
-    const int ALIGNMENT = 16;
-    spill_size = ((spill_size-1) & -ALIGNMENT) + ALIGNMENT;
-  }
-  _max_spill = MAX(max_spill(), spill_size);
-  std::unique_ptr<PatchInfo> pi_uptr = nf_cnt > NF_REGS
-    ? std::make_unique<SpillPatchInfo>(patch_bytes, spill_size)
-    : std::make_unique<PatchInfo>(patch_bytes);
-  PatchInfo* pi = pi_uptr.get();
-  patch_info().emplace(si->stackmap_id, std::move(pi_uptr));
+  cg()->stack().count_spills(node, args);
+  patch_info().emplace(si->stackmap_id, std::make_unique<PatchInfo>(patch_bytes));
   
   llvm::BasicBlock* next_bb = nullptr;
   llvm::CallBase* ret = nullptr;
@@ -503,7 +477,7 @@ llvm::CallBase* Selector::call(MachCallNode* node, llvm::Type* retType, const st
     }
   }
   ret->addAttribute(llvm::AttributeList::FunctionIndex, llvm::Attribute::get(ctx(), "statepoint-id", std::to_string(si->stackmap_id)));
-  call_info().emplace_back(ret, pi);
+  ret->addAttribute(llvm::AttributeList::FunctionIndex, llvm::Attribute::get(ctx(), "statepoint-num-patch-bytes", std::to_string(patch_bytes)));
   return retType->isVoidTy() ? NULL : ret;
 }
 
@@ -733,7 +707,7 @@ void Selector::locs_for_narrow_oops() {
 }
 
 void Selector::map_phi_nodes(PhiNode* opto_phi, llvm::PHINode* llvm_phi) {
-  _phiNodeMap.push_back(std::make_pair(opto_phi, llvm_phi));
+  _phiNodeMap.push_back({ opto_phi, llvm_phi });
 }
 
 void Selector::complete_phi_nodes() {
@@ -775,37 +749,4 @@ void Selector::complete_phi_node(Block *case_block, Node* case_val, llvm::PHINod
     llvm::cast<llvm::Instruction>(phi_case)->insertBefore(bb->getTerminator());
   }
   phi_inst->addIncoming(phi_case, case_bb);
-}
-
-void Selector::epilog() {
-  std::unordered_set<llvm::BasicBlock*> exception_blocks;
-  for (auto& pair : call_info()) {
-    llvm::CallBase* cb = pair.first;
-    PatchInfo* pi = pair.second;
-    size_t* tmp = &pi->size;
-    size_t& patch_bytes = *tmp;
-    if (max_spill()) {
-      SpillPatchInfo* spi = pi->asSpill();
-      if (!spi || (spi->spill_size != max_spill())) {
-        if (patch_bytes == 0) {
-          patch_bytes += NativeCall::instruction_size;
-        }
-        patch_bytes += CallDebugInfo::SUB_RSP_SIZE + CallDebugInfo::ADD_RSP_SIZE;
-      }
-      llvm::BasicBlock* bb = cb->getParent();
-      if (exception_info().count(bb)) {
-        ExceptionInfo& ei = exception_info().at(bb);
-        for (auto pair : ei) {
-          llvm::BasicBlock* hbb = pair.first;
-          if (exception_blocks.find(hbb) == exception_blocks.end()) {
-            builder().SetInsertPoint(hbb, hbb->getFirstInsertionPt());
-            stackmap(DebugInfo::Exception, 0, CallDebugInfo::ADD_RSP_SIZE);
-            stackmap(DebugInfo::PatchBytes);
-            exception_blocks.insert(hbb);
-          }
-        }
-      }
-    }
-    cb->addAttribute(llvm::AttributeList::FunctionIndex, llvm::Attribute::get(ctx(), "statepoint-num-patch-bytes", std::to_string(patch_bytes)));
-  }
 }

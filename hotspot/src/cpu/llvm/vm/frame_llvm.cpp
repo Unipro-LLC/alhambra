@@ -470,7 +470,8 @@ frame frame::sender_for_compiled_frame(RegisterMap* map) const {
 
   // frame owned by optimizing compiler
   assert(_cb->frame_size() >= 0, "must have non-zero frame size");
-  intptr_t* sender_sp = unextended_sp() + _cb->frame_size();
+  bool compiled = _cb->is_compiled_by_c2();
+  intptr_t* sender_sp = compiled ? fp() + frame::sender_sp_offset : unextended_sp() + _cb->frame_size();
   intptr_t* unextended_sp = sender_sp;
 
   // On Intel the return_address is always the word on the stack
@@ -478,7 +479,7 @@ frame frame::sender_for_compiled_frame(RegisterMap* map) const {
 
   // This is the saved value of EBP which may or may not really be an FP.
   // It is only an FP if the sender is an interpreter frame (or C1?).
-  intptr_t** saved_fp_addr = (intptr_t**) (sender_sp - frame::sender_sp_offset);
+  intptr_t** saved_fp_addr = (intptr_t**)(compiled ? fp() : sender_sp - frame::sender_sp_offset);
 
   if (map->update_map()) {
     // Tell GC to use argument oopmaps for some runtime stubs that need it.

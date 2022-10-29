@@ -139,7 +139,7 @@ llvm::Value* tailjmpIndNode::select(Selector* sel) {
     retType->isVoidTy() ? sel->null(T_ADDRESS) : sel->select_node(in(TypeFunc::Parms + 1)), // exception oop
     sel->ret_addr(true),
   };
-  uint64_t id = DebugInfo::id(DebugInfo::PatchBytes);
+  uint64_t id = DebugInfo::id(DebugInfo::Other);
   // fake call to pass arguments to exception handler
   llvm::FunctionCallee callee = sel->callee(OptoRuntime::exception_blob(), sel->type(T_VOID), args);
   sel->builder().CreateGCStatepointCall(id, 1, callee.getCallee(), args, llvm::None, {});
@@ -302,7 +302,7 @@ llvm::Value* RethrowExceptionNode::select(Selector* sel) {
   llvm::Value* exc_oop = sel->select_node(in(TypeFunc::Parms));
   std::vector<llvm::Value*> args = { exc_oop, sel->ret_addr() };
   sel->callconv_adjust(args);
-  uint64_t id = DebugInfo::id(DebugInfo::PatchBytes);
+  uint64_t id = DebugInfo::id(DebugInfo::Other);
   // fake call to pass arguments to rethrow_Java
   llvm::FunctionCallee callee = sel->callee(OptoRuntime::rethrow_stub(), sel->type(T_VOID), args);
   sel->builder().CreateGCStatepointCall(id, 1, callee.getCallee(), args, llvm::None, {});

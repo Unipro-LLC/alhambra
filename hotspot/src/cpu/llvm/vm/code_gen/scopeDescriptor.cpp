@@ -6,56 +6,6 @@
 
 ScopeDescriptor::ScopeDescriptor(LlvmCodeGen* code_gen) : _cg(code_gen), C(code_gen->C) {}
 
-void ScopeDescriptor::describe_scopes() {
-  C->env()->debug_info()->set_oopmaps(C->oop_map_set());
-  for (std::unique_ptr<DebugInfo>& debug_info : cg()->debug_info()) {
-    SafePointDebugInfo* di = debug_info->asSafePoint();
-    if (!di) continue;
-    RecordAccessor record = di->record(cg()->sm_parser());
-    LocationAccessor deopt_cnt = record.getLocation(DEOPT_CNT_OFFSET);
-    uint32_t gc_idx = deopt_cnt.getSmallConstant() + DEOPT_OFFSET;
-    int la_idx = describe_scope(di);
-    if (!C->has_method()) continue;
-    assert(la_idx == gc_idx, "sanity check");
-    std::unordered_map<int, bool> oop_map;
-    for (uint16_t i = gc_idx; i < record.getNumLocations(); i += 2) {
-      int off[2];
-      bool skip = false;
-      for (size_t j = 0; j < 2; ++j) {
-        LocationAccessor la = record.getLocation(i + j);
-        if (la.getKind() != LocationKind::Indirect) {
-          assert(la.getKind() == LocationKind::Constant && la.getSmallConstant() == 0, "no other choice");
-          skip = true;
-          break;
-        }
-        assert(la.getSizeInBytes() == cg()->selector().pointer_size() >> LogBytesPerWord, "only support singular locations");
-        off[j] = stack_offset(la);
-      }
-      if (skip) continue;
-      if (off[0] == off[1]) {
-        oop_map[off[0]] = true;
-      } else if (!oop_map.count(off[0])) {
-        oop_map.insert({ off[0], false });
-      }
-      // set_oop is called if arguments are equal
-      di->oopmap->set_derived_oop(VMRegImpl::stack2reg(off[1] / BytesPerInt), VMRegImpl::stack2reg(off[0] / BytesPerInt));
-    }
-    for (const auto& pair : oop_map) {
-      if (!pair.second) {
-        VMReg oop_reg = VMRegImpl::stack2reg(pair.first / BytesPerInt);
-        di->oopmap->set_derived_oop(oop_reg, oop_reg);
-      }
-    }
-  }
-}
-
-int ScopeDescriptor::stack_offset(LocationAccessor la) {
-  assert(la.getKind() == LocationKind::Indirect, "these are values located on stack");
-  if (la.getDwarfRegNum() == RSP) return la.getOffset();
-  if (la.getDwarfRegNum() == RBP) return la.getOffset() + cg()->stack().unext_offset();
-  Unimplemented();
-}
-
 void ScopeDescriptor::fill_loc_array(GrowableArray<ScopeValue*> *array, const std::vector<std::unique_ptr<NodeInfo>>& src, SafePointDebugInfo* di, int& la_idx) {
   bool skip = false;
   for (const std::unique_ptr<NodeInfo>& ni : src) {
@@ -116,12 +66,7 @@ bool ScopeDescriptor::fill_loc_array_helper(GrowableArray<ScopeValue*> *array, N
               return it != oops.end() ? Location::oop : Location::normal;
           }
         } ();
-        int offset = stack_offset(la);
-        // std::vector<Node*>& narrow_oops = cg()->selector().narrow_oops();
-        // if (std::find(narrow_oops.begin(), narrow_oops.end(), n) != narrow_oops.end()) {
-        //   assert(type == Location::narrowoop, "sanity check");
-        //   di->oopmap->set_narrowoop(VMRegImpl::stack2reg(offset / BytesPerInt));
-        // }
+        int offset = cg()->stack().offset(di->scope_info->sfn, la);
         Location loc = Location::new_stk_loc(type, offset);
         return (ScopeValue*)new LocationValue(loc); 
       } else if (lk == LocationKind::Constant || lk == LocationKind::ConstantIndex) {
@@ -176,7 +121,7 @@ ScopeValue* ScopeDescriptor::con_value(const Type *t, bool& largeType) {
   }
 }
 
-int ScopeDescriptor::describe_scope(SafePointDebugInfo* di) {
+int ScopeDescriptor::describe_scope(SafePointDebugInfo* di, int& la_idx) {
   LlvmStack& stack = cg()->stack();
   MachSafePointNode* sfn = di->scope_info->sfn;
 
@@ -206,7 +151,6 @@ int ScopeDescriptor::describe_scope(SafePointDebugInfo* di) {
   // Do not skip safepoints with a NULL method, they need monitor info
   GrowableArray<ScopeValue*> *objs = di->scope_info->objs;
 
-  int la_idx = DEOPT_OFFSET;
   JVMState* youngest_jvms = sfn->jvms();
   int depth = 0, max_depth = youngest_jvms->depth();
   for (ScopeValueInfo& si : di->scope_info->sv_info) {
@@ -229,7 +173,7 @@ int ScopeDescriptor::describe_scope(SafePointDebugInfo* di) {
       bool eliminated = (box_node->is_BoxLock() && box_node->as_BoxLock()->is_eliminated());
       int mon_idx = box_node->as_BoxLock()->stack_slot() / 2;
 
-      int mon_object_offset = stack.unextended_mon_obj_offset(mon_idx);
+      int mon_object_offset = stack.unextended_mon_obj_offset(sfn, mon_idx);
 
       // Create ScopeValue for object
       ScopeValue *scval = NULL;
@@ -246,7 +190,7 @@ int ScopeDescriptor::describe_scope(SafePointDebugInfo* di) {
         scval = new ConstantOopWriteValue(tp->is_oopptr()->const_oop()->constant_encoding());
       }
 
-      Location basic_lock = Location::new_stk_loc(Location::normal, stack.unextended_mon_offset(mon_idx));
+      Location basic_lock = Location::new_stk_loc(Location::normal, stack.unextended_mon_offset(sfn, mon_idx));
       monarray->append(new MonitorValue(scval, basic_lock, eliminated));
       if (!obj_node->is_SafePointScalarObject() && !(eliminated && obj_node->is_Con())) {
         di->oopmap->set_oop(VMRegImpl::stack2reg(mon_object_offset / BytesPerInt));
@@ -273,22 +217,15 @@ int ScopeDescriptor::describe_scope(SafePointDebugInfo* di) {
   return la_idx;
 }
 
-ScopeInfo* ScopeDescriptor::register_scope(MachSafePointNode* sfn, bool throws_exc) {
-  if (throws_exc) {
-    std::unique_ptr<ThrowScopeInfo> bsi_uptr = std::make_unique<ThrowScopeInfo>();
-    bsi_uptr->bb = cg()->selector().basic_block();
-    scope_info().push_back(std::move(bsi_uptr));
-  } else {
-    std::unique_ptr<ScopeInfo> si_uptr = std::make_unique<ScopeInfo>();
-    scope_info().push_back(std::move(si_uptr));
-  }
+ScopeInfo* ScopeDescriptor::register_scope(MachSafePointNode* sfn) {
+  scope_info().push_back(std::make_unique<ScopeInfo>());
   ScopeInfo* si = scope_info().back().get();
   si->sfn = sfn;
   DebugInfo::Type ty = [&] {
     if (sfn->is_MachCallStaticJava()) return DebugInfo::StaticCall;
     if (sfn->is_MachCallDynamicJava()) return DebugInfo::DynamicCall;
-    if (sfn->is_MachCallRuntime()) return DebugInfo::Call;
-    return DebugInfo::SafePoint;
+    if (sfn->is_MachCallRuntime()) return DebugInfo::SafePoint;
+    return DebugInfo::Poll;
   }();
   uint64_t idx = scope_info().size() - 1;
   si->stackmap_id = DebugInfo::id(ty, idx);
@@ -314,11 +251,11 @@ ScopeInfo* ScopeDescriptor::register_scope(MachSafePointNode* sfn, bool throws_e
     svi.exps.reserve(num_exps);
     for (int idx = 0; idx < num_locs; ++idx) {
       Node* n = si->sfn->local(jvms, idx);
-      svi.locs.push_back(init_node_info(si, n));
+      svi.locs.push_back(create_node_info(si, n));
     }
     for (int idx = 0; idx < num_exps; ++idx) {
       Node* n = si->sfn->stack(jvms, idx);
-      svi.exps.push_back(init_node_info(si, n));
+      svi.exps.push_back(create_node_info(si, n));
     }
     int num_mon = jvms->nof_monitors();
     svi.mons.reserve(num_mon);
@@ -331,14 +268,14 @@ ScopeInfo* ScopeDescriptor::register_scope(MachSafePointNode* sfn, bool throws_e
     for(int idx = 0; idx < num_mon; idx++) {
       Node* obj_node = si->sfn->monitor_obj(jvms, idx); 
       if (obj_node->is_SafePointScalarObject()) {
-        svi.mons.push_back(init_node_info(si, obj_node));
+        svi.mons.push_back(create_node_info(si, obj_node));
       }
     }
   }
   return si;
 }
 
-std::unique_ptr<NodeInfo> ScopeDescriptor::init_node_info(ScopeInfo* si, Node* n) {
+std::unique_ptr<NodeInfo> ScopeDescriptor::create_node_info(ScopeInfo* si, Node* n) {
   if( !n->is_SafePointScalarObject() ) {
     return std::make_unique<NodeInfo>(n);
   }
@@ -360,7 +297,7 @@ std::unique_ptr<NodeInfo> ScopeDescriptor::init_node_info(ScopeInfo* si, Node* n
     sc_obj->dest = sv->field_values();
     for (uint i = 0; i < spobj->n_fields(); i++) {
       Node* fn = si->sfn->in(first_ind+i);
-      sc_obj->field_values.push_back(init_node_info(si, fn));
+      sc_obj->field_values.push_back(create_node_info(si, fn));
     }
     scval = sv;
   }
@@ -383,14 +320,10 @@ void ScopeDescriptor::add_statepoint_arg(std::vector<llvm::Value*>& args, NodeIn
 std::vector<llvm::Value*> ScopeDescriptor::stackmap_scope(const ScopeInfo* si) {
   std::vector<llvm::Value*> args;
   for (const ScopeValueInfo& svi : si->sv_info) {
-    for (const std::unique_ptr<NodeInfo>& info : svi.locs) {
-      add_statepoint_arg(args, info.get());
-    }
-    for (const std::unique_ptr<NodeInfo>& info : svi.exps) {
-      add_statepoint_arg(args, info.get());
-    }
-    for (const std::unique_ptr<NodeInfo>& info : svi.mons) {
-      add_statepoint_arg(args, info.get());
+    for (auto arr : { &svi.locs, &svi.exps, &svi.mons }) {
+      for (const std::unique_ptr<NodeInfo>& info : *arr) {
+        add_statepoint_arg(args, info.get());
+      }
     }
   }
   return args;

@@ -79,5 +79,6 @@ class LlvmCodeGen {
 
   void process_asm_info(int vep_offset);
   void add_stubs(int& exc_offset, int& deopt_offset);
+  void fill_oopmap(SafePointDebugInfo* di, RecordAccessor record, uint32_t idx);
 };
 #endif // CPU_LLVM_VM_CODE_GEN_LLVMCODEGEN_HPP

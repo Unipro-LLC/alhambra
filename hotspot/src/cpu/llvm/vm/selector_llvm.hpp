@@ -17,14 +17,17 @@ class Block;
 class LlvmCodeGen;
 class PatchInfo;
 
+struct PatchInfo {
+  size_t size;
+  PatchInfo(size_t s) : size(s) { }
+};
+
 class Selector : public Phase {
 private:
   struct CacheEntry {
     llvm::Value* val = NULL;
     bool hit = false;
   };
-
-  const static int NF_REGS = 6;
 
   LlvmCodeGen* _cg;
   llvm::LLVMContext& _ctx;
@@ -44,9 +47,6 @@ private:
   std::vector<size_t> _nf_pos;
   std::unordered_map<llvm::BasicBlock*, ExceptionInfo> _exception_info;
   std::unordered_map<uint64_t, std::unique_ptr<PatchInfo>> _patch_info;
-  size_t _max_spill = 0;
-  using CallInfo = std::pair<llvm::CallBase*, PatchInfo*>;
-  std::vector<CallInfo> _call_info;
   std::vector<size_t> _param_to_arg;
   std::unordered_map<uintptr_t, DebugInfo::Type> _consts;
 
@@ -54,12 +54,13 @@ private:
   void create_blocks();
   void prolog();
   void select();
-  llvm::Value* select_oper_helper(const Type* ty, bool oop, bool narrow);
+  llvm::Value* select_oop_or_klass(const Type* ty, bool oop, bool narrow);
   void complete_phi_nodes();
   void complete_phi_node(Block *case_block, Node* case_val, llvm::PHINode *phi_inst);
-  void epilog();
+  void locs_for_narrow_oops();
 
 public:
+  const static int NF_REGS = 6;
   Selector(LlvmCodeGen* code_gen, const char* name);
   void run();
 
@@ -105,8 +106,6 @@ public:
   void select_if(llvm::Value *pred, Node* node);
 
   std::unordered_map<uint64_t, std::unique_ptr<PatchInfo>>& patch_info() { return _patch_info; }
-  size_t max_spill() { return _max_spill; }
-  std::vector<CallInfo>& call_info() { return _call_info; }
   std::vector<llvm::Value*> call_args(MachCallNode* node);
   void callconv_adjust(std::vector<llvm::Value*>& args);
   int param_to_arg(int param_num);
@@ -120,7 +119,6 @@ public:
   llvm::Value* encode_heap_oop(llvm::Value *oop, bool not_null);
   std::vector<Node*>& oops() { return _oops; }
   std::vector<llvm::Instruction*>& narrow_oops() { return _narrow_oops; }
-  void locs_for_narrow_oops();
 
   void map_phi_nodes(PhiNode* opto_node, llvm::PHINode* llvm_node);
 };
